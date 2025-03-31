@@ -27,37 +27,8 @@ var GlobalPluginRegistry map[string]PluginMetadata
 
 func init() {
 	GlobalPluginRegistry = make(map[string]PluginMetadata)
-
-	// Initialize with demo metadata for existing plugins
-	now := time.Now()
-
-	// Kafka plugin metadata
-	kafkaMetadata := PluginMetadata{
-		Name:        "kafka",
-		Version:     "1.5.0",
-		Description: "Kafka management plugin",
-		Author:      "HATMAN",
-		License:     "MIT",
-		Tags:        []string{"messaging", "streaming", "broker"},
-		Arch:        []string{"amd64", "arm64"},
-		LastUpdated: now.AddDate(0, -1, 0), // 1 month ago
-		URL:         "https://github.com/hatembentayeb/ohmyops-v2/plugins/kafka",
-	}
-	GlobalPluginRegistry["kafka"] = kafkaMetadata
-
-	// S3 plugin metadata
-	s3Metadata := PluginMetadata{
-		Name:        "s3",
-		Version:     "1.2.0",
-		Description: "AWS S3 management plugin",
-		Author:      "HATMAN",
-		License:     "Apache-2.0",
-		Tags:        []string{"storage", "cloud", "aws"},
-		Arch:        []string{"amd64", "arm64"},
-		LastUpdated: now.AddDate(0, -2, 0), // 2 months ago
-		URL:         "https://github.com/hatembentayeb/ohmyops-v2/plugins/s3",
-	}
-	GlobalPluginRegistry["s3"] = s3Metadata
+	// The registry will be populated when plugins are loaded
+	// No hardcoded metadata here - it will come from the plugins themselves
 }
 
 // RegisterPlugin adds a plugin to the global registry
