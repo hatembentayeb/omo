@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.20'
+          check-latest: true
+          
+      - name: Get version
+        id: get_version
+        run: |
+          VERSION=$(echo "v$(date +'%Y.%m.%d')-$(git rev-parse --short HEAD)")
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Version: $VERSION"
+
+      - name: Build main app for multiple platforms
+        run: |
+          mkdir -p dist
+          # Build for Linux
+          GOOS=linux GOARCH=amd64 go build -o dist/omo-linux-amd64 .
+          # Build for macOS
+          GOOS=darwin GOARCH=amd64 go build -o dist/omo-darwin-amd64 .
+          GOOS=darwin GOARCH=arm64 go build -o dist/omo-darwin-arm64 .
+          # Build for Windows
+          GOOS=windows GOARCH=amd64 go build -o dist/omo-windows-amd64.exe .
+          # Compress binaries
+          cd dist
+          for file in *; do
+            tar -czf "$file.tar.gz" "$file"
+            rm "$file"
+          done
+          cd ..
+
+      - name: Build plugins
+        run: |
+          mkdir -p dist/plugins
+          # Build each plugin in the plugins directory
+          for plugin_dir in plugins/*; do
+            if [ -d "$plugin_dir" ]; then
+              plugin_name=$(basename "$plugin_dir")
+              echo "Building plugin: $plugin_name"
+              cd "$plugin_dir"
+              GOOS=linux GOARCH=amd64 go build -o "../../dist/plugins/${plugin_name}-linux-amd64.so" -buildmode=plugin .
+              GOOS=darwin GOARCH=amd64 go build -o "../../dist/plugins/${plugin_name}-darwin-amd64.so" -buildmode=plugin .
+              GOOS=darwin GOARCH=arm64 go build -o "../../dist/plugins/${plugin_name}-darwin-arm64.so" -buildmode=plugin .
+              cd ../..
+            fi
+          done
+          # Compress plugin binaries
+          cd dist/plugins
+          for file in *; do
+            tar -czf "$file.tar.gz" "$file"
+            rm "$file"
+          done
+          cd ../..
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ env.VERSION }}
+          tag_name: ${{ env.VERSION }}
+          draft: false
+          prerelease: false
+          files: |
+            dist/*.tar.gz
+            dist/plugins/*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
