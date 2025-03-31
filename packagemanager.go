@@ -3,6 +3,8 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"plugin"
+	"strconv"
 	"time"
 
 	"omo/ui"
@@ -28,48 +30,30 @@ func NewPackageManager(app *tview.Application, pages *tview.Pages) *ui.Cores {
 
 	// Set refresh callback to load plugin data
 	core.SetRefreshCallback(func() ([][]string, error) {
+		// First, make sure we load all available plugins from the plugins directory
+		loadAllPluginsMetadata()
+
 		// Get actual plugin metadata from the global registry
 		plugins := GetAllPluginsMetadata()
 		pluginData := make([][]string, 0, len(plugins))
 
-		// If we have real metadata available, use it
-		if len(plugins) > 0 {
-			for _, metadata := range plugins {
-				// Determine status (installed or not)
-				status := "Not Installed"
-				_, err := os.Stat(filepath.Join(pluginsDir, metadata.Name))
-				if err == nil {
-					status = "Installed"
-				}
+		// Add metadata for each plugin
+		for _, metadata := range plugins {
+			// Determine status (installed or not)
+			status := "Not Installed"
+			_, err := os.Stat(filepath.Join(pluginsDir, metadata.Name))
+			if err == nil {
+				status = "Installed"
+			}
 
-				// Add the plugin data
-				pluginData = append(pluginData, []string{
-					metadata.Name,
-					metadata.Version,
-					metadata.Version, // Use same version for "latest" for now
-					status,
-					metadata.Description,
-				})
-			}
-		} else {
-			// Fallback to sample data if no real metadata is available
-			pluginData = [][]string{
-				{"redis", "1.0.0", "1.2.0", "Installed", "Redis management plugin"},
-				{"postgres", "0.5.0", "0.5.0", "Not Installed", "PostgreSQL management plugin"},
-				{"mongodb", "1.2.0", "1.2.0", "Installed", "MongoDB management plugin"},
-				{"elasticsearch", "0.8.0", "1.0.0", "Not Installed", "Elasticsearch management plugin"},
-				{"mysql", "2.1.0", "2.1.0", "Installed", "MySQL management plugin"},
-				{"kafka", "1.5.0", "1.8.0", "Installed", "Kafka management plugin"},
-				{"rabbitmq", "1.0.0", "1.0.0", "Not Installed", "RabbitMQ management plugin"},
-				{"nginx", "1.2.0", "1.2.0", "Installed", "Nginx management plugin"},
-				{"haproxy", "0.9.0", "1.1.0", "Installed", "HAProxy management plugin"},
-				{"prometheus", "1.0.0", "1.0.0", "Not Installed", "Prometheus management plugin"},
-				{"grafana", "2.0.0", "2.0.0", "Installed", "Grafana management plugin"},
-				{"jenkins", "1.5.0", "1.5.0", "Not Installed", "Jenkins management plugin"},
-				{"docker", "1.8.0", "1.8.0", "Installed", "Docker management plugin"},
-				{"kubernetes", "1.0.0", "1.2.0", "Installed", "Kubernetes management plugin"},
-				{"vault", "0.8.0", "0.8.0", "Not Installed", "Vault management plugin"},
-			}
+			// Add the plugin data
+			pluginData = append(pluginData, []string{
+				metadata.Name,
+				metadata.Version,
+				metadata.Version, // Use same version for "latest" for now
+				status,
+				metadata.Description,
+			})
 		}
 
 		// Update info panel with stats
@@ -207,15 +191,100 @@ func updateInfoPanel(core *ui.Cores, data [][]string) {
 	// Format the info panel text
 	infoText :=
 		"[aqua::b]Total Plugins:[white::b] " +
-			string('0'+total) + "\n" +
+			strconv.Itoa(total) + "\n" +
 			"[aqua::b]Installed:[white::b] " +
-			string('0'+installed) + "\n" +
+			strconv.Itoa(installed) + "\n" +
 			"[aqua::b]Available:[white::b] " +
-			string('0'+available) + "\n" +
+			strconv.Itoa(available) + "\n" +
 			"[aqua::b]Updates:[yellow::b] " +
-			string('0'+updates) + "\n" +
+			strconv.Itoa(updates) + "\n" +
 			"[aqua::b]Last Check:[white::b] " +
 			time.Now().Format("15:04:05")
 
 	core.SetInfoText(infoText)
+}
+
+// loadAllPluginsMetadata loads metadata for all plugins from the compiled_plugins directory
+func loadAllPluginsMetadata() {
+	files, err := os.ReadDir(pluginsDir)
+	if err != nil {
+		return
+	}
+
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+
+		pluginName := file.Name()
+		pluginPath := filepath.Join(pluginsDir, pluginName)
+
+		// Skip if already loaded
+		if _, exists := GetPluginMetadata(pluginName); exists {
+			continue
+		}
+
+		// Try to load the plugin
+		p, err := plugin.Open(pluginPath)
+		if err != nil {
+			continue
+		}
+
+		// Try to get metadata directly via GetMetadata function
+		if metadataFunc, err := p.Lookup("GetMetadata"); err == nil {
+			if getter, ok := metadataFunc.(func() interface{}); ok {
+				if rawMetadata := getter(); rawMetadata != nil {
+					// Try to extract fields from the metadata
+					if m, ok := rawMetadata.(map[string]interface{}); ok {
+						metadata := PluginMetadata{
+							Name: pluginName,
+						}
+
+						// Extract all available fields
+						if name, ok := m["Name"].(string); ok {
+							metadata.Name = name
+						}
+						if version, ok := m["Version"].(string); ok {
+							metadata.Version = version
+						}
+						if description, ok := m["Description"].(string); ok {
+							metadata.Description = description
+						}
+						if author, ok := m["Author"].(string); ok {
+							metadata.Author = author
+						}
+						if license, ok := m["License"].(string); ok {
+							metadata.License = license
+						}
+						if tags, ok := m["Tags"].([]string); ok {
+							metadata.Tags = tags
+						}
+						if arch, ok := m["Arch"].([]string); ok {
+							metadata.Arch = arch
+						}
+						if url, ok := m["URL"].(string); ok {
+							metadata.URL = url
+						}
+						if lastUpdated, ok := m["LastUpdated"].(time.Time); ok {
+							metadata.LastUpdated = lastUpdated
+						} else {
+							metadata.LastUpdated = time.Now() // Default to now
+						}
+
+						// Register the plugin metadata
+						RegisterPlugin(pluginName, metadata)
+					}
+				}
+			}
+			continue
+		}
+
+		// Alternative: try to get via the OhmyopsPlugin interface
+		if pluginSymbol, err := p.Lookup("OhmyopsPlugin"); err == nil {
+			if ohmyopsPlugin, ok := pluginSymbol.(OhmyopsPlugin); ok {
+				metadata := ohmyopsPlugin.GetMetadata()
+				RegisterPlugin(pluginName, metadata)
+			}
+		}
+	}
 }
