@@ -1,0 +1,14 @@
+---
+instances:
+  - name: "1for1"
+    description: "1for1 Redis Server"
+    host: "localhost"
+    port: 6379
+    password: ""
+    database: 0
+
+ui:
+  refresh_interval: 5
+  max_keys_display: 1000
+  enable_slowlog: true
+  enable_server_info: true 
