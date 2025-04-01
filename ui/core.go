@@ -22,9 +22,10 @@ type Cores struct {
 	title      string             // Plugin title
 
 	// Header row panels
-	infoPanel *tview.TextView // Left: context and status information
-	helpPanel *tview.TextView // Middle: keybinding and help information
-	logPanel  *tview.TextView // Right: logs and messages
+	infoPanel   *tview.TextView // Left: context and status information
+	helpPanel   *tview.TextView // Middle: keybinding and help information
+	logPanel    *tview.TextView // Right: logs and messages
+	breadcrumbs *tview.TextView // Navigation breadcrumbs
 
 	// Table view
 	table *tview.Table
@@ -47,6 +48,9 @@ type Cores struct {
 	// Callbacks for plugin integration
 	onRowSelected func(row int)
 	onAction      func(action string, payload map[string]interface{}) error
+
+	// Navigation stack
+	navStack []string
 }
 
 // NewCores creates a new Cores UI component with the specified plugin title
@@ -65,7 +69,7 @@ func NewCores(app *tview.Application, title string) *Cores {
 	// Set default key bindings
 	c.keyBindings = map[string]string{
 		"R":   "Refresh",
-		"ESC": "Escape",
+		"ESC": "Back",
 		"?":   "Help",
 	}
 
@@ -77,6 +81,14 @@ func NewCores(app *tview.Application, title string) *Cores {
 
 // initUI initializes all UI components
 func (c *Cores) initUI() {
+	// Initialize breadcrumbs
+	c.breadcrumbs = tview.NewTextView()
+	c.breadcrumbs.SetDynamicColors(true)
+	c.breadcrumbs.SetTextAlign(tview.AlignLeft)
+	c.breadcrumbs.SetText(c.title)
+	c.breadcrumbs.SetBackgroundColor(tcell.ColorBlack)
+	c.breadcrumbs.SetBorder(false)
+
 	// Info panel (left)
 	c.infoPanel = tview.NewTextView()
 	c.infoPanel.SetDynamicColors(true)
@@ -167,12 +179,13 @@ func (c *Cores) initUI() {
 			return x, y, width, height
 		})
 
-	// Create main layout with header, separator and table
+	// Create main layout with header, separator, table, and breadcrumbs at the bottom
 	c.mainLayout = tview.NewFlex().
 		SetDirection(tview.FlexRow).
 		AddItem(headerRow, 6, 0, false).
 		AddItem(separator, 1, 0, false).
-		AddItem(c.table, 0, 1, true)
+		AddItem(c.table, 0, 1, true).
+		AddItem(c.breadcrumbs, 1, 0, false)
 	c.mainLayout.SetBackgroundColor(tcell.ColorBlack)
 	c.mainLayout.SetBorder(false)
 }
@@ -286,31 +299,25 @@ func (c *Cores) getHelpText() string {
 	return sb.String()
 }
 
-// RegisterHandlers registers the key handlers for this plugin's view
+// RegisterHandlers registers keyboard input handlers
 func (c *Cores) RegisterHandlers() {
 	// Save the current input capture if there is one
 	oldCapture := c.app.GetInputCapture()
 
 	// Set up a new input capture that handles our keys and passes through others
 	c.app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		// Check if this panel is active and visible before handling keys
-		// This would need integration with your main app's focus management
-
 		// Handle key events for this plugin
 		switch event.Key() {
 		case tcell.KeyEscape:
-			// Trigger ESC key action if defined
-			if c.onAction != nil {
-				c.onAction("keypress", map[string]interface{}{
-					"key": "ESC",
-				})
-				return nil
+			// Pass to original handler
+			if oldCapture != nil {
+				return oldCapture(event)
 			}
-			c.clearSelection()
-			return nil
+			return event
+
 		case tcell.KeyRune:
 			switch event.Rune() {
-			case 'R':
+			case 'R', 'r':
 				c.RefreshData()
 				return nil
 			case '?':
@@ -354,7 +361,7 @@ func (c *Cores) RegisterHandlers() {
 	})
 }
 
-// UnregisterHandlers removes this plugin's key handlers
+// UnregisterHandlers removes keyboard input handlers
 // This should be called when switching away from this plugin
 func (c *Cores) UnregisterHandlers() {
 	// This would need to be integrated with your main app's focus management
@@ -786,4 +793,70 @@ func RemovePage(pages *tview.Pages, app *tview.Application, pageID string, callb
 		}
 		return event
 	})
+}
+
+// updateBreadcrumbs updates the breadcrumb display based on the current navigation stack
+func (c *Cores) updateBreadcrumbs() {
+	if len(c.navStack) == 0 {
+		c.breadcrumbs.SetText("")
+		return
+	}
+
+	var sb strings.Builder
+	for i, view := range c.navStack {
+		if i > 0 {
+			sb.WriteString(" [yellow]>[white] ")
+		}
+		if i == len(c.navStack)-1 {
+			// Current view in orange
+			sb.WriteString(fmt.Sprintf("[black:orange]%s[-:-]", view))
+		} else {
+			// Previous views in aqua
+			sb.WriteString(fmt.Sprintf("[black:aqua]%s[-:-]", view))
+		}
+	}
+	c.breadcrumbs.SetText(sb.String())
+}
+
+// PushView adds a view to the navigation stack
+func (c *Cores) PushView(view string) {
+	c.navStack = append(c.navStack, view)
+	c.updateBreadcrumbs()
+}
+
+// PopView removes the last view from the navigation stack
+func (c *Cores) PopView() string {
+	if len(c.navStack) == 0 {
+		return ""
+	}
+	lastView := c.navStack[len(c.navStack)-1]
+	c.navStack = c.navStack[:len(c.navStack)-1]
+	c.updateBreadcrumbs()
+	return lastView
+}
+
+// ClearViews removes all views from the navigation stack
+func (c *Cores) ClearViews() {
+	c.navStack = []string{}
+	c.updateBreadcrumbs()
+}
+
+// GetCurrentView returns the name of the current view
+func (c *Cores) GetCurrentView() string {
+	if len(c.navStack) == 0 {
+		return ""
+	}
+	return c.navStack[len(c.navStack)-1]
+}
+
+// SetViewStack sets the entire navigation stack at once
+func (c *Cores) SetViewStack(stack []string) {
+	c.navStack = append([]string{}, stack...)
+	c.updateBreadcrumbs()
+}
+
+// CopyNavigationStackFrom copies the navigation stack from another Cores instance
+func (c *Cores) CopyNavigationStackFrom(other *Cores) {
+	c.navStack = append([]string{}, other.navStack...)
+	c.updateBreadcrumbs()
 }
