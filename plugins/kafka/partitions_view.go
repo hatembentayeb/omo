@@ -45,11 +45,10 @@ func NewPartitionsView(app *tview.Application, pages *tview.Pages, kafkaClient *
 	}
 
 	// Create Cores UI component
-	title := fmt.Sprintf("Kafka Partitions (Topic: %s)", topic)
-	pv.cores = ui.NewCores(app, title)
+	pv.cores = ui.NewCores(app, "")
 
 	// Set table headers
-	pv.cores.SetTableHeaders([]string{"ID", "Leader", "Replicas", "ISRs", "Size", "Messages", "Status"})
+	pv.cores.SetTableHeaders([]string{"ID", "Leader", "Replicas", "ISR", "Size", "First Offset", "Last Offset", "Messages"})
 
 	// Set up refresh callback to make 'R' key work properly
 	pv.cores.SetRefreshCallback(func() ([][]string, error) {
@@ -71,7 +70,7 @@ func NewPartitionsView(app *tview.Application, pages *tview.Pages, kafkaClient *
 					pv.showPartitionInfo()
 					return nil
 				case "C":
-					pv.showConsumersForPartition()
+					pv.showConsumers()
 					return nil
 				case "B":
 					pv.returnToTopics()
@@ -92,17 +91,13 @@ func NewPartitionsView(app *tview.Application, pages *tview.Pages, kafkaClient *
 	// Set row selection callback for tracking selection
 	pv.cores.SetRowSelectedCallback(func(row int) {
 		if row >= 0 && row < len(pv.partitions) {
-			pv.cores.Log(fmt.Sprintf("[blue]Selected partition: %d (Leader: Broker #%d)",
+			pv.cores.Log(fmt.Sprintf("[blue]Selected partition: %d (Leader: %d)",
 				pv.partitions[row].ID, pv.partitions[row].Leader))
 		}
 	})
 
 	// Register the key handlers to actually handle the key events
 	pv.cores.RegisterHandlers()
-
-	// Set info text
-	pv.cores.SetInfoText(fmt.Sprintf("[yellow]Kafka Partitions[white]\nCluster: %s\nTopic: %s",
-		cluster, topic))
 
 	// Initial refresh to show data
 	pv.refresh()
@@ -279,8 +274,8 @@ func (pv *PartitionsView) showPartitionInfo() {
 	)
 }
 
-// showConsumersForPartition shows consumers for the selected partition
-func (pv *PartitionsView) showConsumersForPartition() {
+// showConsumers shows consumers for the selected partition
+func (pv *PartitionsView) showConsumers() {
 	selectedRow := pv.cores.GetSelectedRow()
 	if selectedRow < 0 || selectedRow >= len(pv.partitions) {
 		pv.cores.Log("[red]No partition selected")
@@ -289,8 +284,12 @@ func (pv *PartitionsView) showConsumersForPartition() {
 
 	partition := pv.partitions[selectedRow]
 
-	// Create a consumers view for this topic
-	consumersView := NewConsumersView(pv.app, pv.pages, pv.kafkaClient, pv.currentCluster, partition.Topic)
+	// Create a consumers view for this partition
+	consumersView := NewConsumersView(pv.app, pv.pages, pv.kafkaClient, pv.currentCluster, pv.currentTopic)
+
+	// Copy the current navigation stack and push new view
+	consumersView.cores.CopyNavigationStackFrom(pv.cores)
+	consumersView.cores.PushView("consumers")
 
 	// Add the consumers view as a new page
 	pv.pages.AddPage("consumers-view", consumersView.GetMainUI(), true, true)
@@ -298,15 +297,14 @@ func (pv *PartitionsView) showConsumersForPartition() {
 	// Switch to the consumers view
 	pv.pages.SwitchToPage("consumers-view")
 
-	pv.cores.Log(fmt.Sprintf("[blue]Showing consumers for topic '%s'", partition.Topic))
+	pv.cores.Log(fmt.Sprintf("[blue]Showing consumers for partition %d", partition.ID))
 }
 
-// returnToTopics returns to the topics view
+// returnToTopics switches back to the topics view
 func (pv *PartitionsView) returnToTopics() {
 	pv.cores.Log("[blue]Returning to topics view")
-
-	// Switch to the main page
-	pv.pages.SwitchToPage("main")
+	pv.cores.PopView() // Remove current view from stack
+	pv.pages.SwitchToPage("topics")
 }
 
 // formatSize formats a byte size in a human-readable format

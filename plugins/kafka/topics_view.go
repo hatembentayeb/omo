@@ -44,13 +44,7 @@ func NewTopicsView(app *tview.Application, pages *tview.Pages, kafkaClient *Kafk
 	}
 
 	// Create Cores UI component
-	var title string
-	if brokerID >= 0 {
-		title = fmt.Sprintf("Kafka Topics (Broker #%d)", brokerID)
-	} else {
-		title = "Kafka Topics"
-	}
-	tv.cores = ui.NewCores(app, title)
+	tv.cores = ui.NewCores(app, "")
 
 	// Set table headers
 	tv.cores.SetTableHeaders([]string{"Name", "Partitions", "Replication", "Leader", "Status", "Size", "Messages", "Consumers"})
@@ -214,12 +208,12 @@ func (tv *TopicsView) showHelp() {
 [green]P[white] - Show partition details for the selected topic
 [green]B[white] - Return to brokers view
 [green]?[white] - Show this help information
-[green]ESC[white] - Close modal dialogs
+[green]ESC[white] - Navigate back to previous view
 
-[aqua]Usage Tips:[white]
+[aqua]Navigation:[white]
+- Use ESC to go back to previous views
+- The breadcrumb at the bottom shows your current location
 - Select a topic by clicking on it or using arrow keys
-- Use the refresh button to update the topics list
-- You can sort the list by clicking on column headers
 `
 
 	ui.ShowInfoModal(
@@ -289,6 +283,10 @@ func (tv *TopicsView) showConsumers() {
 	// Create a consumers view for this topic
 	consumersView := NewConsumersView(tv.app, tv.pages, tv.kafkaClient, tv.currentCluster, topic.Name)
 
+	// Copy the current navigation stack and push new view
+	consumersView.cores.CopyNavigationStackFrom(tv.cores)
+	consumersView.cores.PushView("consumers")
+
 	// Add the consumers view as a new page
 	tv.pages.AddPage("consumers-view", consumersView.GetMainUI(), true, true)
 
@@ -311,6 +309,10 @@ func (tv *TopicsView) showPartitionDetails() {
 	// Create a partitions view for this topic
 	partitionsView := NewPartitionsView(tv.app, tv.pages, tv.kafkaClient, tv.currentCluster, topic.Name)
 
+	// Copy the current navigation stack and push new view
+	partitionsView.cores.CopyNavigationStackFrom(tv.cores)
+	partitionsView.cores.PushView("partitions")
+
 	// Add the partitions view as a new page
 	tv.pages.AddPage("partitions-view", partitionsView.GetMainUI(), true, true)
 
@@ -323,7 +325,6 @@ func (tv *TopicsView) showPartitionDetails() {
 // returnToBrokers switches back to the brokers view
 func (tv *TopicsView) returnToBrokers() {
 	tv.cores.Log("[blue]Returning to brokers view")
-
-	// Return to main page
+	tv.cores.PopView() // Remove current view from stack
 	tv.pages.SwitchToPage("main")
 }

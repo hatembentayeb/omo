@@ -45,16 +45,10 @@ func NewConsumersView(app *tview.Application, pages *tview.Pages, kafkaClient *K
 	}
 
 	// Create Cores UI component
-	var title string
-	if topic != "" {
-		title = fmt.Sprintf("Kafka Consumers (Topic: %s)", topic)
-	} else {
-		title = "Kafka Consumers"
-	}
-	cv.cores = ui.NewCores(app, title)
+	cv.cores = ui.NewCores(app, "")
 
 	// Set table headers
-	cv.cores.SetTableHeaders([]string{"Group ID", "Topic", "Members", "Lag", "Status", "Last Active", "Client ID"})
+	cv.cores.SetTableHeaders([]string{"Group ID", "Topic", "Partitions", "Lag", "Status", "Members", "Pattern"})
 
 	// Set up refresh callback to make 'R' key work properly
 	cv.cores.SetRefreshCallback(func() ([][]string, error) {
@@ -75,17 +69,8 @@ func NewConsumersView(app *tview.Application, pages *tview.Pages, kafkaClient *K
 				case "I":
 					cv.showConsumerInfo()
 					return nil
-				case "P":
-					cv.showPartitions()
-					return nil
-				case "M":
-					cv.showMembers()
-					return nil
 				case "B":
-					cv.returnToPrevious()
-					return nil
-				case "T":
-					cv.showTopicForConsumer()
+					cv.returnToTopics()
 					return nil
 				}
 			}
@@ -97,30 +82,18 @@ func NewConsumersView(app *tview.Application, pages *tview.Pages, kafkaClient *K
 	cv.cores.AddKeyBinding("R", "Refresh", nil)
 	cv.cores.AddKeyBinding("?", "Help", nil)
 	cv.cores.AddKeyBinding("I", "Info", nil)
-	cv.cores.AddKeyBinding("P", "Partitions", nil)
-	cv.cores.AddKeyBinding("M", "Members", nil)
 	cv.cores.AddKeyBinding("B", "Back", nil)
-	cv.cores.AddKeyBinding("T", "Topic", nil)
 
 	// Set row selection callback for tracking selection
 	cv.cores.SetRowSelectedCallback(func(row int) {
 		if row >= 0 && row < len(cv.consumers) {
-			cv.cores.Log(fmt.Sprintf("[blue]Selected consumer: %s (%s)",
-				cv.consumers[row].GroupID, cv.consumers[row].Status))
+			cv.cores.Log(fmt.Sprintf("[blue]Selected consumer group: %s (%d partitions)",
+				cv.consumers[row].GroupID, cv.consumers[row].Partitions))
 		}
 	})
 
 	// Register the key handlers to actually handle the key events
 	cv.cores.RegisterHandlers()
-
-	// Set info text
-	if topic != "" {
-		cv.cores.SetInfoText(fmt.Sprintf("[yellow]Kafka Consumers[white]\nCluster: %s\nTopic: %s",
-			cluster, topic))
-	} else {
-		cv.cores.SetInfoText(fmt.Sprintf("[yellow]Kafka Consumers[white]\nCluster: %s\nAll Topics",
-			cluster))
-	}
 
 	// Initial refresh to show data
 	cv.refresh()
@@ -180,11 +153,11 @@ func (cv *ConsumersView) refreshConsumers() ([][]string, error) {
 		tableData[i] = []string{
 			consumer.GroupID,
 			consumer.Topic,
-			strconv.Itoa(consumer.Members),
+			strconv.Itoa(len(consumer.Partitions)),
 			strconv.FormatInt(consumer.Lag, 10),
 			consumer.Status,
-			formatRelativeTime(consumer.LastActivity),
-			consumer.ClientID,
+			strconv.Itoa(consumer.Members),
+			consumer.Topic,
 		}
 	}
 
@@ -215,17 +188,14 @@ func (cv *ConsumersView) showHelp() {
 [aqua]Key Bindings:[white]
 [green]R[white] - Refresh consumers list
 [green]I[white] - Show detailed information about the selected consumer
-[green]P[white] - Show partition assignments for the selected consumer
-[green]M[white] - Show member details for the selected consumer group
-[green]T[white] - Show topic for the selected consumer
-[green]B[white] - Return to previous view
+[green]B[white] - Return to topics view
 [green]?[white] - Show this help information
-[green]ESC[white] - Close modal dialogs
+[green]ESC[white] - Navigate back to previous view
 
-[aqua]Usage Tips:[white]
+[aqua]Navigation:[white]
+- Use ESC to go back to previous views
+- The breadcrumb at the bottom shows your current location
 - Select a consumer by clicking on it or using arrow keys
-- Use the refresh button to update the consumers list
-- You can sort the list by clicking on column headers
 `
 
 	ui.ShowInfoModal(
@@ -282,123 +252,10 @@ func (cv *ConsumersView) showConsumerInfo() {
 	)
 }
 
-// showPartitions shows partition assignments for the selected consumer
-func (cv *ConsumersView) showPartitions() {
-	selectedRow := cv.cores.GetSelectedRow()
-	if selectedRow < 0 || selectedRow >= len(cv.consumers) {
-		cv.cores.Log("[red]No consumer selected")
-		return
-	}
-
-	consumer := cv.consumers[selectedRow]
-
-	// Format the partitions as a comma-separated list
-	partitions := ""
-	for i, p := range consumer.Partitions {
-		if i > 0 {
-			partitions += ", "
-		}
-		partitions += strconv.Itoa(p)
-	}
-
-	// In a real implementation, we'd get actual partition information
-	infoText := fmt.Sprintf(`[yellow]Partition Assignments for Consumer Group '%s'[white]
-
-[aqua]Topic:[white] %s
-[aqua]Total Partitions:[white] %d
-[aqua]Assigned Partitions:[white] %s
-
-[green]Member[white] | [green]Partitions[white] | [green]Current Offset[white] | [green]Log End Offset[white] | [green]Lag[white]
-----------------------------------------------------------------------------------
-member-1 | 0, 1 | 582,153 | 582,200 | 47
-member-2 | 2, 3 | 629,471 | 629,576 | 105
-`, consumer.GroupID, consumer.Topic, len(consumer.Partitions), partitions)
-
-	ui.ShowInfoModal(
-		cv.pages,
-		cv.app,
-		fmt.Sprintf("Partitions for '%s'", consumer.GroupID),
-		infoText,
-		func() {
-			// Ensure table regains focus after modal is closed
-			cv.app.SetFocus(cv.cores.GetTable())
-		},
-	)
-}
-
-// showMembers shows details about the members in the selected consumer group
-func (cv *ConsumersView) showMembers() {
-	selectedRow := cv.cores.GetSelectedRow()
-	if selectedRow < 0 || selectedRow >= len(cv.consumers) {
-		cv.cores.Log("[red]No consumer selected")
-		return
-	}
-
-	consumer := cv.consumers[selectedRow]
-
-	// In a real implementation, we'd get actual member information
-	infoText := fmt.Sprintf(`[yellow]Members in Consumer Group '%s'[white]
-
-[green]Member ID[white] | [green]Client ID[white] | [green]Host[white] | [green]Partitions[white] | [green]Last Heartbeat[white]
-----------------------------------------------------------------------
-member-1 | %s-1 | 10.0.1.5 | 0, 1 | 3 seconds ago
-member-2 | %s-2 | 10.0.1.6 | 2, 3 | 5 seconds ago
-`, consumer.GroupID, consumer.ClientID, consumer.ClientID)
-
-	if consumer.Members > 2 {
-		infoText += fmt.Sprintf("member-3 | %s-3 | 10.0.1.7 | 4, 5 | 2 seconds ago\n", consumer.ClientID)
-	}
-
-	if consumer.Members > 3 {
-		infoText += fmt.Sprintf("member-4 | %s-4 | 10.0.1.8 | 6, 7 | 1 second ago\n", consumer.ClientID)
-	}
-
-	ui.ShowInfoModal(
-		cv.pages,
-		cv.app,
-		fmt.Sprintf("Members in '%s'", consumer.GroupID),
-		infoText,
-		func() {
-			// Ensure table regains focus after modal is closed
-			cv.app.SetFocus(cv.cores.GetTable())
-		},
-	)
-}
-
-// returnToPrevious returns to the previous view
-func (cv *ConsumersView) returnToPrevious() {
-	cv.cores.Log("[blue]Returning to previous view")
-
-	// Check if we came from partitions view (we were showing consumers for a specific partition)
-	if cv.currentTopic != "" {
-		// Return to the partitions view
-		cv.pages.SwitchToPage("partitions-view")
-	} else {
-		// Otherwise return to the main page
-		cv.pages.SwitchToPage("main")
-	}
-}
-
-// showTopicForConsumer shows the selected consumer's topic in the topic view
-func (cv *ConsumersView) showTopicForConsumer() {
-	selectedRow := cv.cores.GetSelectedRow()
-	if selectedRow < 0 || selectedRow >= len(cv.consumers) {
-		cv.cores.Log("[red]No consumer selected")
-		return
-	}
-
-	consumer := cv.consumers[selectedRow]
-
-	// Create a topics view showing all topics (brokerID = -1)
-	topicsView := NewTopicsView(cv.app, cv.pages, cv.kafkaClient, cv.currentCluster, -1)
-
-	// Add the topics view as a new page
-	cv.pages.AddPage("topics-view", topicsView.GetMainUI(), true, true)
-
-	// Switch to the topics view
-	cv.pages.SwitchToPage("topics-view")
-
-	cv.cores.Log(fmt.Sprintf("[blue]Showing topic details for '%s'", consumer.Topic))
+// returnToTopics switches back to the topics view
+func (cv *ConsumersView) returnToTopics() {
+	cv.cores.Log("[blue]Returning to topics view")
+	cv.pages.SwitchToPage("topics")
 }
 
 // formatRelativeTime formats a time relative to now (e.g., "2 minutes ago")

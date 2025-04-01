@@ -18,6 +18,9 @@ type BrokerView struct {
 	kafkaClient    *KafkaClient
 	currentCluster string
 	brokers        []BrokerInfo
+	topicsView     *TopicsView
+	consumersView  *ConsumersView
+	partitionsView *PartitionsView
 }
 
 // BrokerInfo represents a Kafka broker's information
@@ -41,7 +44,10 @@ func NewBrokerView(app *tview.Application, pages *tview.Pages) *BrokerView {
 	}
 
 	// Create Cores UI component
-	bv.cores = ui.NewCores(app, "Kafka Brokers")
+	bv.cores = ui.NewCores(app, "")
+
+	// Initialize with root view
+	bv.cores.PushView("kafka")
 
 	// Set table headers
 	bv.cores.SetTableHeaders([]string{"ID", "Host", "Port", "Controller", "Version", "Status", "Partitions"})
@@ -79,17 +85,23 @@ func NewBrokerView(app *tview.Application, pages *tview.Pages) *BrokerView {
 					return nil
 				}
 			}
+		} else if action == "navigate_back" {
+			// Handle navigation events
+			if viewName, ok := payload["current_view"].(string); ok {
+				bv.showViewByName(viewName)
+				return nil
+			}
 		}
 		return nil
 	})
 
 	// Add key bindings
-	bv.cores.AddKeyBinding("R", "Refresh", nil)
-	bv.cores.AddKeyBinding("C", "Connect", nil)
-	bv.cores.AddKeyBinding("?", "Help", nil)
-	bv.cores.AddKeyBinding("I", "Info", nil)
-	bv.cores.AddKeyBinding("T", "Topics", nil)
-	bv.cores.AddKeyBinding("A", "Topics", nil)
+	bv.cores.AddKeyBinding("R", "Refresh", bv.refresh)
+	bv.cores.AddKeyBinding("C", "Connect", bv.showClusterSelector)
+	bv.cores.AddKeyBinding("?", "Help", bv.showHelp)
+	bv.cores.AddKeyBinding("I", "Info", bv.showBrokerInfo)
+	bv.cores.AddKeyBinding("T", "Topics", bv.showTopicsForBroker)
+	bv.cores.AddKeyBinding("A", "Topics", bv.showAllTopics)
 	bv.cores.AddKeyBinding("G", "Consumers", nil)
 
 	// Set row selection callback for tracking selection
@@ -106,14 +118,37 @@ func NewBrokerView(app *tview.Application, pages *tview.Pages) *BrokerView {
 	// Initialize Kafka client
 	bv.kafkaClient = NewKafkaClient()
 
-	// Automatically connect to the local cluster to show some data
+	// Initialize the views with the local cluster name
 	bv.currentCluster = "local"
+	bv.topicsView = NewTopicsView(app, pages, bv.kafkaClient, bv.currentCluster, -1)
+	bv.consumersView = NewConsumersView(app, pages, bv.kafkaClient, bv.currentCluster, "")
+	bv.partitionsView = NewPartitionsView(app, pages, bv.kafkaClient, bv.currentCluster, "")
+	// Add the views to the pages
+	pages.AddPage("topics", bv.topicsView.GetMainUI(), true, false)
+	pages.AddPage("consumers", bv.consumersView.GetMainUI(), true, false)
+
+	// Automatically connect to the local cluster to show some data
 	bv.cores.Log("[blue]Automatically connecting to local Kafka cluster")
 
 	// Initial refresh to show data
 	bv.refresh()
 
 	return bv
+}
+
+// showViewByName displays the specified view based on its name
+func (bv *BrokerView) showViewByName(viewName string) {
+	switch viewName {
+	case "brokers":
+		bv.pages.SwitchToPage("main")
+		bv.app.SetFocus(bv.cores.GetTable())
+	case "topics":
+		bv.pages.SwitchToPage("topics")
+		bv.app.SetFocus(bv.topicsView.cores.GetTable())
+	default:
+		bv.pages.SwitchToPage("main")
+		bv.app.SetFocus(bv.cores.GetTable())
+	}
 }
 
 // GetMainUI returns the main UI component
@@ -202,6 +237,14 @@ func (bv *BrokerView) showClusterSelector() {
 
 				bv.cores.Log(fmt.Sprintf("[blue]Connected to Kafka cluster: %s", name))
 				bv.refresh()
+
+				// Update the cluster for the other views
+				if bv.topicsView != nil {
+					bv.topicsView.currentCluster = name
+				}
+				if bv.consumersView != nil {
+					bv.consumersView.currentCluster = name
+				}
 			}
 		},
 	)
@@ -219,12 +262,12 @@ func (bv *BrokerView) showHelp() {
 [green]A[white] - Show all topics across all brokers
 [green]G[white] - Show all consumer groups
 [green]?[white] - Show this help information
-[green]ESC[white] - Close modal dialogs
+[green]ESC[white] - Navigate back to previous view
 
-[aqua]Usage Tips:[white]
+[aqua]Navigation:[white]
+- Use ESC to go back to previous views
+- The breadcrumb at the bottom shows your current location
 - Select a broker by clicking on it or using arrow keys
-- Use the refresh button to update the broker list
-- You can sort the list by clicking on column headers
 `
 
 	ui.ShowInfoModal(
@@ -249,30 +292,24 @@ func (bv *BrokerView) showBrokerInfo() {
 
 	broker := bv.brokers[selectedRow]
 
-	// In a real implementation, we'd get more detailed information from the broker
-	infoText := fmt.Sprintf(`[yellow]Broker Details[white]
+	// Format the broker information as a string
+	infoText := fmt.Sprintf(`[yellow]Broker #%d Information[white]
 
-[aqua]ID:[white] %d
 [aqua]Host:[white] %s
 [aqua]Port:[white] %d
 [aqua]Controller:[white] %t
 [aqua]Version:[white] %s
 [aqua]Status:[white] %s
 [aqua]Partition Count:[white] %d
-[aqua]Topic Count:[white] 15
-[aqua]JVM Version:[white] OpenJDK 17.0.2
-[aqua]Heap Size:[white] 1024 MB
-[aqua]Uptime:[white] %s
-[aqua]Connections:[white] 24 active
-`,
-		broker.ID, broker.Host, broker.Port, broker.Controller,
-		broker.Version, broker.Status, broker.PartitionCount,
-		formatDuration(time.Hour*24*3+time.Hour*7+time.Minute*23)) // Example uptime
 
+This broker is currently hosting %d partitions and its status is %s.
+`, broker.ID, broker.Host, broker.Port, broker.Controller, broker.Version, broker.Status, broker.PartitionCount, broker.PartitionCount, broker.Status)
+
+	// Show the information in a modal
 	ui.ShowInfoModal(
 		bv.pages,
 		bv.app,
-		fmt.Sprintf("Broker #%d Information", broker.ID),
+		fmt.Sprintf("Broker #%d Info", broker.ID),
 		infoText,
 		func() {
 			// Ensure table regains focus after modal is closed
@@ -281,7 +318,7 @@ func (bv *BrokerView) showBrokerInfo() {
 	)
 }
 
-// showTopicsForBroker shows topics hosted on the selected broker
+// showTopicsForBroker shows topics for the selected broker
 func (bv *BrokerView) showTopicsForBroker() {
 	selectedRow := bv.cores.GetSelectedRow()
 	if selectedRow < 0 || selectedRow >= len(bv.brokers) {
@@ -291,59 +328,87 @@ func (bv *BrokerView) showTopicsForBroker() {
 
 	broker := bv.brokers[selectedRow]
 
-	// Create a topics view for this broker
-	topicsView := NewTopicsView(bv.app, bv.pages, bv.kafkaClient, bv.currentCluster, broker.ID)
+	// Initialize topics view if needed
+	if bv.topicsView == nil {
+		bv.topicsView = NewTopicsView(bv.app, bv.pages, bv.kafkaClient, bv.currentCluster, broker.ID)
+		// Copy the current navigation stack to the new view
+		bv.topicsView.cores.CopyNavigationStackFrom(bv.cores)
+	} else {
+		bv.topicsView.currentBroker = broker.ID
+		// Update the navigation stack
+		bv.topicsView.cores.CopyNavigationStackFrom(bv.cores)
+	}
 
-	// Add the topics view as a new page
-	bv.pages.AddPage("topics-view", topicsView.GetMainUI(), true, true)
+	// Push topics view onto stack
+	bv.topicsView.cores.PushView("topics")
 
-	// Switch to the topics view
-	bv.pages.SwitchToPage("topics-view")
+	// Show the topics view for this broker
+	bv.cores.Log(fmt.Sprintf("[blue]Showing topics for broker: %d", broker.ID))
 
-	bv.cores.Log(fmt.Sprintf("[blue]Showing topics for broker #%d", broker.ID))
+	// Show the topics page
+	bv.pages.SwitchToPage("topics")
+	bv.topicsView.refresh()
+	bv.app.SetFocus(bv.topicsView.cores.GetTable())
 }
 
-// showAllTopics shows all topics
+// showAllTopics shows all topics across all brokers
 func (bv *BrokerView) showAllTopics() {
-	// Create a topics view for all brokers (brokerID = -1 means all brokers)
-	topicsView := NewTopicsView(bv.app, bv.pages, bv.kafkaClient, bv.currentCluster, -1)
+	// Initialize topics view if needed
+	if bv.topicsView == nil {
+		bv.topicsView = NewTopicsView(bv.app, bv.pages, bv.kafkaClient, bv.currentCluster, -1)
+		// Copy the current navigation stack to the new view
+		bv.topicsView.cores.CopyNavigationStackFrom(bv.cores)
+	} else {
+		bv.topicsView.currentBroker = -1
+		// Update the navigation stack
+		bv.topicsView.cores.CopyNavigationStackFrom(bv.cores)
+	}
 
-	// Add the topics view as a new page
-	bv.pages.AddPage("topics-view", topicsView.GetMainUI(), true, true)
+	// Push topics view onto stack
+	bv.topicsView.cores.PushView("topics")
 
-	// Switch to the topics view
-	bv.pages.SwitchToPage("topics-view")
+	// Show all topics
+	bv.cores.Log("[blue]Showing all Kafka topics")
 
-	bv.cores.Log("[blue]Showing topics for all brokers")
+	// Show the topics page
+	bv.pages.SwitchToPage("topics")
+	bv.topicsView.refresh()
+	bv.app.SetFocus(bv.topicsView.cores.GetTable())
 }
 
-// showAllConsumers shows all consumers from all brokers
+// showAllConsumers shows all consumer groups
 func (bv *BrokerView) showAllConsumers() {
-	// Create a consumers view for all consumers (empty string means all topics)
-	consumersView := NewConsumersView(bv.app, bv.pages, bv.kafkaClient, bv.currentCluster, "")
+	// Initialize consumers view if needed
+	if bv.consumersView == nil {
+		bv.consumersView = NewConsumersView(bv.app, bv.pages, bv.kafkaClient, bv.currentCluster, "")
+		// Copy the current navigation stack to the new view
+		bv.consumersView.cores.CopyNavigationStackFrom(bv.cores)
+	} else {
+		bv.consumersView.currentTopic = ""
+		// Update the navigation stack
+		bv.consumersView.cores.CopyNavigationStackFrom(bv.cores)
+	}
 
-	// Add the consumers view as a new page
-	bv.pages.AddPage("consumers-view", consumersView.GetMainUI(), true, true)
+	// Push consumers view onto stack
+	bv.consumersView.cores.PushView("consumers")
 
-	// Switch to the consumers view
-	bv.pages.SwitchToPage("consumers-view")
+	// Show all consumers
+	bv.cores.Log("[blue]Showing all Kafka consumer groups")
 
-	bv.cores.Log("[blue]Showing all consumers")
+	// Show the consumers page
+	bv.pages.SwitchToPage("consumers")
+	bv.consumersView.refresh()
+	bv.app.SetFocus(bv.consumersView.cores.GetTable())
 }
-
-// Helper functions
 
 // formatDuration formats a duration in a human-readable way
 func formatDuration(d time.Duration) string {
-	days := int(d.Hours() / 24)
-	hours := int(d.Hours()) % 24
-	minutes := int(d.Minutes()) % 60
-
-	if days > 0 {
-		return fmt.Sprintf("%d days, %d hours, %d minutes", days, hours, minutes)
+	if d < time.Minute {
+		return fmt.Sprintf("%.1f seconds", d.Seconds())
+	} else if d < time.Hour {
+		return fmt.Sprintf("%.1f minutes", d.Minutes())
+	} else if d < 24*time.Hour {
+		return fmt.Sprintf("%.1f hours", d.Hours())
 	}
-	if hours > 0 {
-		return fmt.Sprintf("%d hours, %d minutes", hours, minutes)
-	}
-	return fmt.Sprintf("%d minutes", minutes)
+	return fmt.Sprintf("%.1f days", d.Hours()/24)
 }
