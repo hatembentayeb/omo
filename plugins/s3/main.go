@@ -57,7 +57,7 @@ func (s *S3Plugin) Start(app *tview.Application) tview.Primitive {
 		return event // Pass other events through
 	})
 
-	pages.AddPage("main", mainUI, true, true)
+	pages.AddPage("s3", mainUI, true, true)
 
 	return pages
 }

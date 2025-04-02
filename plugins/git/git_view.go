@@ -244,6 +244,12 @@ func (gv *GitView) ShowRepoSelector() {
 		return
 	}
 
+	// Remove any existing repo selector modal
+	const modalName = "git-repo-selector"
+	if gv.pages.HasPage(modalName) {
+		gv.pages.RemovePage(modalName)
+	}
+
 	// Create data for the selection list
 	items := make([][]string, len(gv.repositories))
 	for i, repo := range gv.repositories {
@@ -258,6 +264,12 @@ func (gv *GitView) ShowRepoSelector() {
 		items,
 		func(index int, repoPath string, cancelled bool) {
 			// Ensure table regains focus
+			gv.app.SetFocus(gv.cores.GetTable())
+
+			// Clean up modal
+			if gv.pages.HasPage(modalName) {
+				gv.pages.RemovePage(modalName)
+			}
 
 			if !cancelled && index >= 0 && index < len(gv.repositories) {
 				// Set the current repository
@@ -266,7 +278,6 @@ func (gv *GitView) ShowRepoSelector() {
 				// Refresh data directly
 				time.Sleep(50 * time.Millisecond)
 				gv.cores.RefreshData()
-				gv.app.SetFocus(gv.cores.GetTable())
 			}
 		},
 	)
@@ -328,12 +339,42 @@ func (gv *GitView) refreshRepositories() ([][]string, error) {
 		}
 	}
 
-	// Update repository information in the background
-	go func() {
-		for i := range gv.repositories {
-			gv.updateRepoInfo(&gv.repositories[i])
+	// Stop any existing refresh timer to prevent leaks
+	if gv.refreshTimer != nil {
+		gv.refreshTimer.Stop()
+	}
+
+	// Update repository information in the background with a timer
+	// Using a timer instead of a direct goroutine gives us better control
+	gv.refreshTimer = time.AfterFunc(100*time.Millisecond, func() {
+		// Make a local copy of repositories to avoid race conditions
+		reposCopy := make([]GitRepository, len(gv.repositories))
+		copy(reposCopy, gv.repositories)
+
+		// Process each repository
+		for _, repo := range reposCopy {
+			// Find the matching repository in the current list
+			for j := range gv.repositories {
+				if gv.repositories[j].Path == repo.Path {
+					// Update repo in the actual list
+					gv.updateRepoInfo(&gv.repositories[j])
+					break
+				}
+			}
+
+			// Add a small delay between updates to prevent CPU spikes
+			time.Sleep(50 * time.Millisecond)
 		}
-	}()
+
+		// Queue a UI refresh after all updates if we still have repositories
+		if len(gv.repositories) > 0 {
+			gv.app.QueueUpdateDraw(func() {
+				if gv.cores != nil {
+					gv.cores.Log("[green]Repository information updated")
+				}
+			})
+		}
+	})
 
 	return result, nil
 }
@@ -693,6 +734,12 @@ func (gv *GitView) ShowDirectorySelector() {
 	// Get user's home directory as default
 	homedir, _ := os.UserHomeDir()
 
+	// Remove any existing modal pages to avoid stacking
+	const modalName = "git-directory-selector"
+	if gv.pages.HasPage(modalName) {
+		gv.pages.RemovePage(modalName)
+	}
+
 	// Use the compact input modal instead of the standard directory selector
 	ui.ShowCompactStyledInputModal(
 		gv.pages,
@@ -704,6 +751,12 @@ func (gv *GitView) ShowDirectorySelector() {
 		nil, // No validator
 		func(directory string, cancelled bool) {
 			// Ensure table regains focus
+			gv.app.SetFocus(gv.cores.GetTable())
+
+			// Make sure the modal is removed
+			if gv.pages.HasPage(modalName) {
+				gv.pages.RemovePage(modalName)
+			}
 
 			if !cancelled && directory != "" {
 				// Expand tilde if present
@@ -724,7 +777,6 @@ func (gv *GitView) ShowDirectorySelector() {
 				gv.cores.Log(fmt.Sprintf("[blue]Searching for repositories in: %s", directory))
 				gv.ManualDiscoverRepositories(directory)
 			}
-			gv.app.SetFocus(gv.cores.GetTable())
 		},
 	)
 }
