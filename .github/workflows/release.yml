@@ -5,6 +5,10 @@ on:
     branches:
       - main
 
+# Permissions needed for creating releases
+permissions:
+  contents: write
+
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
@@ -53,11 +57,10 @@ jobs:
             if [ -d "$plugin_dir" ]; then
               plugin_name=$(basename "$plugin_dir")
               echo "Building plugin: $plugin_name"
-              cd "$plugin_dir"
-              GOOS=linux GOARCH=amd64 go build -o "../../dist/plugins/${plugin_name}-${{ env.VERSION }}-linux-amd64.so" -buildmode=plugin .
-              GOOS=darwin GOARCH=amd64 go build -o "../../dist/plugins/${plugin_name}-${{ env.VERSION }}-darwin-amd64.so" -buildmode=plugin .
-              GOOS=darwin GOARCH=arm64 go build -o "../../dist/plugins/${plugin_name}-${{ env.VERSION }}-darwin-arm64.so" -buildmode=plugin .
-              cd ../..
+              # Build from root directory
+              GOOS=linux GOARCH=amd64 go build -o "dist/plugins/${plugin_name}-${{ env.VERSION }}-linux-amd64.so" -buildmode=plugin "./${plugin_dir}"
+              GOOS=darwin GOARCH=amd64 go build -o "dist/plugins/${plugin_name}-${{ env.VERSION }}-darwin-amd64.so" -buildmode=plugin "./${plugin_dir}"
+              GOOS=darwin GOARCH=arm64 go build -o "dist/plugins/${plugin_name}-${{ env.VERSION }}-darwin-arm64.so" -buildmode=plugin "./${plugin_dir}"
             fi
           done
           # Compress plugin binaries
@@ -66,7 +69,7 @@ jobs:
             tar -czf "$file.tar.gz" "$file"
             rm "$file"
           done
-          cd ../..
+          cd ..
 
       - name: Create Release
         id: create_release
