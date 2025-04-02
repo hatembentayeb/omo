@@ -24,7 +24,7 @@ type Cores struct {
 	breadcrumbs *tview.TextView // Navigation breadcrumbs
 
 	// Table view
-	table *tview.Table
+	table *Table
 
 	// Table data
 	tableHeaders []string
@@ -101,6 +101,11 @@ func min(a, b int) int {
 }
 
 // GetTable returns the underlying table primitive for focus management
-func (c *Cores) GetTable() tview.Primitive {
+func (c *Cores) GetTable() *Table {
 	return c.table
+}
+
+// GetSelectedRow returns the currently selected row in the table
+func (c *Cores) GetSelectedRow() int {
+	return c.table.GetSelectedRow()
 }

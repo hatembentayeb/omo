@@ -45,7 +45,7 @@ func (c *Cores) initUI() {
 	c.logPanel.SetText("[blue::b]INFO[white::-] Plugin initialized")
 
 	// Table view with styling to match Redis plugin
-	c.table = tview.NewTable()
+	c.table = NewTable()
 	c.table.SetBorders(false)
 	c.table.SetSelectable(true, false)
 	c.table.SetBackgroundColor(tcell.ColorBlack)
