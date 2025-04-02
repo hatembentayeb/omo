@@ -5,6 +5,11 @@ BUILD_MODE := -buildmode=plugin
 .PHONY: all clean
 
 all:
+	@echo "Building omo"
+	@go mod tidy
+	@go build -o omo 
+	@go install .
+	@echo "Building plugins"
 	@mkdir -p $(COMPILED_PLUGINS_DIR)
 	@for plugin in $(wildcard $(PLUGINS_DIR)/*); do \
 		echo "Building $$(basename $$plugin) plugin"; \
