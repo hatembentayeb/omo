@@ -55,7 +55,7 @@ func (d *DockerPlugin) Start(app *tview.Application) tview.Primitive {
 		return event
 	})
 
-	pages.AddPage("main", mainUI, true, true)
+	pages.AddPage("docker", mainUI, true, true)
 
 	// Set initial focus to the table explicitly
 	app.SetFocus(d.dockerView.cores.GetTable())

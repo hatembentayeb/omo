@@ -47,7 +47,7 @@ func (p *KafkaPlugin) Start(app *tview.Application) tview.Primitive {
 	p.brokerView.cores.PushView("brokers")
 
 	// Add the broker view to the pages component as the main page
-	pages.AddPage("main", p.brokerView.GetMainUI(), true, true)
+	pages.AddPage("kafka", p.brokerView.GetMainUI(), true, true)
 
 	// Set initial focus on the broker view table
 	app.SetFocus(p.brokerView.cores.GetTable())

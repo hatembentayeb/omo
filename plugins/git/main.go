@@ -46,9 +46,9 @@ func (g *GitPlugin) Start(app *tview.Application) tview.Primitive {
 				go func() {
 					// Run in goroutine with delay to prevent UI freeze
 					time.Sleep(50 * time.Millisecond)
-					app.QueueUpdateDraw(func() {
-						g.gitView.ShowRepoSelector()
-					})
+
+					g.gitView.ShowRepoSelector()
+
 				}()
 			}
 			return nil // Consume the event
@@ -57,7 +57,12 @@ func (g *GitPlugin) Start(app *tview.Application) tview.Primitive {
 		return event
 	})
 
-	pages.AddPage("main", mainUI, true, true)
+	// Add page with a consistent name, removing any existing page first
+	const pageName = "git-main"
+	if pages.HasPage(pageName) {
+		pages.RemovePage(pageName)
+	}
+	pages.AddPage(pageName, mainUI, true, true)
 
 	// Set initial focus to the table explicitly
 	app.SetFocus(g.gitView.cores.GetTable())
@@ -66,22 +71,61 @@ func (g *GitPlugin) Start(app *tview.Application) tview.Primitive {
 	g.gitView.cores.Log("[blue]Git plugin initialized")
 	g.gitView.cores.Log("[yellow]Press 'D' to search for repositories in a directory")
 
-	// Use a timer to delay any heavy operations until after UI is shown
-	time.AfterFunc(100*time.Millisecond, func() {
-		app.QueueUpdateDraw(func() {
-			// This ensures the UI is responsive first
-		})
-	})
-
 	return pages
 }
 
 // Stop cleans up resources used by the Git plugin
 func (g *GitPlugin) Stop() {
 	if g.gitView != nil {
-		// Clean up any resources
+		// Log that we're cleaning up
+		if g.gitView.cores != nil {
+			g.gitView.cores.Log("[blue]Cleaning up Git plugin resources...")
+		}
+
+		// Clean up timer resources
 		if g.gitView.refreshTimer != nil {
 			g.gitView.refreshTimer.Stop()
+			g.gitView.refreshTimer = nil
+		}
+
+		// Reset repositories data to prevent stale data
+		g.gitView.repositories = []GitRepository{}
+
+		// Reset current repo path
+		g.gitView.currentRepoPath = ""
+
+		// Clean up UI resources
+		if g.gitView.cores != nil {
+			// Unregister handlers to prevent input capture conflicts
+			g.gitView.cores.UnregisterHandlers()
+
+			// Stop auto-refresh if enabled
+			g.gitView.cores.StopAutoRefresh()
+		}
+
+		// Clean up any modal pages that might still be open
+		if g.gitView.pages != nil {
+			// Remove known modal pages
+			knownPages := []string{
+				"git-main",
+				"git-repo-selector",
+				"git-directory-selector",
+				"git-help-modal",
+				"git-status-modal",
+				"git-log-modal",
+				"git-branches-modal",
+			}
+
+			for _, pageName := range knownPages {
+				if g.gitView.pages.HasPage(pageName) {
+					g.gitView.pages.RemovePage(pageName)
+				}
+			}
+		}
+
+		// Log final cleanup complete
+		if g.gitView.cores != nil {
+			g.gitView.cores.Log("[green]Git plugin resources cleaned up")
 		}
 	}
 }
