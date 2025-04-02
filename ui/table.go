@@ -169,11 +169,6 @@ func (c *Cores) SetTableData(data [][]string) *Cores {
 	return c
 }
 
-// GetSelectedRow returns the index of the currently selected row, or -1 if none
-func (c *Cores) GetSelectedRow() int {
-	return c.selectedRow
-}
-
 // GetSelectedRowData returns the data of the currently selected row, or nil if none
 func (c *Cores) GetSelectedRowData() []string {
 	if c.selectedRow >= 0 && c.selectedRow < len(c.tableData) {
@@ -202,4 +197,49 @@ func (c *Cores) SetTableTitle(title string) *Cores {
 func (c *Cores) SetSelectionKey(columnName string) *Cores {
 	c.selectionKey = columnName
 	return c
+}
+
+// UpdateRow updates a single row in the table
+func (c *Cores) UpdateRow(index int, rowData []string) {
+	// Ensure index is valid
+	if index < 0 || index >= len(c.tableData) {
+		return
+	}
+
+	// Update the data in the table
+	c.tableData[index] = rowData
+
+	// Update the visual table
+	for j, value := range rowData {
+		if j < c.table.GetColumnCount() {
+			c.table.SetCell(index+1, j, // +1 for header row
+				tview.NewTableCell(value).
+					SetTextColor(tcell.ColorWhite).
+					SetAlign(tview.AlignLeft))
+		}
+	}
+}
+
+// Table wraps tview.Table to provide additional functionality
+type Table struct {
+	*tview.Table
+}
+
+// NewTable creates a new Table instance
+func NewTable() *Table {
+	return &Table{
+		Table: tview.NewTable(),
+	}
+}
+
+// GetSelectedRow returns the currently selected row in the table
+func (t *Table) GetSelectedRow() int {
+	row, _ := t.GetSelection()
+	return row
+}
+
+// SetupSelection configures the table for row selection
+func (t *Table) SetupSelection() {
+	t.SetSelectable(true, false)
+	t.Select(0, 0)
 }

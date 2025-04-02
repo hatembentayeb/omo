@@ -114,3 +114,37 @@ func (c *Cores) getHelpText() string {
 
 	return sb.String()
 }
+
+// getExpandedHelpText returns the expanded help text with more detailed information
+func (c *Cores) getExpandedHelpText() string {
+	// Start with the basic help text as a foundation
+	var sb strings.Builder
+
+	sb.WriteString("[yellow]Keybinding Reference:[white]\n\n")
+
+	// Add standard keybindings with more detailed descriptions
+	sb.WriteString("[yellow]Standard Navigation:[white]\n")
+	sb.WriteString("  [aqua]ESC[white]    - Navigate back to previous view\n")
+	sb.WriteString("  [aqua]R[white]      - Refresh current data\n")
+	sb.WriteString("  [aqua]?[white]      - Toggle between basic and detailed help\n\n")
+
+	// Add custom keybindings with detailed explanations
+	sb.WriteString("[yellow]Custom Actions:[white]\n")
+	for key, description := range c.keyBindings {
+		// Skip the standard keys we already covered
+		if key == "R" || key == "ESC" || key == "?" {
+			continue
+		}
+		sb.WriteString(fmt.Sprintf("  [aqua]%s[white]      - %s\n", key, description))
+	}
+
+	// Add additional help sections with more context
+	sb.WriteString("\n[yellow]Navigation Tips:[white]\n")
+	sb.WriteString("  - Use arrow keys to navigate the table\n")
+	sb.WriteString("  - Press Enter to select an item\n")
+	sb.WriteString("  - Use ESC to go back through navigation history\n\n")
+
+	sb.WriteString("[yellow]Current View:[white] " + c.GetCurrentView() + "\n")
+
+	return sb.String()
+}
