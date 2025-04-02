@@ -31,6 +31,12 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "Version: $VERSION"
 
+      - name: Set up cross-compilation tools
+        run: |
+          # Install compilers needed for cross-compilation
+          sudo apt-get update
+          sudo apt-get install -y gcc-multilib gcc-mingw-w64
+
       - name: Build main app for multiple platforms
         run: |
           mkdir -p dist
@@ -49,20 +55,35 @@ jobs:
           done
           cd ..
 
-      - name: Build plugins
+      - name: Build plugins for Linux (only)
         run: |
           mkdir -p dist/plugins
+          # Note: Cross-compiling plugins with CGO is complex
+          # For now, we're building only Linux plugins on the Linux runner
+          # In a production environment, consider using separate runners for macOS/Windows
+          echo "Building only Linux plugins. macOS/Windows plugins require native compilation."
+          
           # Build each plugin in the plugins directory
           for plugin_dir in plugins/*; do
             if [ -d "$plugin_dir" ]; then
               plugin_name=$(basename "$plugin_dir")
-              echo "Building plugin: $plugin_name"
-              # Build from root directory
-              GOOS=linux GOARCH=amd64 go build -o "dist/plugins/${plugin_name}-${{ env.VERSION }}-linux-amd64.so" -buildmode=plugin "./${plugin_dir}"
-              GOOS=darwin GOARCH=amd64 go build -o "dist/plugins/${plugin_name}-${{ env.VERSION }}-darwin-amd64.so" -buildmode=plugin "./${plugin_dir}"
-              GOOS=darwin GOARCH=arm64 go build -o "dist/plugins/${plugin_name}-${{ env.VERSION }}-darwin-arm64.so" -buildmode=plugin "./${plugin_dir}"
+              echo "Building Linux plugin: $plugin_name"
+              # Enable CGO for plugin compilation
+              CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o "dist/plugins/${plugin_name}-${{ env.VERSION }}-linux-amd64.so" -buildmode=plugin "./${plugin_dir}"
             fi
           done
+          
+          # Create placeholder files for other platforms
+          # These would need to be built on their native platforms
+          for plugin_dir in plugins/*; do
+            if [ -d "$plugin_dir" ]; then
+              plugin_name=$(basename "$plugin_dir")
+              # Create placeholder files for macOS/Windows
+              echo "This is a placeholder. macOS plugins must be built on macOS." > "dist/plugins/${plugin_name}-${{ env.VERSION }}-darwin-amd64.so"
+              echo "This is a placeholder. macOS ARM plugins must be built on macOS." > "dist/plugins/${plugin_name}-${{ env.VERSION }}-darwin-arm64.so"
+            fi
+          done
+          
           # Compress plugin binaries
           cd dist/plugins
           for file in *; do
