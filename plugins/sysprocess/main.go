@@ -141,15 +141,16 @@ func (p *Plugin) initializeMainView() {
 		TableHeaders: []string{"PID", "Name", "CPU%", "Memory%", "Status", "Threads", "Created"},
 		RefreshFunc:  p.fetchProcessData,
 		KeyHandlers: map[string]string{
-			"R": "Refresh",
-			"K": "Kill Process",
-			"I": "Process Info",
-			"S": "System Info",
-			"D": "Resource Dashboard",
-			"N": "Kernel Info",
-			"T": "Sort by CPU",
-			"M": "Sort by Memory",
-			"?": "Help",
+			"R":  "Refresh",
+			"K":  "Kill Process",
+			"I":  "Process Info",
+			"S":  "System Info",
+			"D":  "Resource Dashboard",
+			"N":  "Kernel Info",
+			"T":  "Sort by CPU",
+			"M":  "Sort by Memory",
+			"?":  "Help",
+			"^B": "Back",
 		},
 		SelectedFunc: p.onProcessSelected,
 	}
@@ -195,28 +196,85 @@ func (p *Plugin) setupActionHandler() {
 					p.sortByMemory()
 				case "?":
 					p.showHelpModal()
-				case "ESC":
-					// Handle ESC key to return to the process list
-					if p.currentView != "main" {
-						p.returnToProcessList()
-					}
+				case "^B":
+					p.returnToPreviousView()
 				}
+			}
+		} else if action == "navigate_back" {
+			// When ESC is pressed, the Core UI automatically pops the view,
+			// and we just need to update our internal state to match
+			currentView := p.cores.GetCurrentView()
+			p.switchToView(currentView)
+			logger.Printf("Navigated back to %s view (ESC key)", currentView)
+		} else if action == "back" {
+			// This is triggered when ESC is pressed, before navigate_back
+			if fromView, ok := payload["from"].(string); ok {
+				logger.Printf("Navigating back from %s view", fromView)
 			}
 		}
 		return nil
 	})
 }
 
-// returnToProcessList returns to the main process list view
-func (p *Plugin) returnToProcessList() {
-	logger.Println("Returning to process list")
-	p.cores.PopView() // Remove current view from navigation stack
-	p.currentView = "main"
+// switchToView updates the current view and UI based on the view name
+func (p *Plugin) switchToView(viewName string) {
+	logger.Printf("Switching to view: %s", viewName)
 
-	// Update UI back to process list
-	p.cores.SetTableHeaders([]string{"PID", "Name", "CPU%", "Memory%", "Status", "Threads", "Created"})
-	p.cores.Log("[blue]Returned to process list")
+	// Set the current view based on the view name
+	switch viewName {
+	case "Process List":
+		p.currentView = "main"
+		p.cores.SetTableHeaders([]string{"PID", "Name", "CPU%", "Memory%", "Status", "Threads", "Created"})
+	case "System Info":
+		p.currentView = "sysinfo"
+		p.cores.SetTableHeaders([]string{"Property", "Value"})
+	case "Resource Dashboard":
+		p.currentView = "resource"
+		p.cores.SetTableHeaders([]string{"Resource", "Usage"})
+	case "Kernel Info":
+		p.currentView = "kernel"
+		p.cores.SetTableHeaders([]string{"Parameter", "Value"})
+	default:
+		// If we don't recognize the view, default to main view
+		p.currentView = "main"
+		p.cores.SetTableHeaders([]string{"PID", "Name", "CPU%", "Memory%", "Status", "Threads", "Created"})
+	}
+
+	// Refresh data to update the view
 	p.cores.RefreshData()
+}
+
+// returnToPreviousView goes back one step in the view stack
+func (p *Plugin) returnToPreviousView() {
+	logger.Println("Returning to previous view using Ctrl+B")
+
+	// Only do something if we have more than one view in the stack
+	currentViewName := p.cores.GetCurrentView()
+	if currentViewName == "Process List" || currentViewName == "" {
+		p.cores.Log("[yellow]Already at the root view")
+		return
+	}
+
+	// Get the view before popping
+	previousView := ""
+
+	// Simulate ESC behavior by popping the view and updating
+	popped := p.cores.PopView()
+	if popped != "" {
+		logger.Printf("Popped view: %s", popped)
+	}
+
+	// Get the new current view
+	newCurrentView := p.cores.GetCurrentView()
+	if newCurrentView != "" {
+		previousView = newCurrentView
+	} else {
+		previousView = "Process List" // Default to process list if no previous view
+	}
+
+	// Update the UI based on the previous view
+	p.switchToView(previousView)
+	p.cores.Log(fmt.Sprintf("[blue]Navigated back to %s view (using Ctrl+B)", previousView))
 }
 
 // showHelpModal displays a help modal with keyboard shortcuts
@@ -229,20 +287,24 @@ func (p *Plugin) showHelpModal() {
 [aqua]Key Bindings:[white]
 [green]R[white] - Refresh process list
 [green]K[white] - Kill selected process
-[green]I[white] - Show detailed process information
-[green]S[white] - Show system information
-[green]D[white] - Show resource dashboard
-[green]N[white] - Show kernel information
+[green]I[white] - Show detailed process information (modal)
+[green]S[white] - Show system information view
+[green]D[white] - Show resource dashboard view
+[green]N[white] - Show kernel information view
 [green]T[white] - Sort processes by CPU usage
 [green]M[white] - Sort processes by memory usage
 [green]?[white] - Show this help dialog
-[green]ESC[white] - Close modal or return to process list view
+[green]ESC[white] - Return to previous view (standard navigation)
+[green]^B[white] - Alternative back navigation (for compatibility)
 
 [aqua]Navigation:[white]
-- Use arrow keys to navigate the process list
-- Select a process by clicking on it or using arrow keys
-- Press ESC to close modals or return to the main process list
-- When viewing system info, resource dashboard, or kernel info, press ESC to return to the process list
+- Use arrow keys to navigate tables and select items
+- Press ESC to navigate back to the previous view (standard way)
+- Press Ctrl+B as an alternative way to navigate back
+- Process information (I) is shown in a modal dialog:
+  - The modal can be closed by pressing ESC
+- System Info (S), Resource Dashboard (D) and Kernel Info (N) are separate views:
+  - Press ESC to navigate back to the previous view
 - The breadcrumb at the bottom shows your current location
 `
 
