@@ -1,3 +1,5 @@
+// Package ui provides terminal UI components for building consistent
+// terminal applications with a unified interface.
 package ui
 
 import (
@@ -7,7 +9,18 @@ import (
 	"github.com/rivo/tview"
 )
 
-// initUI initializes all UI components
+// initUI initializes all UI components for the Cores instance.
+// This function sets up the primary UI components including:
+//   - Breadcrumbs for navigation history
+//   - Info panel for status and context information
+//   - Help panel for displaying available key commands
+//   - Log panel for displaying messages and notifications
+//   - Table for data display
+//   - Separator lines and other visual elements
+//
+// The UI follows a consistent design pattern used throughout OMO,
+// with a header section, main data view (table), and navigation breadcrumbs.
+// Colors, borders, and styles are configured to maintain visual consistency.
 func (c *Cores) initUI() {
 	// Initialize breadcrumbs
 	c.breadcrumbs = tview.NewTextView()
@@ -30,7 +43,7 @@ func (c *Cores) initUI() {
 	c.helpPanel.SetDynamicColors(true)
 	c.helpPanel.SetTextAlign(tview.AlignLeft)
 	c.helpPanel.SetText(c.getHelpText())
-	c.helpPanel.SetBackgroundColor(tcell.ColorBlack)
+	c.helpPanel.SetBackgroundColor(tcell.ColorDefault)
 	c.helpPanel.SetBorder(false)
 
 	// Log panel (right)
@@ -40,7 +53,7 @@ func (c *Cores) initUI() {
 		c.app.Draw()
 	})
 	c.logPanel.SetScrollable(true)
-	c.logPanel.SetBackgroundColor(tcell.ColorBlack)
+	c.logPanel.SetBackgroundColor(tcell.ColorDefault)
 	c.logPanel.SetBorder(false)
 	c.logPanel.SetText("[blue::b]INFO[white::-] Plugin initialized")
 
@@ -48,9 +61,9 @@ func (c *Cores) initUI() {
 	c.table = NewTable()
 	c.table.SetBorders(false)
 	c.table.SetSelectable(true, false)
-	c.table.SetBackgroundColor(tcell.ColorBlack)
+	c.table.SetBackgroundColor(tcell.ColorDefault)
 	c.table.SetBorderColor(tcell.ColorAqua)
-	c.table.Box.SetBackgroundColor(tcell.ColorBlack)
+	c.table.Box.SetBackgroundColor(tcell.ColorDefault)
 	c.table.Box.SetBorderAttributes(tcell.AttrNone)
 	c.table.SetBorder(false) // Remove border to match Redis style
 
@@ -94,15 +107,15 @@ func (c *Cores) initUI() {
 		AddItem(c.infoPanel, 0, 1, false).
 		AddItem(c.helpPanel, 0, 1, false).
 		AddItem(c.logPanel, 0, 1, false)
-	headerRow.SetBackgroundColor(tcell.ColorBlack)
+	headerRow.SetBackgroundColor(tcell.ColorDefault)
 
 	// Create separator like Redis plugin
 	separator := tview.NewBox().
-		SetBackgroundColor(tcell.ColorBlack).
+		SetBackgroundColor(tcell.ColorDefault).
 		SetDrawFunc(func(screen tcell.Screen, x, y, width, height int) (int, int, int, int) {
 			// Draw a horizontal line
 			for i := 0; i < width; i++ {
-				screen.SetContent(x+i, y, tcell.RuneHLine, nil, tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorAqua))
+				screen.SetContent(x+i, y, tcell.RuneHLine, nil, tcell.StyleDefault.Background(tcell.ColorDefault).Foreground(tcell.ColorAqua))
 			}
 			return x, y, width, height
 		})
@@ -114,6 +127,6 @@ func (c *Cores) initUI() {
 		AddItem(separator, 1, 0, false).
 		AddItem(c.table, 0, 1, true).
 		AddItem(c.breadcrumbs, 1, 0, false)
-	c.mainLayout.SetBackgroundColor(tcell.ColorBlack)
+	c.mainLayout.SetBackgroundColor(tcell.ColorDefault)
 	c.mainLayout.SetBorder(false)
 }

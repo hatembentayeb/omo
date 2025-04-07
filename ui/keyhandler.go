@@ -1,17 +1,37 @@
+// Package ui provides terminal UI components for building consistent
+// terminal applications with a unified interface.
 package ui
 
 import (
 	"github.com/gdamore/tcell/v2"
 )
 
-// KeyAction represents a key binding and its associated action
+// KeyAction represents a key binding and its associated action.
+// This struct encapsulates everything needed to define and handle
+// keyboard shortcuts in the UI, including the key, a human-readable
+// description, and the callback function to execute when the key is pressed.
 type KeyAction struct {
-	Key         string
-	Description string
-	Callback    func()
+	Key         string // The key or key combination (e.g., "R", "Ctrl+C")
+	Description string // Human-readable description of the action
+	Callback    func() // Function to call when the key is pressed
 }
 
-// StandardKeyHandler provides a consistent way to register and handle keys
+// StandardKeyHandler provides a standardized approach to handling key events
+// across all plugins. It implements common key actions like:
+// - R for refreshing data
+// - ? for toggling help view
+// - ESC for navigation back
+//
+// This function follows the tview input capture pattern, where handlers can be chained.
+// It processes key events, handles standard keys, and forwards unhandled events to the
+// previous handler.
+//
+// Parameters:
+//   - event: The key event to process
+//   - oldCapture: The previous input capture function in the chain
+//
+// Returns:
+//   - The event for the next handler, or nil if handled
 func (c *Cores) StandardKeyHandler(event *tcell.EventKey, oldCapture func(*tcell.EventKey) *tcell.EventKey) *tcell.EventKey {
 	// Handle standard navigation keys
 	switch event.Key() {
@@ -88,14 +108,21 @@ func (c *Cores) StandardKeyHandler(event *tcell.EventKey, oldCapture func(*tcell
 	return event
 }
 
-// RegisterStandardKeys adds common keybindings that should be consistent across plugins
+// RegisterStandardKeys registers the common keybindings that should be
+// consistent across all plugins (R for refresh, ? for help, ESC for back).
+// This ensures a consistent user experience across different plugins by
+// maintaining the same basic key commands in every view.
 func (c *Cores) RegisterStandardKeys() {
 	c.keyBindings["R"] = "Refresh"
 	c.keyBindings["?"] = "Help"
 	c.keyBindings["ESC"] = "Back"
 }
 
-// ToggleHelpExpanded toggles the help panel between expanded and compact states
+// ToggleHelpExpanded switches between basic and expanded help views
+// to provide consistent help functionality across plugins.
+// This function alternates between a compact help display showing
+// just the key bindings, and an expanded view with more detailed
+// information about each command.
 func (c *Cores) ToggleHelpExpanded() {
 	if c.helpPanel.GetTitle() == "Keybindings" {
 		c.helpPanel.SetTitle("Keybindings (expanded)")

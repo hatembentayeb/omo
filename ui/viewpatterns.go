@@ -1,3 +1,5 @@
+// Package ui provides terminal UI components for building consistent
+// terminal applications with a unified interface.
 package ui
 
 import (
@@ -7,20 +9,32 @@ import (
 	"github.com/rivo/tview"
 )
 
-// ViewPattern encapsulates common patterns for view initialization
+// ViewPattern encapsulates common patterns for view initialization.
+// It provides a standard way to configure views across different plugins,
+// ensuring consistency in the user interface while reducing boilerplate code.
+// This allows plugin developers to focus on implementing functionality
+// rather than UI configuration details.
 type ViewPattern struct {
-	App          *tview.Application
-	Pages        *tview.Pages
-	Cores        *Cores
-	Title        string
-	HeaderText   string
-	TableHeaders []string
-	RefreshFunc  func() ([][]string, error)
-	KeyHandlers  map[string]string // Key to description mapping
-	SelectedFunc func(row int)
+	App          *tview.Application         // Reference to the main application
+	Pages        *tview.Pages               // Pages component for navigation
+	Cores        *Cores                     // Optional existing Cores instance
+	Title        string                     // Title of the view
+	HeaderText   string                     // Text to display in the header
+	TableHeaders []string                   // Column headers for the table
+	RefreshFunc  func() ([][]string, error) // Function to retrieve data
+	KeyHandlers  map[string]string          // Key to description mapping
+	SelectedFunc func(row int)              // Called when a row is selected
 }
 
-// InitializeView creates a standard view based on the provided pattern
+// InitializeView creates a standard view based on the provided pattern.
+// This function creates a consistent UI layout following the OMO design patterns,
+// by configuring headers, callbacks, and key bindings based on the supplied pattern.
+//
+// Parameters:
+//   - pattern: The ViewPattern containing view configuration options
+//
+// Returns:
+//   - A fully configured Cores instance ready to be displayed
 func InitializeView(pattern ViewPattern) *Cores {
 	// Create new Cores UI component if none was provided
 	cores := pattern.Cores
@@ -74,7 +88,16 @@ func InitializeView(pattern ViewPattern) *Cores {
 	return cores
 }
 
-// CreateStandardTableRow creates a consistently formatted table row
+// CreateStandardTableRow creates a consistently formatted table row.
+// This function standardizes the appearance of table rows across the application,
+// applying consistent styling and colors.
+//
+// Parameters:
+//   - values: The strings to display in the row
+//   - colors: Optional colors to apply to each cell (defaults to white if not specified)
+//
+// Returns:
+//   - A styled table cell that can be added to a table
 func CreateStandardTableRow(values []string, colors []tcell.Color) *tview.TableCell {
 	row := tview.NewTableCell("")
 
@@ -93,10 +116,21 @@ func CreateStandardTableRow(values []string, colors []tcell.Color) *tview.TableC
 	return row
 }
 
-// StandardDataFormatterFunc provides a standard way to format row data
+// StandardDataFormatterFunc provides a standard way to format row data.
+// This function type defines a transformation that can be applied to
+// row data before displaying it in the UI.
 type StandardDataFormatterFunc func([]string) []string
 
-// FormatDataWithStandardPattern applies consistent formatting to table data
+// FormatDataWithStandardPattern applies consistent formatting to table data.
+// This helper function processes all rows in a dataset using the provided
+// formatter function, ensuring consistent appearance across tables.
+//
+// Parameters:
+//   - data: The raw data rows to format
+//   - formatter: Optional function to transform each row (can be nil)
+//
+// Returns:
+//   - Formatted data rows ready for display
 func FormatDataWithStandardPattern(
 	data [][]string,
 	formatter StandardDataFormatterFunc,
@@ -114,7 +148,18 @@ func FormatDataWithStandardPattern(
 	return result
 }
 
-// CreateStandardSelectionHandler returns a standard selection handler function
+// CreateStandardSelectionHandler returns a standard selection handler function.
+// This creates a consistent way to handle row selection events across different views,
+// with optional formatting and actions triggered on selection.
+//
+// Parameters:
+//   - cores: The Cores instance to log selection events to
+//   - data: The underlying data objects represented by the rows
+//   - formatFunc: Function to format the selected item for display in logs
+//   - actionFunc: Function to perform an action when an item is selected
+//
+// Returns:
+//   - A row selection handler function that can be registered with Cores
 func CreateStandardSelectionHandler(
 	cores *Cores,
 	data []interface{},
