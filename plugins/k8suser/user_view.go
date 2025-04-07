@@ -234,8 +234,11 @@ func (uv *UserView) showAssignRoleModalForUser(user *K8sUser) {
 				nil, true,
 			)
 
-			// Assign the role in a goroutine
+			// Assign the role in a goroutine to prevent UI blocking
 			safeGo(func() {
+				// Log the assignment operation through the UI
+				uv.cores.Log(fmt.Sprintf("[blue]Assigning role %s to user %s in namespace %s...", role, user.Username, namespace))
+
 				err := uv.k8sClient.AssignRoleToUser(user.Username, namespace, role)
 				if err != nil {
 					uv.app.QueueUpdateDraw(func() {
