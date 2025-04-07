@@ -39,11 +39,14 @@ func (p *K8sUserPlugin) Start(app *tview.Application) tview.Primitive {
 	// Try to get the default kubeconfig
 	p.k8sClient.GetKubeConfig()
 
+	// Initialize the user view - move this up before initializeMainView
+	p.userView = NewUserView(p.app, p.pages, nil, p.certManager, p.k8sClient)
+
 	// Initialize views
 	p.initializeMainView()
 
-	// Initialize the user view
-	p.userView = NewUserView(p.app, p.pages, p.cores, p.certManager, p.k8sClient)
+	// Update the cores reference in UserView with the initialized one
+	p.userView.cores = p.cores
 
 	// Add keyboard handling for context selection (Ctrl+T)
 	p.pages.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -95,7 +98,7 @@ func (p *K8sUserPlugin) initializeMainView() {
 		Pages:        p.pages,
 		Title:        "Kubernetes User Manager",
 		HeaderText:   "Manage Kubernetes users with certificate-based authentication",
-		TableHeaders: []string{"Username", "Namespace", "Roles", "Certificate Expiry"},
+		TableHeaders: []string{"Username", "Certificate Expiry", "Namespaces", "Roles"},
 		RefreshFunc:  p.fetchUsers,
 		KeyHandlers: map[string]string{
 			"R":  "Refresh",
@@ -105,6 +108,7 @@ func (p *K8sUserPlugin) initializeMainView() {
 			"V":  "View Details",
 			"T":  "Test Access",
 			"E":  "Export Config",
+			"K":  "Connection Command",
 			"^T": "Switch Context",
 			"?":  "Help",
 			"^B": "Back",
@@ -114,6 +118,11 @@ func (p *K8sUserPlugin) initializeMainView() {
 
 	// Initialize the UI
 	p.cores = ui.InitializeView(pattern)
+
+	// Set the table selection handler with the right signature
+	p.cores.GetTable().Select(0, 0).SetSelectedFunc(func(row, column int) {
+		p.onUserSelected(row)
+	})
 
 	// Set up action handler
 	p.setupActionHandler()
@@ -143,11 +152,14 @@ func (p *K8sUserPlugin) setupActionHandler() {
 				case "A":
 					p.userView.showAssignRoleModal()
 				case "V":
+					// Show user details for the selected user directly
 					p.userView.showUserDetails()
 				case "T":
 					p.userView.showTestAccessModal()
 				case "E":
 					p.userView.exportUserConfig()
+				case "K":
+					p.userView.showConnectionCommand()
 				case "?":
 					p.showHelpModal()
 				case "^B":
@@ -164,14 +176,25 @@ func (p *K8sUserPlugin) setupActionHandler() {
 
 // fetchUsers retrieves Kubernetes users and formats them for display
 func (p *K8sUserPlugin) fetchUsers() ([][]string, error) {
+	// Debug log start
+	p.cores.Log("[yellow]Debug: fetchUsers called")
+
 	if p.k8sClient == nil || p.k8sClient.CurrentContext == "" {
+		p.cores.Log("[yellow]Debug: No k8sClient or current context")
 		return [][]string{{"Please select a Kubernetes context", "", "", ""}}, nil
 	}
 
 	users, err := p.k8sClient.GetUsers()
 	if err != nil {
+		p.cores.Log(fmt.Sprintf("[red]Error fetching users: %v", err))
 		return [][]string{{"Error fetching users", err.Error(), "", ""}}, nil
 	}
+
+	// Debug log user count
+	p.cores.Log(fmt.Sprintf("[yellow]Debug: GetUsers returned %d users", len(users)))
+
+	// Store the users in the k8sClient for selection operations
+	p.k8sClient.Users = users
 
 	if len(users) == 0 {
 		return [][]string{{"No certificate-based users found", "Use 'C' to create", "", ""}}, nil
@@ -179,12 +202,15 @@ func (p *K8sUserPlugin) fetchUsers() ([][]string, error) {
 
 	result := make([][]string, 0, len(users))
 
-	for _, user := range users {
+	for i, user := range users {
+		// Debug log each user
+		p.cores.Log(fmt.Sprintf("[yellow]Debug: User[%d]: %s", i, user.Username))
+
 		result = append(result, []string{
 			user.Username,
+			user.CertExpiry,
 			user.Namespace,
 			user.Roles,
-			user.CertExpiry,
 		})
 	}
 
@@ -264,10 +290,34 @@ func (p *K8sUserPlugin) showContextSelector() {
 	)
 }
 
-// onUserSelected handles when a user is selected in the table
+// onUserSelected is called when a user is selected in the table
 func (p *K8sUserPlugin) onUserSelected(row int) {
-	// Show user details when a row is selected
-	p.userView.showUserDetails()
+	// Debug log
+	p.cores.Log(fmt.Sprintf("[yellow]Debug: onUserSelected called with row %d", row))
+
+	// Debug state info
+	p.cores.Log(fmt.Sprintf("[yellow]Debug: k8sClient is nil? %v", p.k8sClient == nil))
+
+	if p.k8sClient == nil {
+		p.cores.Log("[red]Error: k8sClient is nil")
+		return
+	}
+
+	p.cores.Log(fmt.Sprintf("[yellow]Debug: Users length: %d", len(p.k8sClient.Users)))
+
+	if row < 0 || row >= len(p.k8sClient.Users) {
+		p.cores.Log(fmt.Sprintf("[red]Error: Invalid row %d (not in range 0-%d)", row, len(p.k8sClient.Users)-1))
+		return
+	}
+
+	// Debug selected user
+	user := p.k8sClient.Users[row]
+	p.cores.Log(fmt.Sprintf("[yellow]Debug: Selected user: %s at row %d", user.Username, row))
+
+	// Log the selected user
+	p.cores.Log(fmt.Sprintf("[blue]Selected user: %s", user.Username))
+
+	// We don't call showUserDetails here anymore since the user presses Enter to see details
 }
 
 // showHelpModal displays the help information
@@ -287,6 +337,7 @@ func (p *K8sUserPlugin) showHelpModal() {
   [aqua]V[white] - View user details
   [aqua]T[white] - Test user access
   [aqua]E[white] - Export user kubeconfig
+  [aqua]K[white] - Show kubectl connection command
   [aqua]Ctrl+T[white] - Switch Kubernetes context
   [aqua]Esc[white] - Go back to previous view
   [aqua]Ctrl+B[white] - Go back to previous view

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 	"os/exec"
@@ -70,21 +71,81 @@ func (cm *CertManager) GenerateUserCert(username string) (*CertificateInfo, erro
 		return nil, fmt.Errorf("failed to generate CSR: %v", err)
 	}
 
-	// Get from kubectl the CA cert paths
-	caPaths, err := cm.getKubectlCAPaths()
+	// Read the CSR file
+	csrData, err := os.ReadFile(csrPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get CA paths: %v", err)
+		return nil, fmt.Errorf("failed to read CSR file: %v", err)
 	}
 
-	// Sign the CSR
-	err = cm.signCSR(csrPath, certPath, caPaths.CAKey, caPaths.CACert, username, "365") // Valid for 1 year
+	// Base64 encode the CSR data
+	encodedCSR := base64.StdEncoding.EncodeToString(csrData)
+
+	// Create a unique name for the Kubernetes CSR resource
+	csrResourceName := fmt.Sprintf("csr-%s-%d", username, time.Now().Unix())
+	tempFile := filepath.Join(os.TempDir(), fmt.Sprintf("%s.yaml", csrResourceName))
+
+	// Create the CSR YAML content that includes the CSR data
+	csrYaml := fmt.Sprintf(`apiVersion: certificates.k8s.io/v1
+kind: CertificateSigningRequest
+metadata:
+  name: %s
+spec:
+  request: %s
+  signerName: kubernetes.io/kube-apiserver-client
+  expirationSeconds: 31536000  # 1 year
+  usages:
+  - client auth
+`, csrResourceName, encodedCSR)
+
+	// Write the CSR resource to a temp file
+	err = os.WriteFile(tempFile, []byte(csrYaml), 0600)
 	if err != nil {
-		return nil, fmt.Errorf("failed to sign CSR: %v", err)
+		return nil, fmt.Errorf("failed to write CSR resource YAML: %v", err)
 	}
+
+	// Submit the CSR to Kubernetes
+	submitCmd := exec.Command("kubectl", "apply", "-f", tempFile)
+	output, err := submitCmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("kubectl error submitting CSR: %v, output: %s", err, string(output))
+	}
+
+	// Approve the CSR
+	approveCmd := exec.Command("kubectl", "certificate", "approve", csrResourceName)
+	output, err = approveCmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("kubectl error approving CSR: %v, output: %s", err, string(output))
+	}
+
+	// Wait a moment for the approval to process
+	time.Sleep(2 * time.Second)
+
+	// Retrieve the signed certificate
+	getCmd := exec.Command("kubectl", "get", "csr", csrResourceName, "-o", "jsonpath={.status.certificate}")
+	output, err = getCmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("kubectl error getting signed certificate: %v, output: %s", err, string(output))
+	}
+
+	// Decode the base64 certificate
+	certData, err := base64.StdEncoding.DecodeString(string(output))
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode certificate: %v", err)
+	}
+
+	// Save the signed certificate
+	err = os.WriteFile(certPath, certData, 0600)
+	if err != nil {
+		return nil, fmt.Errorf("failed to write certificate file: %v", err)
+	}
+
+	// Clean up the temporary files
+	os.Remove(tempFile)
 
 	// Calculate expiry date (1 year from now)
 	expiryDate := time.Now().AddDate(1, 0, 0)
 
+	// Return the certificate info
 	return &CertificateInfo{
 		Username:   username,
 		PrivateKey: keyPath,
@@ -107,26 +168,13 @@ func (cm *CertManager) generatePrivateKey(keyPath string) error {
 
 // generateCSR generates a Certificate Signing Request using OpenSSL
 func (cm *CertManager) generateCSR(keyPath, csrPath, username string) error {
-	// Create a config file for the CSR
-	configPath := filepath.Join(filepath.Dir(keyPath), "csr.conf")
-	configContent := fmt.Sprintf(`[req]
-default_bits = 4096
-prompt = no
-default_md = sha256
-distinguished_name = dn
+	// Create the OpenSSL command with the correct format for Kubernetes user authentication
+	// The CN (Common Name) is the username for Kubernetes RBAC
+	// The O (Organization) field is used for group membership in Kubernetes
+	cmd := exec.Command("openssl", "req", "-new", "-key", keyPath,
+		"-out", csrPath,
+		"-subj", fmt.Sprintf("/CN=%s/O=system:masters", username))
 
-[dn]
-CN = %s
-O = system:masters
-`, username)
-
-	err := os.WriteFile(configPath, []byte(configContent), 0600)
-	if err != nil {
-		return fmt.Errorf("failed to write CSR config: %v", err)
-	}
-
-	// Generate CSR
-	cmd := exec.Command("openssl", "req", "-new", "-key", keyPath, "-out", csrPath, "-config", configPath)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("openssl error: %v, output: %s", err, string(output))
@@ -224,39 +272,14 @@ basicConstraints = critical, CA:true
 
 // signCSR signs a CSR with the given CA
 func (cm *CertManager) signCSR(csrPath, certPath, caKeyPath, caCertPath, username, days string) error {
-	// Create a config for the signing
-	configPath := filepath.Join(filepath.Dir(csrPath), "signing.conf")
-	configContent := fmt.Sprintf(`[req]
-req_extensions = v3_req
-distinguished_name = req_distinguished_name
-
-[req_distinguished_name]
-
-[v3_req]
-basicConstraints = CA:FALSE
-keyUsage = nonRepudiation, digitalSignature, keyEncipherment
-extendedKeyUsage = clientAuth
-subjectAltName = @alt_names
-
-[alt_names]
-DNS.1 = %s
-`, username)
-
-	err := os.WriteFile(configPath, []byte(configContent), 0600)
-	if err != nil {
-		return fmt.Errorf("failed to write signing config: %v", err)
-	}
-
-	// Sign the CSR
+	// Use a simple signing command without complex configs
 	cmd := exec.Command("openssl", "x509", "-req",
 		"-in", csrPath,
 		"-CA", caCertPath,
 		"-CAkey", caKeyPath,
 		"-CAcreateserial",
 		"-out", certPath,
-		"-days", days,
-		"-extensions", "v3_req",
-		"-extfile", configPath)
+		"-days", days)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -346,7 +369,12 @@ func (cm *CertManager) GenerateKubeConfig(certInfo *CertificateInfo, serverURL s
 		serverURL = string(output)
 	}
 
-	// Create kubeconfig content
+	// Encode the cert and key data
+	encodedCert := encodeBase64(string(certData))
+	encodedKey := encodeBase64(string(keyData))
+
+	// Create kubeconfig content using just the username
+	// This follows the typical kubeconfig format used by kubectl
 	kubeConfigContent := fmt.Sprintf(`apiVersion: v1
 kind: Config
 clusters:
@@ -365,8 +393,14 @@ users:
   user:
     client-certificate-data: %s
     client-key-data: %s
-`, serverURL, certInfo.Username, certInfo.Username, certInfo.Username,
-		encodeBase64(string(certData)), encodeBase64(string(keyData)))
+`,
+		serverURL,
+		certInfo.Username,
+		certInfo.Username,
+		certInfo.Username,
+		certInfo.Username,
+		encodedCert,
+		encodedKey)
 
 	// Write the kubeconfig file
 	err = os.WriteFile(kubeConfigPath, []byte(kubeConfigContent), 0600)
@@ -379,12 +413,5 @@ users:
 
 // encodeBase64 encodes a string to base64
 func encodeBase64(data string) string {
-	cmd := exec.Command("base64")
-	cmd.Stdin = strings.NewReader(data)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return ""
-	}
-
-	return strings.TrimSpace(string(output))
+	return base64.StdEncoding.EncodeToString([]byte(data))
 }
