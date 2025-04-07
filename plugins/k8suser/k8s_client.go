@@ -199,6 +199,41 @@ func (kc *K8sClient) GetUsers() ([]*K8sUser, error) {
 		}
 	}
 
+	// Also look for any users with CSRs
+	csrCmd := exec.Command("kubectl", "get", "csr", "-o",
+		"jsonpath={range .items[*]}{.spec.username}{\",\"}{end}")
+	csrOutput, err := csrCmd.CombinedOutput()
+	if err == nil {
+		csrUsernames := strings.Split(strings.TrimSpace(string(csrOutput)), ",")
+		for _, csrUsername := range csrUsernames {
+			if csrUsername == "" {
+				continue
+			}
+
+			// Skip usernames that are already in our list
+			found := false
+			for _, user := range kc.Users {
+				if user.Username == csrUsername {
+					found = true
+					break
+				}
+			}
+
+			if !found {
+				// Get namespace bindings
+				namespace, roles := kc.getUserRoles(csrUsername)
+
+				// Add the user with CSR status
+				kc.Users = append(kc.Users, &K8sUser{
+					Username:   csrUsername,
+					Namespace:  namespace,
+					Roles:      roles,
+					CertExpiry: "CSR Pending",
+				})
+			}
+		}
+	}
+
 	return kc.Users, nil
 }
 
@@ -230,6 +265,7 @@ func (kc *K8sClient) getUserRoles(username string) (string, string) {
 			usernames := strings.Split(parts[2], " ")
 
 			for _, name := range usernames {
+				// Check both with and without system prefix
 				if name == username {
 					namespaces[namespace] = true
 					roleBindings[binding] = true
@@ -259,6 +295,7 @@ func (kc *K8sClient) getUserRoles(username string) (string, string) {
 			usernames := strings.Split(parts[1], " ")
 
 			for _, name := range usernames {
+				// Check both with and without system prefix
 				if name == username {
 					namespaces["cluster-wide"] = true
 					roleBindings[binding] = true
@@ -394,31 +431,115 @@ func (kc *K8sClient) GetRoles(namespace string) ([]string, error) {
 // AssignRoleToUser assigns a role to a user
 func (kc *K8sClient) AssignRoleToUser(username, namespace, role string) error {
 	var cmd *exec.Cmd
+	var bindingName string
+
+	// Log the assignment operation
+	fmt.Printf("Assigning role %s to user %s in namespace %s\n", role, username, namespace)
 
 	if namespace == "cluster-wide" {
-		// Create a ClusterRoleBinding
-		bindingName := fmt.Sprintf("%s-%s-binding", username, role)
+		// Create a ClusterRoleBinding for cluster-wide permissions
+		bindingName = fmt.Sprintf("%s-%s-binding", username, role)
+
+		// For cluster-wide roles, we use a ClusterRoleBinding
 		cmd = exec.Command("kubectl", "create", "clusterrolebinding", bindingName,
 			"--clusterrole="+role, "--user="+username)
+
+		// Create special binding for cluster-admin if requested
+		if role == "cluster-admin" {
+			// Create and apply cluster-admin YAML directly
+			clusterAdminYaml := fmt.Sprintf(`
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: %s-cluster-admin
+subjects:
+- kind: User
+  name: %s
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io
+`, username, username)
+
+			// Write to a temp file
+			tempFile := filepath.Join(os.TempDir(), fmt.Sprintf("%s-cluster-admin.yaml", username))
+			err := os.WriteFile(tempFile, []byte(clusterAdminYaml), 0600)
+			if err != nil {
+				return fmt.Errorf("failed to write cluster-admin YAML: %v", err)
+			}
+
+			// Apply the YAML
+			applyCmd := exec.Command("kubectl", "apply", "-f", tempFile)
+			output, err := applyCmd.CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("kubectl error applying cluster-admin: %v, output: %s", err, string(output))
+			}
+
+			// Clean up
+			os.Remove(tempFile)
+		}
 	} else {
-		// Check if this is a cluster role
+		// Create a RoleBinding for namespace-scoped permissions
 		if strings.HasPrefix(role, "clusterrole/") {
-			// Extract the actual role name
+			// Extract the actual role name for cluster roles used in namespaces
 			roleName := strings.TrimPrefix(role, "clusterrole/")
-			bindingName := fmt.Sprintf("%s-%s-binding", username, roleName)
-			cmd = exec.Command("kubectl", "create", "rolebinding", bindingName,
-				"--clusterrole="+roleName, "--user="+username, "-n", namespace)
+			bindingName = fmt.Sprintf("%s-%s-binding", username, roleName)
+
+			// Create a RoleBinding using a ClusterRole
+			roleBindingYaml := fmt.Sprintf(`
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: %s
+  namespace: %s
+subjects:
+- kind: User
+  name: %s
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: %s
+  apiGroup: rbac.authorization.k8s.io
+`, bindingName, namespace, username, roleName)
+
+			// Write to a temp file
+			tempFile := filepath.Join(os.TempDir(), fmt.Sprintf("%s-%s.yaml", username, roleName))
+			err := os.WriteFile(tempFile, []byte(roleBindingYaml), 0600)
+			if err != nil {
+				return fmt.Errorf("failed to write role binding YAML: %v", err)
+			}
+
+			// Apply the YAML
+			applyCmd := exec.Command("kubectl", "apply", "-f", tempFile)
+			output, err := applyCmd.CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("kubectl error: %v, output: %s", err, string(output))
+			}
+
+			// Clean up
+			os.Remove(tempFile)
 		} else {
 			// Regular role
-			bindingName := fmt.Sprintf("%s-%s-binding", username, role)
+			bindingName = fmt.Sprintf("%s-%s-binding", username, role)
+
+			// Create RoleBinding using kubectl command
 			cmd = exec.Command("kubectl", "create", "rolebinding", bindingName,
 				"--role="+role, "--user="+username, "-n", namespace)
+
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("kubectl error: %v, output: %s", err, string(output))
+			}
 		}
 	}
 
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("kubectl error: %v, output: %s", err, string(output))
+	// If cmd was set, execute it (for the simple cases)
+	if cmd != nil {
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("kubectl error: %v, output: %s", err, string(output))
+		}
 	}
 
 	return nil
@@ -496,17 +617,29 @@ func (kc *K8sClient) DeleteUser(username string) error {
 		}
 	}
 
+	// Also check for and delete any pending CSRs for this user
+	cmd = exec.Command("kubectl", "get", "csr", "-o", "jsonpath={.items[*].metadata.name}")
+	output, err = cmd.CombinedOutput()
+	if err == nil {
+		csrNames := strings.Split(strings.TrimSpace(string(output)), " ")
+		for _, csrName := range csrNames {
+			if strings.Contains(csrName, username) {
+				deleteCmd := exec.Command("kubectl", "delete", "csr", csrName)
+				deleteCmd.CombinedOutput()
+			}
+		}
+	}
+
 	return nil
 }
 
 // TestAccess tests a user's access to a resource
 func (kc *K8sClient) TestAccess(username, namespace, resource, verb string) (bool, string, error) {
-	// Generate temp kubeconfig for the user
+	// Find the user's certificate
 	user := &K8sUser{
 		Username: username,
 	}
 
-	// Find the user's certificate
 	for _, u := range kc.Users {
 		if u.Username == username && u.Certificate != nil {
 			user = u
@@ -536,6 +669,7 @@ func (kc *K8sClient) TestAccess(username, namespace, resource, verb string) (boo
 		args = append(args, "-n", namespace)
 	}
 
+	fmt.Printf("Testing access with command: kubectl %s\n", strings.Join(args, " "))
 	cmd := exec.Command("kubectl", args...)
 	output, err := cmd.CombinedOutput()
 	result := strings.TrimSpace(string(output))
@@ -548,7 +682,7 @@ func (kc *K8sClient) TestAccess(username, namespace, resource, verb string) (boo
 		return true, result, nil
 	}
 
-	if result == "no" {
+	if strings.Contains(result, "no") {
 		return false, result, nil
 	}
 
