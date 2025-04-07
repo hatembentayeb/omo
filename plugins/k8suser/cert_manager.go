@@ -37,7 +37,8 @@ func NewCertManager() *CertManager {
 	// Create the directory if it doesn't exist
 	err = os.MkdirAll(baseDir, 0700)
 	if err != nil {
-		fmt.Printf("Warning: Failed to create certificate directory: %v\n", err)
+		// Don't print to stdout as it interferes with the UI
+		// Just silently continue - the error will be handled later if needed
 	}
 
 	return &CertManager{

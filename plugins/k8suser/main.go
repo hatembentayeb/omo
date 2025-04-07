@@ -379,7 +379,9 @@ func safeGo(f func()) {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				fmt.Printf("Recovered from panic: %v\n", r)
+				// Don't use fmt.Printf as it causes UI issues
+				// This could be logged to a file or handled differently if needed
+				// If using in a UI context, ideally would use UI.cores.Log
 			}
 		}()
 		f()

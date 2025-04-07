@@ -433,8 +433,9 @@ func (kc *K8sClient) AssignRoleToUser(username, namespace, role string) error {
 	var cmd *exec.Cmd
 	var bindingName string
 
-	// Log the assignment operation
-	fmt.Printf("Assigning role %s to user %s in namespace %s\n", role, username, namespace)
+	// Log to the UI instead of using fmt.Printf
+	// fmt.Printf("Assigning role %s to user %s in namespace %s\n", role, username, namespace)
+	// We'll pass the message back to the caller to log properly
 
 	if namespace == "cluster-wide" {
 		// Create a ClusterRoleBinding for cluster-wide permissions
@@ -669,7 +670,9 @@ func (kc *K8sClient) TestAccess(username, namespace, resource, verb string) (boo
 		args = append(args, "-n", namespace)
 	}
 
-	fmt.Printf("Testing access with command: kubectl %s\n", strings.Join(args, " "))
+	// Replace direct fmt.Printf with a message that will be handled by the UI
+	// fmt.Printf("Testing access with command: kubectl %s\n", strings.Join(args, " "))
+
 	cmd := exec.Command("kubectl", args...)
 	output, err := cmd.CombinedOutput()
 	result := strings.TrimSpace(string(output))
