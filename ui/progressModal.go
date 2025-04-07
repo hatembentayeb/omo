@@ -1,3 +1,5 @@
+// Package ui provides terminal UI components for building consistent
+// terminal applications with a unified interface.
 package ui
 
 import (
@@ -7,23 +9,37 @@ import (
 	"github.com/rivo/tview"
 )
 
-// ProgressModal holds the state for a progress modal
+// ProgressModal holds the state for a progress modal.
+// This component provides a progress bar dialog that can be used to show
+// the status of long-running operations. It includes a progress bar,
+// status text, and an optional cancel button.
 type ProgressModal struct {
-	pages         *tview.Pages
-	app           *tview.Application
-	modal         *tview.Flex
-	progressBar   *tview.TextView
-	statusText    *tview.TextView
-	progress      int
-	maxProgress   int
-	pageName      string
-	onCancel      func()
-	isCancellable bool
-	autoClose     bool
-	done          bool
+	pages         *tview.Pages       // Reference to the application pages
+	app           *tview.Application // Reference to the main application
+	modal         *tview.Flex        // The main container for the modal
+	progressBar   *tview.TextView    // Visual progress bar component
+	statusText    *tview.TextView    // Status text component
+	progress      int                // Current progress value
+	maxProgress   int                // Maximum progress value
+	pageName      string             // Name of the page in the pages component
+	onCancel      func()             // Callback when cancel is pressed
+	isCancellable bool               // Whether the operation can be cancelled
+	autoClose     bool               // Whether to auto-close when complete
+	done          bool               // Whether the operation is complete
 }
 
-// NewProgressModal creates a new progress modal with the given configuration
+// NewProgressModal creates a new progress modal with the given configuration.
+// This factory function initializes a ProgressModal with default settings
+// and creates the UI components.
+//
+// Parameters:
+//   - pages: The tview.Pages instance to add the modal to
+//   - app: The tview.Application instance for UI updates
+//   - title: The title to display at the top of the modal
+//   - maxProgress: The maximum value for the progress bar (100%)
+//
+// Returns:
+//   - A configured ProgressModal instance (not yet displayed)
 func NewProgressModal(pages *tview.Pages, app *tview.Application, title string, maxProgress int) *ProgressModal {
 	pm := &ProgressModal{
 		pages:       pages,
@@ -99,36 +115,72 @@ func NewProgressModal(pages *tview.Pages, app *tview.Application, title string, 
 	return pm
 }
 
-// SetCancellable sets whether the progress modal can be cancelled
+// SetCancellable sets whether the progress modal can be cancelled.
+// When cancellable, the modal will display a cancel button that,
+// when clicked, will call the onCancel callback if set.
+//
+// Parameters:
+//   - cancellable: Whether to enable cancellation
+//
+// Returns:
+//   - The ProgressModal instance for method chaining
 func (pm *ProgressModal) SetCancellable(cancellable bool) *ProgressModal {
 	pm.isCancellable = cancellable
 	return pm
 }
 
-// SetOnCancel sets a callback to be called when the cancel button is clicked
+// SetOnCancel sets a callback to be called when the cancel button is clicked.
+// This function will be executed when the user clicks the cancel button.
+//
+// Parameters:
+//   - callback: The function to call on cancellation
+//
+// Returns:
+//   - The ProgressModal instance for method chaining
 func (pm *ProgressModal) SetOnCancel(callback func()) *ProgressModal {
 	pm.onCancel = callback
 	return pm
 }
 
-// SetAutoClose sets whether the progress modal should automatically close when progress reaches 100%
+// SetAutoClose sets whether the progress modal should automatically close when progress reaches 100%.
+// When enabled, the modal will automatically close after a short delay when the operation completes.
+//
+// Parameters:
+//   - autoClose: Whether to enable auto-closing
+//
+// Returns:
+//   - The ProgressModal instance for method chaining
 func (pm *ProgressModal) SetAutoClose(autoClose bool) *ProgressModal {
 	pm.autoClose = autoClose
 	return pm
 }
 
-// Show displays the progress modal
+// Show displays the progress modal.
+// This adds the modal to the pages component and makes it visible.
+//
+// Returns:
+//   - The ProgressModal instance for method chaining
 func (pm *ProgressModal) Show() *ProgressModal {
 	pm.pages.AddPage(pm.pageName, pm.modal, true, true)
 	return pm
 }
 
-// Close removes the progress modal
+// Close removes the progress modal.
+// This removes the modal from the pages component, hiding it from view.
 func (pm *ProgressModal) Close() {
 	pm.pages.RemovePage(pm.pageName)
 }
 
-// UpdateProgress updates the progress bar
+// UpdateProgress updates the progress bar.
+// This function updates both the visual progress bar and the status text,
+// and handles auto-closing if enabled and progress is complete.
+//
+// Parameters:
+//   - progress: The new progress value (0 to maxProgress)
+//   - status: The status text to display
+//
+// Returns:
+//   - The ProgressModal instance for method chaining
 func (pm *ProgressModal) UpdateProgress(progress int, status string) *ProgressModal {
 	if pm.done {
 		return pm
@@ -158,7 +210,9 @@ func (pm *ProgressModal) UpdateProgress(progress int, status string) *ProgressMo
 	return pm
 }
 
-// updateProgressBar updates the visual progress bar
+// updateProgressBar updates the visual progress bar.
+// This internal function renders the progress bar with the current progress value,
+// calculating the appropriate number of filled segments and the percentage text.
 func (pm *ProgressModal) updateProgressBar() {
 	percent := int(float64(pm.progress) / float64(pm.maxProgress) * 100)
 	barWidth := 50
@@ -177,7 +231,21 @@ func (pm *ProgressModal) updateProgressBar() {
 	pm.progressBar.SetText(bar + " " + string(rune(percent)) + "%")
 }
 
-// ShowProgressModal creates, configures, and shows a progress modal in one operation
+// ShowProgressModal creates, configures, and shows a progress modal in one operation.
+// This convenience function combines the creation, configuration, and display
+// of a progress modal into a single call.
+//
+// Parameters:
+//   - pages: The tview.Pages instance to add the modal to
+//   - app: The tview.Application instance for UI updates
+//   - title: The title to display at the top of the modal
+//   - maxProgress: The maximum value for the progress bar (100%)
+//   - cancellable: Whether to enable cancellation
+//   - onCancel: The function to call on cancellation
+//   - autoClose: Whether to enable auto-closing
+//
+// Returns:
+//   - A configured and displayed ProgressModal instance
 func ShowProgressModal(
 	pages *tview.Pages,
 	app *tview.Application,

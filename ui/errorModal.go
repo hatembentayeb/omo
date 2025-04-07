@@ -1,3 +1,5 @@
+// Package ui provides terminal UI components for building consistent
+// terminal applications with a unified interface.
 package ui
 
 import (
@@ -5,7 +7,16 @@ import (
 	"github.com/rivo/tview"
 )
 
-// ShowErrorModal displays a modal with an error message and OK button
+// ShowErrorModal displays a modal with an error message and OK button.
+// This function creates and displays a modal dialog to show an error message
+// with a centered title, red border, and an OK button for dismissal.
+//
+// Parameters:
+//   - pages: The tview.Pages instance to add the modal to
+//   - app: The tview.Application instance for focus management
+//   - title: The title to display at the top of the modal
+//   - errorText: The error message text to display
+//   - callback: Optional function to call when the modal is dismissed
 func ShowErrorModal(
 	pages *tview.Pages,
 	app *tview.Application,
@@ -72,8 +83,20 @@ func ShowErrorModal(
 	app.SetFocus(form)
 }
 
-// ShowStandardErrorModal displays a standardized error modal with consistent styling
-// This is the preferred method for showing errors throughout the application
+// ShowStandardErrorModal displays a standardized error modal with consistent styling.
+// This is the preferred method for showing errors throughout the application.
+// It presents error messages with a consistent look and feel, including:
+// - Red border and title for error identification
+// - Left-aligned, scrollable text for better readability of long messages
+// - Proper sizing based on message length
+// - Keyboard navigation including ESC to dismiss
+//
+// Parameters:
+//   - pages: The tview.Pages instance to add the modal to
+//   - app: The tview.Application instance for focus management
+//   - title: The title to display at the top of the modal (defaults to "Error" if empty)
+//   - errorText: The error message text to display
+//   - callback: Optional function to call when the modal is dismissed
 func ShowStandardErrorModal(
 	pages *tview.Pages,
 	app *tview.Application,

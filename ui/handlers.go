@@ -1,3 +1,5 @@
+// Package ui provides terminal UI components for building consistent
+// terminal applications with a unified interface.
 package ui
 
 import (
@@ -5,7 +7,17 @@ import (
 	"github.com/rivo/tview"
 )
 
-// RegisterHandlers registers keyboard input handlers
+// RegisterHandlers registers keyboard input handlers.
+// This method sets up input capture for the Cores instance, establishing
+// the standard key handlers while preserving any existing input handlers.
+// It implements a chain-of-responsibility pattern where this handler
+// processes relevant keys and passes others to the previous handler.
+//
+// The handlers include standard keys like:
+// - R for refresh
+// - ? for help
+// - ESC for navigation back
+// - Any custom key bindings defined for the instance
 func (c *Cores) RegisterHandlers() {
 	// Save the current input capture if there is one
 	oldCapture := c.app.GetInputCapture()
@@ -17,15 +29,29 @@ func (c *Cores) RegisterHandlers() {
 	})
 }
 
-// UnregisterHandlers removes keyboard input handlers
+// UnregisterHandlers removes keyboard input handlers.
 // This should be called when switching away from this plugin
+// to prevent interference with other components' keyboard handling.
+// In a complete implementation, this would restore the previous
+// input capture that was saved during registration.
 func (c *Cores) UnregisterHandlers() {
 	// This would need to be integrated with your main app's focus management
 	// Typically restores the previous input capture
 }
 
-// RemovePage is a utility function to remove any modal page with ESC key handling
-// This can be used by any modal in the application to ensure consistent behavior
+// RemovePage is a utility function to remove any modal page with ESC key handling.
+// This can be used by any modal in the application to ensure consistent behavior.
+// The function implements standard ESC key handling for modals:
+// - Captures the ESC key while a modal is active
+// - Removes the modal when ESC is pressed
+// - Restores the original input capture
+// - Calls an optional callback function
+//
+// Parameters:
+//   - pages: The tview.Pages instance containing the modal
+//   - app: The tview.Application instance for input capture
+//   - pageID: The ID of the page/modal to remove
+//   - callback: Optional function to call after removing the page
 func RemovePage(pages *tview.Pages, app *tview.Application, pageID string, callback func()) {
 	// Save original input capture to restore later
 	oldCapture := app.GetInputCapture()

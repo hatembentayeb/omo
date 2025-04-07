@@ -204,7 +204,12 @@ func updateInfoPanel(core *ui.Cores, data [][]string) {
 	core.SetInfoText(infoText)
 }
 
-// loadAllPluginsMetadata loads metadata for all plugins from the compiled_plugins directory
+// loadAllPluginsMetadata scans the plugins directory and loads metadata from all plugin files
+// This function:
+// 1. Reads all files in the plugins directory
+// 2. Attempts to load each file as a Go plugin
+// 3. Extracts metadata from plugins using either the GetMetadata function or OhmyopsPlugin interface
+// 4. Registers valid plugins in the GlobalPluginRegistry
 func loadAllPluginsMetadata() {
 	files, err := os.ReadDir(pluginsDir)
 	if err != nil {
@@ -240,7 +245,7 @@ func loadAllPluginsMetadata() {
 							Name: pluginName,
 						}
 
-						// Extract all available fields
+						// Extract all available fields from map to metadata struct
 						if name, ok := m["Name"].(string); ok {
 							metadata.Name = name
 						}

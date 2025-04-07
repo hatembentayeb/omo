@@ -1,3 +1,5 @@
+// Package ui provides terminal UI components for building consistent
+// terminal applications with a unified interface.
 package ui
 
 import (
@@ -8,29 +10,50 @@ import (
 	"github.com/rivo/tview"
 )
 
-// ErrorLevel defines the severity level of an error
+// ErrorLevel defines the severity level of an error.
+// The levels are arranged in increasing order of severity,
+// allowing for appropriate handling and display based on importance.
 type ErrorLevel int
 
 const (
-	// ErrorLevelInfo represents an informational message
+	// ErrorLevelInfo represents an informational message.
+	// Information messages are typically non-critical notifications.
 	ErrorLevelInfo ErrorLevel = iota
-	// ErrorLevelWarning represents a warning message
+
+	// ErrorLevelWarning represents a warning message.
+	// Warnings indicate potential issues that don't prevent operation.
 	ErrorLevelWarning
-	// ErrorLevelError represents an error message
+
+	// ErrorLevelError represents an error message.
+	// Errors indicate issues that may disrupt normal operation.
 	ErrorLevelError
-	// ErrorLevelFatal represents a fatal error message
+
+	// ErrorLevelFatal represents a fatal error message.
+	// Fatal errors indicate critical issues that prevent continued operation.
 	ErrorLevelFatal
 )
 
 // ErrorHandler provides a centralized way to handle and display errors
+// across the application. It coordinates error logging, user notifications,
+// and appropriate UI responses based on error severity.
 type ErrorHandler struct {
-	app         *tview.Application
-	pages       *tview.Pages
-	logFunc     func(message string)
-	errorLogger *log.Logger
+	app         *tview.Application   // Reference to the main application
+	pages       *tview.Pages         // Pages component for showing modals
+	logFunc     func(message string) // Function to log messages to the UI log panel
+	errorLogger *log.Logger          // Optional external logger
 }
 
-// NewErrorHandler creates a new error handler
+// NewErrorHandler creates a new error handler.
+// This factory function initializes an ErrorHandler with the necessary
+// components for displaying and logging errors.
+//
+// Parameters:
+//   - app: The tview application instance
+//   - pages: The pages component for displaying modal dialogs
+//   - logFunc: A function that logs messages to the UI log panel
+//
+// Returns:
+//   - A new ErrorHandler instance
 func NewErrorHandler(app *tview.Application, pages *tview.Pages, logFunc func(message string)) *ErrorHandler {
 	return &ErrorHandler{
 		app:     app,
@@ -39,7 +62,16 @@ func NewErrorHandler(app *tview.Application, pages *tview.Pages, logFunc func(me
 	}
 }
 
-// HandleError processes an error and displays it appropriately based on its level
+// HandleError processes an error and displays it appropriately based on its level.
+// This method performs the following actions based on error severity:
+// - Logs the error to the UI log panel with appropriate formatting
+// - Logs to an external logger if configured
+// - Displays an error modal for errors of level Error or Fatal
+//
+// Parameters:
+//   - err: The error to handle
+//   - level: The severity level of the error
+//   - title: The title for the error modal (uses "Error" if empty)
 func (h *ErrorHandler) HandleError(err error, level ErrorLevel, title string) {
 	if err == nil {
 		return
@@ -92,7 +124,14 @@ func (h *ErrorHandler) HandleError(err error, level ErrorLevel, title string) {
 	}
 }
 
-// levelToString converts an error level to its string representation
+// levelToString converts an error level to its string representation.
+// This helper function provides standardized text labels for each error level.
+//
+// Parameters:
+//   - level: The ErrorLevel to convert
+//
+// Returns:
+//   - The string representation of the error level
 func levelToString(level ErrorLevel) string {
 	switch level {
 	case ErrorLevelInfo:
@@ -108,7 +147,17 @@ func levelToString(level ErrorLevel) string {
 	}
 }
 
-// HandleErrorWithCallback processes an error and calls the provided callback if needed
+// HandleErrorWithCallback processes an error and calls the provided callback if needed.
+// This method extends HandleError by adding a callback function that will be called:
+// - Immediately if there is no error
+// - After handling the error for non-fatal errors
+// - Not called at all for fatal errors
+//
+// Parameters:
+//   - err: The error to handle
+//   - level: The severity level of the error
+//   - title: The title for the error modal
+//   - callback: Function to call after handling non-fatal errors
 func (h *ErrorHandler) HandleErrorWithCallback(
 	err error,
 	level ErrorLevel,
@@ -131,7 +180,11 @@ func (h *ErrorHandler) HandleErrorWithCallback(
 	}
 }
 
-// SetErrorLogger sets an external logger for error logging
+// SetErrorLogger sets an external logger for error logging.
+// This allows integration with application-wide logging systems.
+//
+// Parameters:
+//   - logger: The log.Logger instance to use for logging
 func (h *ErrorHandler) SetErrorLogger(logger *log.Logger) {
 	h.errorLogger = logger
 }
