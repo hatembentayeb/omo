@@ -691,3 +691,102 @@ func (kc *K8sClient) TestAccess(username, namespace, resource, verb string) (boo
 
 	return false, result, fmt.Errorf("unexpected response: %s, error: %v", result, err)
 }
+
+// CreateCustomRole creates a custom role with the specified rules
+func (kc *K8sClient) CreateCustomRole(name, namespace string, rules []map[string]interface{}) error {
+	// Determine if this is a cluster role or namespace role
+	isClusterRole := namespace == "cluster-wide"
+
+	// Convert rules to YAML format
+	rulesYaml := ""
+	for _, rule := range rules {
+		rulesYaml += "- apiGroups:\n"
+
+		// Handle API groups
+		apiGroups, ok := rule["apiGroups"].([]string)
+		if !ok {
+			apiGroups = []string{""}
+		}
+		for _, group := range apiGroups {
+			rulesYaml += fmt.Sprintf("  - \"%s\"\n", group)
+		}
+
+		// Handle resources
+		rulesYaml += "  resources:\n"
+		resources, ok := rule["resources"].([]string)
+		if !ok {
+			return fmt.Errorf("resources not specified or invalid format")
+		}
+		for _, resource := range resources {
+			rulesYaml += fmt.Sprintf("  - \"%s\"\n", resource)
+		}
+
+		// Handle verbs
+		rulesYaml += "  verbs:\n"
+		verbs, ok := rule["verbs"].([]string)
+		if !ok {
+			return fmt.Errorf("verbs not specified or invalid format")
+		}
+		for _, verb := range verbs {
+			rulesYaml += fmt.Sprintf("  - \"%s\"\n", verb)
+		}
+	}
+
+	// Create the role YAML content
+	var roleYaml string
+	if isClusterRole {
+		roleYaml = fmt.Sprintf(`apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: %s
+rules:
+%s`, name, rulesYaml)
+	} else {
+		roleYaml = fmt.Sprintf(`apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: %s
+  namespace: %s
+rules:
+%s`, name, namespace, rulesYaml)
+	}
+
+	// Write to a temp file
+	tempFile := filepath.Join(os.TempDir(), fmt.Sprintf("%s-role.yaml", name))
+	err := os.WriteFile(tempFile, []byte(roleYaml), 0600)
+	if err != nil {
+		return fmt.Errorf("failed to write role YAML: %v", err)
+	}
+
+	// Apply the role
+	applyCmd := exec.Command("kubectl", "apply", "-f", tempFile)
+	output, err := applyCmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("kubectl error applying role: %v, output: %s", err, string(output))
+	}
+
+	// Clean up the temp file
+	os.Remove(tempFile)
+
+	return nil
+}
+
+// DeleteCustomRole deletes a custom role
+func (kc *K8sClient) DeleteCustomRole(name, namespace string) error {
+	var cmd *exec.Cmd
+
+	if namespace == "cluster-wide" {
+		// Delete cluster role
+		cmd = exec.Command("kubectl", "delete", "clusterrole", name)
+	} else {
+		// Delete namespace role
+		cmd = exec.Command("kubectl", "delete", "role", name, "-n", namespace)
+	}
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("kubectl error deleting role: %v, output: %s", err, string(output))
+	}
+
+	return nil
+}
