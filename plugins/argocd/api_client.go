@@ -80,7 +80,7 @@ type ProjectRole struct {
 	Groups      []string `json:"groups"`
 }
 
-// Application represents an ArgoCD application
+// Application represents an ArgoCD application.
 type Application struct {
 	Name      string                 `json:"name"`
 	Project   string                 `json:"project"`
@@ -90,55 +90,114 @@ type Application struct {
 	Namespace string                 `json:"namespace"`
 	Server    string                 `json:"server"`
 	Metadata  map[string]interface{} `json:"metadata"`
+	Spec      map[string]interface{} `json:"spec"`
 }
 
-// UnmarshalJSON custom unmarshaler for Application to handle potential missing fields
+// UnmarshalJSON implements custom unmarshaling for Application
 func (a *Application) UnmarshalJSON(data []byte) error {
 	type Alias Application
 	aux := &struct {
 		*Alias
-		Health   *Health                `json:"health"`
-		Sync     *Sync                  `json:"sync"`
-		Status   map[string]interface{} `json:"status"`
-		Metadata map[string]interface{} `json:"metadata"`
+		// Extra fields to handle various API response formats
+		HealthStatus interface{}            `json:"healthStatus"`
+		SyncStatus   interface{}            `json:"syncStatus"`
+		ProjectName  interface{}            `json:"projectName"`
+		Spec         map[string]interface{} `json:"spec"`
 	}{
 		Alias: (*Alias)(a),
 	}
 
-	if err := json.Unmarshal(data, &aux); err != nil {
-		Debug("Error unmarshaling Application: %v", err)
+	if err := json.Unmarshal(data, aux); err != nil {
 		return err
 	}
 
-	// Set default values for potentially missing fields
-	if aux.Health == nil {
-		a.Health = Health{Status: "Unknown", Message: "Health status not available"}
-	}
+	// Extract project name from various locations if it's empty
+	if a.Project == "" {
+		// Try from the Spec field
+		if aux.Spec != nil {
+			if project, ok := aux.Spec["project"].(string); ok && project != "" {
+				a.Project = project
+			}
+		}
 
-	if aux.Sync == nil {
-		a.Sync = Sync{Status: "Unknown", Revision: ""}
-	}
+		// Try from the ProjectName field
+		if a.Project == "" && aux.ProjectName != nil {
+			if project, ok := aux.ProjectName.(string); ok && project != "" {
+				a.Project = project
+			}
+		}
 
-	// Check if we got the name in metadata instead of the root level
-	if a.Name == "" && aux.Metadata != nil {
-		if name, ok := aux.Metadata["name"].(string); ok {
-			a.Name = name
+		// Try from metadata
+		if a.Project == "" && a.Metadata != nil {
+			// Try metadata.project
+			if project, ok := a.Metadata["project"].(string); ok && project != "" {
+				a.Project = project
+			} else if labels, ok := a.Metadata["labels"].(map[string]interface{}); ok {
+				// Try metadata.labels['argocd.argoproj.io/project']
+				if project, ok := labels["argocd.argoproj.io/project"].(string); ok && project != "" {
+					a.Project = project
+				}
+			}
+		}
+
+		// Try from status
+		if a.Project == "" && a.Status != nil {
+			if statusSpec, ok := a.Status["spec"].(map[string]interface{}); ok {
+				if project, ok := statusSpec["project"].(string); ok && project != "" {
+					a.Project = project
+				}
+			}
+		}
+
+		// If still empty after all attempts, store from Spec
+		if a.Project == "" && aux.Spec != nil {
+			a.Spec = aux.Spec
 		}
 	}
 
-	// Check if project is missing but exists in metadata
-	if a.Project == "" && aux.Metadata != nil {
-		if projectName, ok := aux.Metadata["project"].(string); ok {
-			a.Project = projectName
+	// Handle Health status
+	// If health object is missing completely or has empty status
+	if a.Health.Status == "" {
+		// Try direct healthStatus field
+		if aux.HealthStatus != nil {
+			if status, ok := aux.HealthStatus.(string); ok && status != "" {
+				a.Health.Status = status
+			} else if healthObj, ok := aux.HealthStatus.(map[string]interface{}); ok {
+				if status, ok := healthObj["status"].(string); ok && status != "" {
+					a.Health.Status = status
+				}
+			}
+		}
+
+		// Try from status field
+		if a.Health.Status == "" && a.Status != nil {
+			if health, ok := a.Status["health"].(map[string]interface{}); ok {
+				if status, ok := health["status"].(string); ok && status != "" {
+					a.Health.Status = status
+				}
+			}
 		}
 	}
 
-	// Check if namespace is in status or spec
-	if a.Namespace == "" && aux.Status != nil {
-		if spec, ok := aux.Status["spec"].(map[string]interface{}); ok {
-			if dest, ok := spec["destination"].(map[string]interface{}); ok {
-				if ns, ok := dest["namespace"].(string); ok {
-					a.Namespace = ns
+	// Handle Sync status
+	// If sync object is missing completely or has empty status
+	if a.Sync.Status == "" {
+		// Try direct syncStatus field
+		if aux.SyncStatus != nil {
+			if status, ok := aux.SyncStatus.(string); ok && status != "" {
+				a.Sync.Status = status
+			} else if syncObj, ok := aux.SyncStatus.(map[string]interface{}); ok {
+				if status, ok := syncObj["status"].(string); ok && status != "" {
+					a.Sync.Status = status
+				}
+			}
+		}
+
+		// Try from status field
+		if a.Sync.Status == "" && a.Status != nil {
+			if sync, ok := a.Status["sync"].(map[string]interface{}); ok {
+				if status, ok := sync["status"].(string); ok && status != "" {
+					a.Sync.Status = status
 				}
 			}
 		}
@@ -147,13 +206,13 @@ func (a *Application) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// Health represents application health status
+// Health represents the health status of an application
 type Health struct {
 	Status  string `json:"status"`
 	Message string `json:"message"`
 }
 
-// UnmarshalJSON custom unmarshaler for Health to handle potential missing fields
+// UnmarshalJSON is a custom unmarshaler for Health
 func (h *Health) UnmarshalJSON(data []byte) error {
 	type Alias Health
 	aux := &struct {
@@ -162,55 +221,33 @@ func (h *Health) UnmarshalJSON(data []byte) error {
 		Alias: (*Alias)(h),
 	}
 
+	// Try standard unmarshal first
 	if err := json.Unmarshal(data, &aux); err != nil {
-		Debug("Error unmarshaling Health: %v", err)
-		// If we can't unmarshal as expected, try as string or map
-		var rawValue interface{}
-		if err := json.Unmarshal(data, &rawValue); err != nil {
-			return err
-		}
-
-		// Handle case where health is just a string
-		if status, ok := rawValue.(string); ok {
+		// If it's a string, assume it's just the status
+		var status string
+		if err := json.Unmarshal(data, &status); err == nil {
 			h.Status = status
 			h.Message = ""
 			return nil
 		}
+		return err
+	}
 
-		// Handle case where health is a map but with different structure
-		if healthMap, ok := rawValue.(map[string]interface{}); ok {
-			if status, ok := healthMap["status"].(string); ok {
-				h.Status = status
-			} else {
-				h.Status = "Unknown"
-			}
-
-			if message, ok := healthMap["message"].(string); ok {
-				h.Message = message
-			} else if statusMessage, ok := healthMap["statusMessage"].(string); ok {
-				h.Message = statusMessage
-			} else {
-				h.Message = ""
-			}
-			return nil
-		}
-
-		// Default values if we couldn't parse
+	// Provide default values if fields are empty
+	if h.Status == "" {
 		h.Status = "Unknown"
-		h.Message = ""
-		return nil
 	}
 
 	return nil
 }
 
-// Sync represents application sync status
+// Sync represents the sync status of an application
 type Sync struct {
 	Status   string `json:"status"`
 	Revision string `json:"revision"`
 }
 
-// UnmarshalJSON custom unmarshaler for Sync to handle potential missing fields
+// UnmarshalJSON is a custom unmarshaler for Sync
 func (s *Sync) UnmarshalJSON(data []byte) error {
 	type Alias Sync
 	aux := &struct {
@@ -219,41 +256,21 @@ func (s *Sync) UnmarshalJSON(data []byte) error {
 		Alias: (*Alias)(s),
 	}
 
+	// Try standard unmarshal first
 	if err := json.Unmarshal(data, &aux); err != nil {
-		Debug("Error unmarshaling Sync: %v", err)
-		// If we can't unmarshal as expected, try as string or map
-		var rawValue interface{}
-		if err := json.Unmarshal(data, &rawValue); err != nil {
-			return err
-		}
-
-		// Handle case where sync is just a string
-		if status, ok := rawValue.(string); ok {
+		// If it's a string, assume it's just the status
+		var status string
+		if err := json.Unmarshal(data, &status); err == nil {
 			s.Status = status
 			s.Revision = ""
 			return nil
 		}
+		return err
+	}
 
-		// Handle case where sync is a map but with different structure
-		if syncMap, ok := rawValue.(map[string]interface{}); ok {
-			if status, ok := syncMap["status"].(string); ok {
-				s.Status = status
-			} else {
-				s.Status = "Unknown"
-			}
-
-			if revision, ok := syncMap["revision"].(string); ok {
-				s.Revision = revision
-			} else {
-				s.Revision = ""
-			}
-			return nil
-		}
-
-		// Default values if we couldn't parse
+	// Provide default values if fields are empty
+	if s.Status == "" {
 		s.Status = "Unknown"
-		s.Revision = ""
-		return nil
 	}
 
 	return nil

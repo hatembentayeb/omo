@@ -712,7 +712,7 @@ func (p *ArgocdPlugin) returnToPreviousView() {
 
 // switchToApplicationsView switches to the application view
 func (p *ArgocdPlugin) switchToApplicationsView() {
-	Debug("Switching to Applications view")
+	Debug("Switching to Applications View")
 
 	// Make sure we're connected
 	if p.apiClient == nil || !p.apiClient.IsConnected {
@@ -726,38 +726,47 @@ func (p *ArgocdPlugin) switchToApplicationsView() {
 	// Push view to navigation stack
 	p.cores.PushView("Applications")
 
-	// Update UI
-	p.switchToView("Applications")
+	// Set info text
+	if p.apiClient.IsConnected {
+		p.cores.SetInfoText(fmt.Sprintf("ArgoCD Manager | Server: %s | User: %s", p.serverURL, p.credentials.Username))
+	} else {
+		p.cores.SetInfoText("ArgoCD Manager | Not connected")
+	}
 
-	// Clear any old data and set loading message
-	p.cores.SetTableData([][]string{
-		{"Loading applications...", "", "", "", "", ""},
+	// Set up the table headers for applications
+	p.cores.SetTableHeaders([]string{
+		"Name",
+		"Project",
+		"Health Status",
+		"Sync Status",
 	})
 
-	// Force refresh the data with delayed execution to ensure UI is ready
+	// Setup refresh callback to fetch applications
+	p.cores.SetRefreshCallback(p.fetchApplications)
+
+	// Refresh data
 	go func() {
-		time.Sleep(200 * time.Millisecond)
-		p.app.QueueUpdateDraw(func() {
-			Debug("Performing explicit applications refresh")
-
-			// First try to load the applications directly
-			applications, err := p.apiClient.GetApplications()
-			if err != nil {
-				Debug("Error pre-loading applications: %v", err)
-				p.cores.Log(fmt.Sprintf("[red]Error loading applications: %v", err))
-			} else {
-				Debug("Pre-loaded %d applications successfully", len(applications))
-				// Update the applicationView's applications slice
-				p.applicationView.applications = applications
+		// Refresh synchronously to avoid race condition
+		applications, err := p.applicationView.fetchApplications()
+		if err != nil {
+			Debug("Error fetching applications in switchToApplicationsView: %v", err)
+			// Handle error - use default message
+			applications = [][]string{
+				{"Error fetching applications", "", "", ""},
 			}
+		}
 
-			// Now refresh the table through the normal flow
-			p.cores.RefreshData()
-
-			// Log completion
-			Debug("Applications view refresh complete")
+		p.app.QueueUpdateDraw(func() {
+			// Update table data
+			p.cores.SetTableData(applications)
+			Debug("Updated applications table data with %d rows", len(applications))
 		})
 	}()
+
+	// Make sure we unregister previous handlers and register application ones
+	p.cores.UnregisterHandlers()
+	p.applicationView.SetupTableHandlers()
+	p.cores.RegisterHandlers()
 }
 
 // switchToProjectsView switches to the project management view
