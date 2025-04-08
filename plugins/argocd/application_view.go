@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/rivo/tview"
 
@@ -127,42 +128,78 @@ func (v *ApplicationView) fetchApplications() ([][]string, error) {
 			}
 		}
 
-		// Handle cases where some fields might be missing
+		// Extract project name with enhanced fallbacks
 		projectName := app.Project
-		if projectName == "" {
-			// Try multiple ways to extract project name
-			if app.Metadata != nil {
-				// Try from metadata
-				if project, ok := app.Metadata["project"].(string); ok && project != "" {
+		if projectName == "" || projectName == "-" {
+			// Try from spec
+			if app.Spec != nil {
+				if project, ok := app.Spec["project"].(string); ok && project != "" {
 					projectName = project
-				} else if meta, ok := app.Metadata["labels"].(map[string]interface{}); ok {
-					if project, ok := meta["argocd.argoproj.io/project"].(string); ok && project != "" {
+				}
+			}
+
+			// Try from metadata
+			if projectName == "" || projectName == "-" {
+				if app.Metadata != nil {
+					// Direct project field
+					if project, ok := app.Metadata["project"].(string); ok && project != "" {
 						projectName = project
+					} else if labels, ok := app.Metadata["labels"].(map[string]interface{}); ok {
+						// Labels
+						if project, ok := labels["argocd.argoproj.io/project"].(string); ok && project != "" {
+							projectName = project
+						}
 					}
 				}
 			}
 
 			// Try from status
-			if projectName == "" && app.Status != nil {
+			if (projectName == "" || projectName == "-") && app.Status != nil {
+				// Direct from status
 				if project, ok := app.Status["project"].(string); ok && project != "" {
 					projectName = project
 				} else if spec, ok := app.Status["spec"].(map[string]interface{}); ok {
+					// From status.spec
 					if project, ok := spec["project"].(string); ok && project != "" {
 						projectName = project
 					}
 				}
 			}
 
-			// If still empty, use placeholder
-			if projectName == "" {
-				projectName = "-"
+			// If still empty after all attempts, try to get from the URL
+			if projectName == "" || projectName == "-" {
+				// Some ArgoCD instances use URL paths that include the project name
+				// Example: /applications/[project]/[app-name]
+				// We can try to extract it if available
+				if app.Metadata != nil {
+					if selfLink, ok := app.Metadata["selfLink"].(string); ok && selfLink != "" {
+						parts := strings.Split(selfLink, "/")
+						if len(parts) >= 3 {
+							// URL format might be /applications/[project]/[name]
+							for i, part := range parts {
+								if part == "applications" && i+1 < len(parts) {
+									potentialProject := parts[i+1]
+									if potentialProject != "" && potentialProject != app.Name {
+										projectName = potentialProject
+										break
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
+			// If still empty, use "default" as a reasonable fallback
+			if projectName == "" || projectName == "-" {
+				projectName = "default"
 			}
 		}
 
-		// Extract health status with fallbacks
+		// Extract health status
 		healthStatus := app.Health.Status
-		if healthStatus == "" {
-			// Try to extract health from status field
+		if healthStatus == "" || healthStatus == "Unknown" || healthStatus == "-" {
+			// Try to extract health from status field if not already set
 			if app.Status != nil {
 				if health, ok := app.Status["health"].(map[string]interface{}); ok {
 					if status, ok := health["status"].(string); ok && status != "" {
@@ -172,22 +209,17 @@ func (v *ApplicationView) fetchApplications() ([][]string, error) {
 			}
 
 			// If still not found, check direct properties
-			if healthStatus == "" && app.Status != nil {
+			if (healthStatus == "" || healthStatus == "Unknown" || healthStatus == "-") && app.Status != nil {
 				if status, ok := app.Status["healthStatus"].(string); ok && status != "" {
 					healthStatus = status
 				}
 			}
-
-			// Set a useful placeholder if still empty
-			if healthStatus == "" {
-				healthStatus = "-"
-			}
 		}
 
-		// Extract sync status with fallbacks
+		// Extract sync status
 		syncStatus := app.Sync.Status
-		if syncStatus == "" {
-			// Try to extract sync status from status field
+		if syncStatus == "" || syncStatus == "Unknown" || syncStatus == "-" {
+			// Try to extract sync status from status field if not already set
 			if app.Status != nil {
 				if sync, ok := app.Status["sync"].(map[string]interface{}); ok {
 					if status, ok := sync["status"].(string); ok && status != "" {
@@ -197,15 +229,10 @@ func (v *ApplicationView) fetchApplications() ([][]string, error) {
 			}
 
 			// If still not found, check direct properties
-			if syncStatus == "" && app.Status != nil {
+			if (syncStatus == "" || syncStatus == "Unknown" || syncStatus == "-") && app.Status != nil {
 				if status, ok := app.Status["syncStatus"].(string); ok && status != "" {
 					syncStatus = status
 				}
-			}
-
-			// Set a useful placeholder if still empty
-			if syncStatus == "" {
-				syncStatus = "-"
 			}
 		}
 
