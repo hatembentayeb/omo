@@ -20,6 +20,7 @@ type K8sUserPlugin struct {
 	cores          *ui.Cores
 	currentView    string
 	userView       *UserView
+	roleView       *RoleView
 	certManager    *CertManager
 	k8sClient      *K8sClient
 	kubeconfig     string
@@ -42,11 +43,15 @@ func (p *K8sUserPlugin) Start(app *tview.Application) tview.Primitive {
 	// Initialize the user view - move this up before initializeMainView
 	p.userView = NewUserView(p.app, p.pages, nil, p.certManager, p.k8sClient)
 
+	// Initialize the role view
+	p.roleView = NewRoleView(p.app, p.pages, nil, p.k8sClient)
+
 	// Initialize views
 	p.initializeMainView()
 
-	// Update the cores reference in UserView with the initialized one
+	// Update the cores reference in views with the initialized one
 	p.userView.cores = p.cores
+	p.roleView.cores = p.cores
 
 	// Add keyboard handling for context selection (Ctrl+T)
 	p.pages.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -109,6 +114,7 @@ func (p *K8sUserPlugin) initializeMainView() {
 			"T":  "Test Access",
 			"E":  "Export Config",
 			"K":  "Connection Command",
+			"M":  "Role Management",
 			"^T": "Switch Context",
 			"?":  "Help",
 			"^B": "Back",
@@ -133,6 +139,9 @@ func (p *K8sUserPlugin) initializeMainView() {
 	// Push initial view to navigation stack
 	p.cores.PushView("K8s Users")
 
+	// Set the current view to users
+	p.currentView = "users"
+
 	// Log initial state
 	p.cores.Log("Plugin initialized")
 }
@@ -142,33 +151,71 @@ func (p *K8sUserPlugin) setupActionHandler() {
 	p.cores.SetActionCallback(func(action string, payload map[string]interface{}) error {
 		if action == "keypress" {
 			if key, ok := payload["key"].(string); ok {
-				switch key {
-				case "R":
-					p.refreshUsers()
-				case "C":
-					p.userView.showCreateUserModal()
-				case "D":
-					p.userView.showDeleteUserModal()
-				case "A":
-					p.userView.showAssignRoleModal()
-				case "V":
-					// Show user details for the selected user directly
-					p.userView.showUserDetails()
-				case "T":
-					p.userView.showTestAccessModal()
-				case "E":
-					p.userView.exportUserConfig()
-				case "K":
-					p.userView.showConnectionCommand()
-				case "?":
-					p.showHelpModal()
-				case "^B":
-					p.returnToPreviousView()
+				switch p.currentView {
+				case "users":
+					// User view actions
+					switch key {
+					case "R":
+						p.refreshUsers()
+					case "C":
+						p.userView.showCreateUserModal()
+					case "D":
+						p.userView.showDeleteUserModal()
+					case "A":
+						p.userView.showAssignRoleModal()
+					case "V":
+						p.userView.showUserDetails()
+					case "T":
+						p.userView.showTestAccessModal()
+					case "E":
+						p.userView.exportUserConfig()
+					case "K":
+						p.userView.showConnectionCommand()
+					case "M":
+						p.switchToRolesView()
+					case "?":
+						p.showHelpModal()
+					case "^B":
+						p.returnToPreviousView()
+					}
+				case "roles":
+					// Role view actions
+					switch key {
+					case "R":
+						p.refreshRoles()
+					case "C":
+						p.roleView.showCreateRoleModal()
+					case "D":
+						p.roleView.showDeleteRoleModal()
+					case "V":
+						p.roleView.showRoleDetailsModal()
+					case "U":
+						p.switchToUsersView()
+					case "?":
+						p.showHelpModal()
+					case "^B":
+						p.returnToPreviousView()
+					}
+				default:
+					// Default actions for any view
+					switch key {
+					case "R":
+						p.refreshUsers()
+					case "?":
+						p.showHelpModal()
+					}
 				}
 			}
 		} else if action == "navigate_back" {
+			// When ESC is pressed, the Core UI automatically pops the view,
+			// and we just need to update our internal state to match
 			currentView := p.cores.GetCurrentView()
 			p.switchToView(currentView)
+		} else if action == "back" {
+			// This is triggered when ESC is pressed, before navigate_back
+			if fromView, ok := payload["from"].(string); ok {
+				p.cores.Log(fmt.Sprintf("[blue]Navigating back from %s view", fromView))
+			}
 		}
 		return nil
 	})
@@ -326,11 +373,11 @@ func (p *K8sUserPlugin) showHelpModal() {
 	content := `[yellow]Kubernetes User Manager Help[white]
 
 [green]Navigation[white]
-  [aqua]↑/↓[white] - Navigate between users
-  [aqua]Enter[white] - Select a user
+  [aqua]↑/↓[white] - Navigate between items
+  [aqua]Enter[white] - Select an item
 
-[green]Actions[white]
-  [aqua]R[white] - Refresh user list
+[green]User Management[white]
+  [aqua]R[white] - Refresh list
   [aqua]C[white] - Create a new user with certificate
   [aqua]D[white] - Delete selected user
   [aqua]A[white] - Assign role to user
@@ -338,14 +385,18 @@ func (p *K8sUserPlugin) showHelpModal() {
   [aqua]T[white] - Test user access
   [aqua]E[white] - Export user kubeconfig
   [aqua]K[white] - Show kubectl connection command
+
+[green]Role Management[white]
+  [aqua]M[white] - Switch to role management view
+  [aqua]U[white] - Switch to user management view
+  [aqua]C[white] - Create a new custom role
+  [aqua]D[white] - Delete selected role
+  [aqua]V[white] - View role details
+
+[green]Global Keys[white]
   [aqua]Ctrl+T[white] - Switch Kubernetes context
   [aqua]Esc[white] - Go back to previous view
-  [aqua]Ctrl+B[white] - Go back to previous view
-
-[green]Certificates[white]
-  User certificates are generated using OpenSSL and stored in ~/.k8s-users/
-  Each user gets a private key, CSR, and signed certificate.
-  Certificates are valid for 1 year by default.`
+  [aqua]Ctrl+B[white] - Go back to previous view`
 
 	// Show the info modal with a callback to return focus to the table
 	ui.ShowInfoModal(
@@ -360,17 +411,96 @@ func (p *K8sUserPlugin) showHelpModal() {
 	)
 }
 
-// switchToView updates the current view
+// switchToView updates the current view and UI based on the view name
 func (p *K8sUserPlugin) switchToView(viewName string) {
-	p.currentView = viewName
+	// Set the current view based on the view name
+	switch viewName {
+	case "K8s Users":
+		p.currentView = "users"
+		p.cores.SetTableHeaders([]string{"Username", "Certificate Expiry", "Namespaces", "Roles"})
+		p.cores.SetRefreshCallback(p.fetchUsers)
+		p.cores.SetInfoText(fmt.Sprintf("Kubernetes User Manager | Context: %s", p.k8sClient.CurrentContext))
+
+		// Clear existing key bindings and set new ones for users view
+		p.cores.ClearKeyBindings()
+		p.cores.AddKeyBinding("R", "Refresh", p.refreshUsers)
+		p.cores.AddKeyBinding("C", "Create User", nil)
+		p.cores.AddKeyBinding("D", "Delete User", nil)
+		p.cores.AddKeyBinding("A", "Assign Role", nil)
+		p.cores.AddKeyBinding("V", "View Details", nil)
+		p.cores.AddKeyBinding("T", "Test Access", nil)
+		p.cores.AddKeyBinding("E", "Export Config", nil)
+		p.cores.AddKeyBinding("K", "Connection Command", nil)
+		p.cores.AddKeyBinding("M", "Manage Roles", nil)
+		p.cores.AddKeyBinding("?", "Help", nil)
+		p.cores.AddKeyBinding("ESC", "Back", nil)
+
+	case "K8s Roles":
+		p.currentView = "roles"
+		p.cores.SetTableHeaders([]string{"Name", "Namespace", "Resources"})
+		p.cores.SetRefreshCallback(p.roleView.fetchRoles)
+		p.cores.SetInfoText(fmt.Sprintf("Kubernetes Role Manager | Context: %s", p.k8sClient.CurrentContext))
+
+		// Clear existing key bindings and set new ones for roles view
+		p.cores.ClearKeyBindings()
+		p.cores.AddKeyBinding("R", "Refresh", p.refreshRoles)
+		p.cores.AddKeyBinding("C", "Create Role", nil)
+		p.cores.AddKeyBinding("D", "Delete Role", nil)
+		p.cores.AddKeyBinding("V", "View Details", nil)
+		p.cores.AddKeyBinding("U", "Users View", nil)
+		p.cores.AddKeyBinding("?", "Help", nil)
+		p.cores.AddKeyBinding("ESC", "Back", nil)
+
+	default:
+		// If we don't recognize the view, default to user view
+		p.currentView = "users"
+		p.cores.SetTableHeaders([]string{"Username", "Certificate Expiry", "Namespaces", "Roles"})
+		p.cores.SetRefreshCallback(p.fetchUsers)
+		p.cores.SetInfoText(fmt.Sprintf("Kubernetes User Manager | Context: %s", p.k8sClient.CurrentContext))
+
+		// Clear existing key bindings and set new ones for users view
+		p.cores.ClearKeyBindings()
+		p.cores.AddKeyBinding("R", "Refresh", p.refreshUsers)
+		p.cores.AddKeyBinding("C", "Create User", nil)
+		p.cores.AddKeyBinding("D", "Delete User", nil)
+		p.cores.AddKeyBinding("A", "Assign Role", nil)
+		p.cores.AddKeyBinding("V", "View Details", nil)
+		p.cores.AddKeyBinding("T", "Test Access", nil)
+		p.cores.AddKeyBinding("E", "Export Config", nil)
+		p.cores.AddKeyBinding("K", "Connection Command", nil)
+		p.cores.AddKeyBinding("M", "Manage Roles", nil)
+		p.cores.AddKeyBinding("?", "Help", nil)
+		p.cores.AddKeyBinding("ESC", "Back", nil)
+	}
+
+	// Refresh data to update the view
+	p.cores.RefreshData()
 }
 
-// returnToPreviousView returns to the previous view
+// returnToPreviousView goes back one step in the view stack
 func (p *K8sUserPlugin) returnToPreviousView() {
-	lastView := p.cores.PopView()
-	if lastView != "" {
-		currentView := p.cores.GetCurrentView()
-		p.switchToView(currentView)
+	// Only do something if we have more than one view in the stack
+	currentViewName := p.cores.GetCurrentView()
+	if currentViewName == "" {
+		p.cores.Log("[yellow]Already at the root view")
+		return
+	}
+
+	// Simulate ESC behavior by popping the view and updating
+	popped := p.cores.PopView()
+	if popped != "" {
+		p.cores.Log(fmt.Sprintf("[blue]Popped view: %s", popped))
+	}
+
+	// Get the new current view
+	newCurrentView := p.cores.GetCurrentView()
+	if newCurrentView != "" {
+		// Update the UI based on the previous view
+		p.switchToView(newCurrentView)
+		p.cores.Log(fmt.Sprintf("[blue]Navigated back to %s view (using Ctrl+B)", newCurrentView))
+	} else {
+		// Default to users view if no previous view exists
+		p.switchToUsersView()
 	}
 }
 
@@ -386,4 +516,71 @@ func safeGo(f func()) {
 		}()
 		f()
 	}()
+}
+
+// switchToRolesView switches to the role management view
+func (p *K8sUserPlugin) switchToRolesView() {
+	// Update current view
+	p.currentView = "roles"
+
+	// Push view to navigation stack
+	p.cores.PushView("K8s Roles")
+
+	// Update UI
+	p.cores.SetInfoText(fmt.Sprintf("Kubernetes Role Manager | Context: %s", p.k8sClient.CurrentContext))
+	p.cores.SetTableHeaders([]string{"Name", "Namespace", "Resources"})
+
+	// Clear existing key bindings and set new ones for roles view
+	p.cores.ClearKeyBindings()
+	p.cores.AddKeyBinding("R", "Refresh", p.refreshRoles)
+	p.cores.AddKeyBinding("C", "Create Role", nil)
+	p.cores.AddKeyBinding("D", "Delete Role", nil)
+	p.cores.AddKeyBinding("V", "View Details", nil)
+	p.cores.AddKeyBinding("U", "Users View", nil)
+	p.cores.AddKeyBinding("?", "Help", nil)
+	p.cores.AddKeyBinding("ESC", "Back", nil)
+
+	// Set refresh callback for roles
+	p.cores.SetRefreshCallback(p.roleView.fetchRoles)
+
+	// Refresh data
+	p.cores.RefreshData()
+}
+
+// switchToUsersView switches to the user management view
+func (p *K8sUserPlugin) switchToUsersView() {
+	// Update current view
+	p.currentView = "users"
+
+	// Push view to navigation stack
+	p.cores.PushView("K8s Users")
+
+	// Update UI
+	p.cores.SetInfoText(fmt.Sprintf("Kubernetes User Manager | Context: %s", p.k8sClient.CurrentContext))
+	p.cores.SetTableHeaders([]string{"Username", "Certificate Expiry", "Namespaces", "Roles"})
+
+	// Clear existing key bindings and set new ones for users view
+	p.cores.ClearKeyBindings()
+	p.cores.AddKeyBinding("R", "Refresh", p.refreshUsers)
+	p.cores.AddKeyBinding("C", "Create User", nil)
+	p.cores.AddKeyBinding("D", "Delete User", nil)
+	p.cores.AddKeyBinding("A", "Assign Role", nil)
+	p.cores.AddKeyBinding("V", "View Details", nil)
+	p.cores.AddKeyBinding("T", "Test Access", nil)
+	p.cores.AddKeyBinding("E", "Export Config", nil)
+	p.cores.AddKeyBinding("K", "Connection Command", nil)
+	p.cores.AddKeyBinding("M", "Manage Roles", nil)
+	p.cores.AddKeyBinding("?", "Help", nil)
+	p.cores.AddKeyBinding("ESC", "Back", nil)
+
+	// Set refresh callback for users
+	p.cores.SetRefreshCallback(p.fetchUsers)
+
+	// Refresh data
+	p.cores.RefreshData()
+}
+
+// refreshRoles refreshes the role list
+func (p *K8sUserPlugin) refreshRoles() {
+	p.cores.RefreshData()
 }
