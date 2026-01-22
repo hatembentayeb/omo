@@ -774,8 +774,8 @@ func (dv *DockerView) showConfirmationModal(
 	form := tview.NewForm()
 	form.SetItemPadding(0)
 	form.SetButtonsAlign(tview.AlignCenter)
-	form.SetBackgroundColor(tcell.ColorBlack)
-	form.SetButtonBackgroundColor(tcell.ColorBlack)
+	form.SetBackgroundColor(tcell.ColorDefault)
+	form.SetButtonBackgroundColor(tcell.ColorDefault)
 	form.SetButtonTextColor(tcell.ColorWhite)
 	form.SetBorder(true)
 	form.SetTitle(" " + title + " ")
@@ -805,10 +805,10 @@ func (dv *DockerView) showConfirmationModal(
 	// Style the buttons with focus colors
 	for i := 0; i < form.GetButtonCount(); i++ {
 		if b := form.GetButton(i); b != nil {
-			b.SetBackgroundColor(tcell.ColorBlack)
+			b.SetBackgroundColor(tcell.ColorDefault)
 			b.SetLabelColor(tcell.ColorWhite)
 			b.SetBackgroundColorActivated(tcell.ColorWhite)
-			b.SetLabelColorActivated(tcell.ColorBlack)
+			b.SetLabelColorActivated(tcell.ColorDefault)
 		}
 	}
 
@@ -854,10 +854,10 @@ func (dv *DockerView) showCompactInputModal(
 	form := tview.NewForm()
 	form.SetItemPadding(0)
 	form.SetButtonsAlign(tview.AlignCenter)
-	form.SetBackgroundColor(tcell.ColorBlack)
-	form.SetButtonBackgroundColor(tcell.ColorBlack)
+	form.SetBackgroundColor(tcell.ColorDefault)
+	form.SetButtonBackgroundColor(tcell.ColorDefault)
 	form.SetButtonTextColor(tcell.ColorWhite)
-	form.SetFieldBackgroundColor(tcell.ColorBlack)
+	form.SetFieldBackgroundColor(tcell.ColorDefault)
 	form.SetFieldTextColor(tcell.ColorWhite)
 	form.SetBorder(true)
 	form.SetTitle(" " + title + " ")
@@ -896,10 +896,10 @@ func (dv *DockerView) showCompactInputModal(
 	// Style the buttons with focus colors
 	for i := 0; i < form.GetButtonCount(); i++ {
 		if b := form.GetButton(i); b != nil {
-			b.SetBackgroundColor(tcell.ColorBlack)
+			b.SetBackgroundColor(tcell.ColorDefault)
 			b.SetLabelColor(tcell.ColorWhite)
 			b.SetBackgroundColorActivated(tcell.ColorWhite)
-			b.SetLabelColorActivated(tcell.ColorBlack)
+			b.SetLabelColorActivated(tcell.ColorDefault)
 		}
 	}
 

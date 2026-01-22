@@ -85,7 +85,7 @@ func ShowInfoModal(
 		SetTitleAlign(tview.AlignCenter).
 		SetBorderColor(tcell.ColorBlue).
 		SetTitleColor(tcell.ColorYellow).
-		SetBackgroundColor(tcell.ColorBlack)
+		SetBackgroundColor(tcell.ColorDefault)
 
 	// Handle ESC key
 	modal.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {

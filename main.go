@@ -21,13 +21,24 @@ const (
 )
 
 var (
-	mainFrame   = tview.NewFrame(nil)
-	mainUI      = tview.NewGrid()
+	mainFrame   *tview.Frame
+	mainUI      *tview.Grid
 	app         = tview.NewApplication()
 	pluginsList = tview.NewList()
 	appPages    = tview.NewPages()
-	headerView  = tview.NewGrid()
+	headerView  *tview.Grid
 )
+
+func init() {
+	mainFrame = tview.NewFrame(nil)
+	mainFrame.SetBackgroundColor(tcell.ColorDefault)
+	
+	mainUI = tview.NewGrid()
+	mainUI.SetBackgroundColor(tcell.ColorDefault)
+	
+	headerView = tview.NewGrid()
+	headerView.SetBackgroundColor(tcell.ColorDefault)
+}
 
 // Update the OhmyopsPlugin interface to include UI functions
 type OhmyopsPlugin interface {
@@ -40,7 +51,7 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 
 	// Initialize header
-	headerView.SetBackgroundColor(tcell.ColorBlack)
+	headerView.SetBackgroundColor(tcell.ColorDefault)
 
 	// Setup default header content
 	updateHeader(headerView, "")
@@ -54,6 +65,7 @@ func main() {
 
 	// Set less obtrusive borders
 	mainUI.SetBorders(true).SetBordersColor(tcell.ColorAqua)
+	mainUI.SetBackgroundColor(tcell.ColorDefault)
 
 	// Configure mainFrame to take maximum space with no padding
 	mainFrame.SetBorderPadding(0, 0, 0, 0)
@@ -114,6 +126,7 @@ func getPluginsNames(dir string) (*tview.List, error) {
 
 	list := tview.NewList().ShowSecondaryText(false)
 	list.SetMainTextColor(tcell.ColorPurple)
+	list.SetBackgroundColor(tcell.ColorDefault)
 	for i, file := range files {
 		if !file.IsDir() {
 			fileName := file.Name()
@@ -134,6 +147,7 @@ func helpList() *tview.List {
 		AddItem("Settings", "", 'a', nil).
 		AddItem("Package Manager", "", 'p', nil)
 	list.ShowSecondaryText(false)
+	list.SetBackgroundColor(tcell.ColorDefault)
 	list.SetSelectedFunc(func(index int, mainText string, secondaryText string, shortcut rune) {
 
 		switch index {
@@ -148,6 +162,7 @@ func helpList() *tview.List {
 			settingsGrid.SetRows(0, 0, 0)
 			settingsGrid.SetColumns(30, 0, 0)
 			settingsGrid.SetBorders(true).SetBordersColor(tcell.ColorGray)
+			settingsGrid.SetBackgroundColor(tcell.ColorDefault)
 
 			list, err := getPluginsNames("./config")
 			if err != nil || list.GetItemCount() == 0 {
@@ -156,6 +171,7 @@ func helpList() *tview.List {
 					SetTextAlign(tview.AlignCenter).
 					SetText("No configuration files found in ./config directory.\n\nCreate at least one .yml file in the config directory.").
 					SetTextColor(tcell.ColorYellow).
+					SetBackgroundColor(tcell.ColorDefault).
 					SetBorder(true)
 				mainFrame.SetPrimitive(infoText)
 				return
@@ -198,11 +214,14 @@ func helpList() *tview.List {
 }
 
 func loadPlugins(pluginsDir string) *tview.List {
-	pluginsList.Clear()
 	var err error
 	pluginsList, err = getPluginsNames(pluginsDir)
-	if err != nil {
-		return nil
+	if err != nil || pluginsList == nil {
+		// Return empty list instead of nil to prevent crash
+		pluginsList = tview.NewList().ShowSecondaryText(false)
+		pluginsList.SetMainTextColor(tcell.ColorPurple)
+		pluginsList.SetBackgroundColor(tcell.ColorDefault)
+		pluginsList.AddItem("No plugins found", "Run 'make all' to build plugins", '0', nil)
 	}
 
 	pluginsList.SetSelectedFunc(func(i int, s1, s2 string, r rune) {

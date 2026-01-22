@@ -41,8 +41,8 @@ func ShowErrorModal(
 	form := tview.NewForm()
 	form.SetItemPadding(0)
 	form.SetButtonsAlign(tview.AlignCenter)
-	form.SetBackgroundColor(tcell.ColorBlack)
-	form.SetButtonBackgroundColor(tcell.ColorBlack)
+	form.SetBackgroundColor(tcell.ColorDefault)
+	form.SetButtonBackgroundColor(tcell.ColorDefault)
 	form.SetButtonTextColor(tcell.ColorWhite)
 
 	// Add OK button
@@ -55,10 +55,10 @@ func ShowErrorModal(
 
 	// Style the button with focus colors
 	if b := form.GetButton(0); b != nil {
-		b.SetBackgroundColor(tcell.ColorBlack)
+		b.SetBackgroundColor(tcell.ColorDefault)
 		b.SetLabelColor(tcell.ColorWhite)
 		b.SetBackgroundColorActivated(tcell.ColorWhite)
-		b.SetLabelColorActivated(tcell.ColorBlack)
+		b.SetLabelColorActivated(tcell.ColorDefault)
 	}
 
 	// Set a width for the modal
@@ -66,14 +66,18 @@ func ShowErrorModal(
 	height := 8 // Adjust based on content
 
 	// Create a flexbox container to center the components
-	flex := tview.NewFlex().
-		AddItem(nil, 0, 1, false).
-		AddItem(tview.NewFlex().
-			SetDirection(tview.FlexRow).
-			AddItem(nil, 0, 1, false).
-			AddItem(textView, height-3, 1, false).
-			AddItem(form, 3, 0, true).
-			AddItem(nil, 0, 1, false), width, 1, true).
+	innerFlex := tview.NewFlex()
+	innerFlex.SetDirection(tview.FlexRow)
+	innerFlex.SetBackgroundColor(tcell.ColorDefault)
+	innerFlex.AddItem(nil, 0, 1, false).
+		AddItem(textView, height-3, 1, false).
+		AddItem(form, 3, 0, true).
+		AddItem(nil, 0, 1, false)
+	
+	flex := tview.NewFlex()
+	flex.SetBackgroundColor(tcell.ColorDefault)
+	flex.AddItem(nil, 0, 1, false).
+		AddItem(innerFlex, width, 1, true).
 		AddItem(nil, 0, 1, false)
 
 	RemovePage(pages, app, "error-modal", callback)
@@ -128,8 +132,8 @@ func ShowStandardErrorModal(
 	form := tview.NewForm()
 	form.SetItemPadding(0)
 	form.SetButtonsAlign(tview.AlignCenter)
-	form.SetBackgroundColor(tcell.ColorBlack)
-	form.SetButtonBackgroundColor(tcell.ColorBlack)
+	form.SetBackgroundColor(tcell.ColorDefault)
+	form.SetButtonBackgroundColor(tcell.ColorDefault)
 	form.SetButtonTextColor(tcell.ColorWhite)
 
 	// Add OK button with standardized styling
@@ -142,10 +146,10 @@ func ShowStandardErrorModal(
 
 	// Style the button with standardized focus colors
 	if b := form.GetButton(0); b != nil {
-		b.SetBackgroundColor(tcell.ColorBlack)
+		b.SetBackgroundColor(tcell.ColorDefault)
 		b.SetLabelColor(tcell.ColorRed)
 		b.SetBackgroundColorActivated(tcell.ColorRed)
-		b.SetLabelColorActivated(tcell.ColorBlack)
+		b.SetLabelColorActivated(tcell.ColorDefault)
 	}
 
 	// Calculate appropriate dimensions based on content
@@ -156,14 +160,18 @@ func ShowStandardErrorModal(
 	height := min(estimatedLines, 15)       // Cap at 15 lines to prevent overly large modals
 
 	// Create a flexbox layout with standardized margins
-	flex := tview.NewFlex().
-		AddItem(nil, 0, 1, false).
-		AddItem(tview.NewFlex().
-			SetDirection(tview.FlexRow).
-			AddItem(nil, 0, 1, false).
-			AddItem(textView, height-3, 1, true). // Make text view focused for scrolling
-			AddItem(form, 3, 0, true).
-			AddItem(nil, 0, 1, false), width, 1, true).
+	innerFlex := tview.NewFlex()
+	innerFlex.SetDirection(tview.FlexRow)
+	innerFlex.SetBackgroundColor(tcell.ColorDefault)
+	innerFlex.AddItem(nil, 0, 1, false).
+		AddItem(textView, height-3, 1, true). // Make text view focused for scrolling
+		AddItem(form, 3, 0, true).
+		AddItem(nil, 0, 1, false)
+	
+	flex := tview.NewFlex()
+	flex.SetBackgroundColor(tcell.ColorDefault)
+	flex.AddItem(nil, 0, 1, false).
+		AddItem(innerFlex, width, 1, true).
 		AddItem(nil, 0, 1, false)
 
 	// Set a standardized ESC key handler

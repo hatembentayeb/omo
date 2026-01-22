@@ -132,7 +132,7 @@ func (c *Cores) refreshTable() {
 
 		cell := tview.NewTableCell(headerText).
 			SetTextColor(tcell.ColorYellow).
-			SetBackgroundColor(tcell.ColorBlack).
+			SetBackgroundColor(tcell.ColorDefault).
 			SetAttributes(tcell.AttrBold).
 			SetSelectable(false)
 
@@ -155,7 +155,7 @@ func (c *Cores) refreshTable() {
 
 			cell := tview.NewTableCell(cellData).
 				SetTextColor(tcell.ColorAqua).
-				SetBackgroundColor(tcell.ColorBlack).
+				SetBackgroundColor(tcell.ColorDefault).
 				SetSelectable(true).
 				SetAlign(tview.AlignLeft)
 

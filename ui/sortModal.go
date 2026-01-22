@@ -25,7 +25,7 @@ func ShowSortModal(
 	form.SetTitle(" Sort Options ")
 	form.SetTitleColor(tcell.ColorOrange)
 	form.SetBorderColor(tcell.ColorAqua)
-	form.SetFieldBackgroundColor(tcell.ColorBlack)
+	form.SetFieldBackgroundColor(tcell.ColorDefault)
 	form.SetButtonBackgroundColor(tcell.ColorDefault)
 	form.SetButtonTextColor(tcell.ColorWhite)
 	form.SetFieldTextColor(tcell.ColorWhite)
@@ -84,13 +84,18 @@ func ShowSortModal(
 	// Create a flexbox container for the modal, with reduced margins
 	width := 45
 	height := 12
-	flex := tview.NewFlex().
-		AddItem(nil, 0, 1, false).
-		AddItem(tview.NewFlex().
-			SetDirection(tview.FlexRow).
-			AddItem(nil, 0, 1, false).
-			AddItem(form, height, 1, true).
-			AddItem(nil, 0, 1, false), width, 1, true).
+	
+	innerFlex := tview.NewFlex()
+	innerFlex.SetDirection(tview.FlexRow)
+	innerFlex.SetBackgroundColor(tcell.ColorDefault)
+	innerFlex.AddItem(nil, 0, 1, false).
+		AddItem(form, height, 1, true).
+		AddItem(nil, 0, 1, false)
+	
+	flex := tview.NewFlex()
+	flex.SetBackgroundColor(tcell.ColorDefault)
+	flex.AddItem(nil, 0, 1, false).
+		AddItem(innerFlex, width, 1, true).
 		AddItem(nil, 0, 1, false)
 
 	// Show the modal

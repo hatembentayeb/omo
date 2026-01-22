@@ -53,7 +53,7 @@ func (v *PluginHeaderView) Draw(screen tcell.Screen) {
 	// Background styling
 	for row := 0; row < height; row++ {
 		for col := 0; col < width; col++ {
-			screen.SetContent(x+col, y+row, ' ', nil, tcell.StyleDefault.Background(tcell.ColorBlack))
+			screen.SetContent(x+col, y+row, ' ', nil, tcell.StyleDefault.Background(tcell.ColorDefault))
 		}
 	}
 

@@ -27,7 +27,7 @@ func (c *Cores) initUI() {
 	c.breadcrumbs.SetDynamicColors(true)
 	c.breadcrumbs.SetTextAlign(tview.AlignLeft)
 	c.breadcrumbs.SetText(c.title)
-	c.breadcrumbs.SetBackgroundColor(tcell.ColorBlack)
+	c.breadcrumbs.SetBackgroundColor(tcell.ColorDefault)
 	c.breadcrumbs.SetBorder(false)
 
 	// Info panel (left)
@@ -35,7 +35,7 @@ func (c *Cores) initUI() {
 	c.infoPanel.SetDynamicColors(true)
 	c.infoPanel.SetTextAlign(tview.AlignLeft)
 	c.infoPanel.SetText(fmt.Sprintf("[yellow]%s[white]\nStatus: Active", c.title))
-	c.infoPanel.SetBackgroundColor(tcell.ColorBlack)
+	c.infoPanel.SetBackgroundColor(tcell.ColorDefault)
 	c.infoPanel.SetBorder(false)
 
 	// Help panel (middle)
@@ -70,7 +70,7 @@ func (c *Cores) initUI() {
 	// Set selection style to match Redis plugin
 	c.table.SetSelectedStyle(
 		tcell.StyleDefault.
-			Foreground(tcell.ColorBlack).
+			Foreground(tcell.ColorDefault).
 			Background(tcell.ColorAqua).
 			Attributes(tcell.AttrBold),
 	)
@@ -102,12 +102,12 @@ func (c *Cores) initUI() {
 	})
 
 	// Build a header row with no borders to match Redis style
-	headerRow := tview.NewFlex().
-		SetDirection(tview.FlexColumn).
-		AddItem(c.infoPanel, 0, 1, false).
+	headerRow := tview.NewFlex()
+	headerRow.SetDirection(tview.FlexColumn)
+	headerRow.SetBackgroundColor(tcell.ColorDefault)
+	headerRow.AddItem(c.infoPanel, 0, 1, false).
 		AddItem(c.helpPanel, 0, 1, false).
 		AddItem(c.logPanel, 0, 1, false)
-	headerRow.SetBackgroundColor(tcell.ColorDefault)
 
 	// Create separator like Redis plugin
 	separator := tview.NewBox().
@@ -121,12 +121,12 @@ func (c *Cores) initUI() {
 		})
 
 	// Create main layout with header, separator, table, and breadcrumbs at the bottom
-	c.mainLayout = tview.NewFlex().
-		SetDirection(tview.FlexRow).
-		AddItem(headerRow, 6, 0, false).
+	c.mainLayout = tview.NewFlex()
+	c.mainLayout.SetDirection(tview.FlexRow)
+	c.mainLayout.SetBackgroundColor(tcell.ColorDefault)
+	c.mainLayout.SetBorder(false)
+	c.mainLayout.AddItem(headerRow, 6, 0, false).
 		AddItem(separator, 1, 0, false).
 		AddItem(c.table, 0, 1, true).
 		AddItem(c.breadcrumbs, 1, 0, false)
-	c.mainLayout.SetBackgroundColor(tcell.ColorDefault)
-	c.mainLayout.SetBorder(false)
 }

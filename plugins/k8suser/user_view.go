@@ -269,10 +269,10 @@ func (uv *UserView) showAssignRoleModalForUser(user *K8sUser) {
 	// Style the form according to UI package standards
 	form.SetItemPadding(0)
 	form.SetButtonsAlign(tview.AlignCenter)
-	form.SetBackgroundColor(tcell.ColorBlack)
-	form.SetButtonBackgroundColor(tcell.ColorBlack)
+	form.SetBackgroundColor(tcell.ColorDefault)
+	form.SetButtonBackgroundColor(tcell.ColorDefault)
 	form.SetButtonTextColor(tcell.ColorWhite)
-	form.SetFieldBackgroundColor(tcell.ColorBlack)
+	form.SetFieldBackgroundColor(tcell.ColorDefault)
 	form.SetFieldTextColor(tcell.ColorWhite)
 	form.SetBorder(true)
 	form.SetTitle(" Assign Role to User ")
@@ -284,10 +284,10 @@ func (uv *UserView) showAssignRoleModalForUser(user *K8sUser) {
 	// Style the buttons with focus colors
 	for i := 0; i < form.GetButtonCount(); i++ {
 		if b := form.GetButton(i); b != nil {
-			b.SetBackgroundColor(tcell.ColorBlack)
+			b.SetBackgroundColor(tcell.ColorDefault)
 			b.SetLabelColor(tcell.ColorWhite)
 			b.SetBackgroundColorActivated(tcell.ColorWhite)
-			b.SetLabelColorActivated(tcell.ColorBlack)
+			b.SetLabelColorActivated(tcell.ColorDefault)
 		}
 	}
 
@@ -479,7 +479,7 @@ func (uv *UserView) showTestAccessModal() {
 	resultsView.SetTitle(" Results ")
 	resultsView.SetTitleAlign(tview.AlignCenter)
 	resultsView.SetTitleColor(tcell.ColorOrange)
-	resultsView.SetBackgroundColor(tcell.ColorBlack)
+	resultsView.SetBackgroundColor(tcell.ColorDefault)
 	resultsView.SetTextColor(tcell.ColorWhite)
 	resultsView.SetBorderPadding(1, 1, 2, 2)
 
@@ -532,10 +532,10 @@ func (uv *UserView) showTestAccessModal() {
 	// Style the form according to UI package standards
 	form.SetItemPadding(1)
 	form.SetButtonsAlign(tview.AlignCenter)
-	form.SetBackgroundColor(tcell.ColorBlack)
-	form.SetButtonBackgroundColor(tcell.ColorBlack)
+	form.SetBackgroundColor(tcell.ColorDefault)
+	form.SetButtonBackgroundColor(tcell.ColorDefault)
 	form.SetButtonTextColor(tcell.ColorWhite)
-	form.SetFieldBackgroundColor(tcell.ColorBlack)
+	form.SetFieldBackgroundColor(tcell.ColorDefault)
 	form.SetFieldTextColor(tcell.ColorWhite)
 	form.SetBorder(true)
 	form.SetTitle(" Test Access ")
@@ -547,10 +547,10 @@ func (uv *UserView) showTestAccessModal() {
 	// Style the buttons with focus colors
 	for i := 0; i < form.GetButtonCount(); i++ {
 		if b := form.GetButton(i); b != nil {
-			b.SetBackgroundColor(tcell.ColorBlack)
+			b.SetBackgroundColor(tcell.ColorDefault)
 			b.SetLabelColor(tcell.ColorWhite)
 			b.SetBackgroundColorActivated(tcell.ColorWhite)
-			b.SetLabelColorActivated(tcell.ColorBlack)
+			b.SetLabelColorActivated(tcell.ColorDefault)
 		}
 	}
 

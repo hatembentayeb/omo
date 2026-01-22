@@ -17,8 +17,8 @@ func ShowStandardConfirmationModal(
 	form := tview.NewForm()
 	form.SetItemPadding(0)
 	form.SetButtonsAlign(tview.AlignCenter)
-	form.SetBackgroundColor(tcell.ColorBlack)
-	form.SetButtonBackgroundColor(tcell.ColorBlack)
+	form.SetBackgroundColor(tcell.ColorDefault)
+	form.SetButtonBackgroundColor(tcell.ColorDefault)
 	form.SetButtonTextColor(tcell.ColorWhite)
 	form.SetBorder(true)
 	form.SetTitle(" " + title + " ")
@@ -48,10 +48,10 @@ func ShowStandardConfirmationModal(
 	// Style the buttons with focus colors
 	for i := 0; i < form.GetButtonCount(); i++ {
 		if b := form.GetButton(i); b != nil {
-			b.SetBackgroundColor(tcell.ColorBlack)
+			b.SetBackgroundColor(tcell.ColorDefault)
 			b.SetLabelColor(tcell.ColorWhite)
 			b.SetBackgroundColorActivated(tcell.ColorWhite)
-			b.SetLabelColorActivated(tcell.ColorBlack)
+			b.SetLabelColorActivated(tcell.ColorDefault)
 		}
 	}
 
@@ -60,13 +60,17 @@ func ShowStandardConfirmationModal(
 	height := 8 // Fixed height for confirmation dialog
 
 	// Create a flexbox container to center the components
-	flex := tview.NewFlex().
-		AddItem(nil, 0, 1, false).
-		AddItem(tview.NewFlex().
-			SetDirection(tview.FlexRow).
-			AddItem(nil, 0, 1, false).
-			AddItem(form, height, 1, true).
-			AddItem(nil, 0, 1, false), width, 1, true).
+	innerFlex := tview.NewFlex()
+	innerFlex.SetDirection(tview.FlexRow)
+	innerFlex.SetBackgroundColor(tcell.ColorDefault)
+	innerFlex.AddItem(nil, 0, 1, false).
+		AddItem(form, height, 1, true).
+		AddItem(nil, 0, 1, false)
+	
+	flex := tview.NewFlex()
+	flex.SetBackgroundColor(tcell.ColorDefault)
+	flex.AddItem(nil, 0, 1, false).
+		AddItem(innerFlex, width, 1, true).
 		AddItem(nil, 0, 1, false)
 
 	const pageID = "confirmation-modal"
