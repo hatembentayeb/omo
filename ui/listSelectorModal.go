@@ -39,7 +39,7 @@ func ShowStandardListSelectorModal(
 	list := tview.NewList()
 	list.SetHighlightFullLine(true)
 	list.SetSelectedBackgroundColor(tcell.ColorAqua)
-	list.SetSelectedTextColor(tcell.ColorBlack)
+	list.SetSelectedTextColor(tcell.ColorDefault)
 	list.SetBorder(true)
 	list.SetBorderColor(tcell.ColorAqua)
 	list.SetTitle(" " + title + " ")
@@ -69,14 +69,18 @@ func ShowStandardListSelectorModal(
 	height := len(items) + 6 // Adjust based on item count plus border and help text
 
 	// Create a flexbox container to center the components
-	flex := tview.NewFlex().
-		AddItem(nil, 0, 1, false).
-		AddItem(tview.NewFlex().
-			SetDirection(tview.FlexRow).
-			AddItem(nil, 0, 1, false).
-			AddItem(list, height-2, 1, true).
-			AddItem(helpText, 1, 0, false).
-			AddItem(nil, 0, 1, false), width, 1, true).
+	innerFlex := tview.NewFlex()
+	innerFlex.SetDirection(tview.FlexRow)
+	innerFlex.SetBackgroundColor(tcell.ColorDefault)
+	innerFlex.AddItem(nil, 0, 1, false).
+		AddItem(list, height-2, 1, true).
+		AddItem(helpText, 1, 0, false).
+		AddItem(nil, 0, 1, false)
+	
+	flex := tview.NewFlex()
+	flex.SetBackgroundColor(tcell.ColorDefault)
+	flex.AddItem(nil, 0, 1, false).
+		AddItem(innerFlex, width, 1, true).
 		AddItem(nil, 0, 1, false)
 
 	// Set the callback for when an item is selected

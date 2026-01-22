@@ -32,13 +32,17 @@ func ShowInfoModal(
 	height := 26 // Adjusted for content
 
 	// Create a flexbox container to center the components - similar to help modal layout
-	flex := tview.NewFlex().
-		AddItem(nil, 0, 1, false).
-		AddItem(tview.NewFlex().
-			SetDirection(tview.FlexRow).
-			AddItem(nil, 0, 1, false).
-			AddItem(textView, height, 1, true).
-			AddItem(nil, 0, 1, false), width, 1, true).
+	innerFlex := tview.NewFlex()
+	innerFlex.SetDirection(tview.FlexRow)
+	innerFlex.SetBackgroundColor(tcell.ColorDefault)
+	innerFlex.AddItem(nil, 0, 1, false).
+		AddItem(textView, height, 1, true).
+		AddItem(nil, 0, 1, false)
+	
+	flex := tview.NewFlex()
+	flex.SetBackgroundColor(tcell.ColorDefault)
+	flex.AddItem(nil, 0, 1, false).
+		AddItem(innerFlex, width, 1, true).
 		AddItem(nil, 0, 1, false)
 
 	// Use the global RemovePage function for consistent ESC handling

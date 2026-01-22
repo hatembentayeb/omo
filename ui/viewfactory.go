@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/rivo/tview"
+	"github.com/gdamore/tcell/v2"
 )
 
 // ViewType represents the type of view to create
@@ -162,9 +163,10 @@ func (f *ViewFactory) CreateSplitView(config SplitViewConfig) tview.Primitive {
 	rightCores.RegisterHandlers()
 
 	// Create a flex container for the split view
-	flex := tview.NewFlex().
-		SetDirection(tview.FlexColumn).
-		AddItem(leftCores.GetLayout(), 0, 1, true).
+	flex := tview.NewFlex()
+	flex.SetDirection(tview.FlexColumn)
+	flex.SetBackgroundColor(tcell.ColorDefault)
+	flex.AddItem(leftCores.GetLayout(), 0, 1, true).
 		AddItem(rightCores.GetLayout(), 0, 1, false)
 
 	return flex

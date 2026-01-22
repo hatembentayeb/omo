@@ -492,7 +492,7 @@ func (v *ProjectView) showCreateProjectModal() {
 	form.SetTitleAlign(tview.AlignCenter)
 	form.SetBorderColor(tcell.ColorBlue)
 	form.SetTitleColor(tcell.ColorYellow)
-	form.SetBackgroundColor(tcell.ColorBlack)
+	form.SetBackgroundColor(tcell.ColorDefault)
 
 	// Create centered modal
 	width := 60

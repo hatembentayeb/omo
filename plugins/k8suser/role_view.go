@@ -193,11 +193,11 @@ func (rv *RoleView) showCreateRoleModal() {
 		ruleForm.SetTitleAlign(tview.AlignCenter)
 		ruleForm.SetBorderColor(tcell.ColorBlue)
 		ruleForm.SetTitleColor(tcell.ColorYellow)
-		ruleForm.SetBackgroundColor(tcell.ColorBlack)
+		ruleForm.SetBackgroundColor(tcell.ColorDefault)
 		ruleForm.SetButtonsAlign(tview.AlignCenter)
-		ruleForm.SetButtonBackgroundColor(tcell.ColorBlack)
+		ruleForm.SetButtonBackgroundColor(tcell.ColorDefault)
 		ruleForm.SetButtonTextColor(tcell.ColorWhite)
-		ruleForm.SetFieldBackgroundColor(tcell.ColorBlack)
+		ruleForm.SetFieldBackgroundColor(tcell.ColorDefault)
 		ruleForm.SetFieldTextColor(tcell.ColorWhite)
 
 		// Create centered modal
@@ -309,11 +309,11 @@ func (rv *RoleView) showCreateRoleModal() {
 	form.SetTitleAlign(tview.AlignCenter)
 	form.SetBorderColor(tcell.ColorBlue)
 	form.SetTitleColor(tcell.ColorYellow)
-	form.SetBackgroundColor(tcell.ColorBlack)
+	form.SetBackgroundColor(tcell.ColorDefault)
 	form.SetButtonsAlign(tview.AlignCenter)
-	form.SetButtonBackgroundColor(tcell.ColorBlack)
+	form.SetButtonBackgroundColor(tcell.ColorDefault)
 	form.SetButtonTextColor(tcell.ColorWhite)
-	form.SetFieldBackgroundColor(tcell.ColorBlack)
+	form.SetFieldBackgroundColor(tcell.ColorDefault)
 	form.SetFieldTextColor(tcell.ColorWhite)
 
 	// Get namespaces

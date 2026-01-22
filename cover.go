@@ -32,6 +32,7 @@ func Cover() tview.Primitive {
 	logoBox := tview.NewTextView()
 	logoBox.SetDynamicColors(true)
 	logoBox.SetTextAlign(tview.AlignCenter)
+	logoBox.SetBackgroundColor(tcell.ColorDefault)
 
 	// Add subtle shadow effect to logo
 	logoWithShadow := logo + "\n[#FF8C40]  OMO - Terminal Operations Dashboard  [white]"
@@ -52,6 +53,7 @@ func Cover() tview.Primitive {
 	infoBox.SetTitle(" About ")
 	infoBox.SetTitleColor(tcell.ColorOrange)
 	infoBox.SetBorderPadding(1, 1, 2, 2)
+	infoBox.SetBackgroundColor(tcell.ColorDefault)
 	infoBox.SetText(infoContent)
 
 	// Create features content
@@ -73,6 +75,7 @@ func Cover() tview.Primitive {
 	featuresBox.SetTitle(" Features ")
 	featuresBox.SetTitleColor(tcell.ColorOrange)
 	featuresBox.SetBorderPadding(1, 1, 2, 2)
+	featuresBox.SetBackgroundColor(tcell.ColorDefault)
 	featuresBox.SetText(enhancedFeatures)
 
 	// Create a grid layout for better organization
@@ -80,6 +83,7 @@ func Cover() tview.Primitive {
 	grid.SetColumns(0, 40, 40, 0)
 	grid.SetRows(0, 12, 0, 15, 0)
 	grid.SetBorders(false)
+	grid.SetBackgroundColor(tcell.ColorDefault)
 
 	// Add items to the grid with proper positioning
 	grid.AddItem(logoBox, 1, 1, 1, 2, 0, 0, true)
@@ -89,6 +93,7 @@ func Cover() tview.Primitive {
 	// Create a frame around everything for a polished look
 	frame := tview.NewFrame(grid)
 	frame.SetBorders(0, 0, 0, 0, 0, 0)
+	frame.SetBackgroundColor(tcell.ColorDefault)
 	frame.AddText("Press Tab to navigate", true, tview.AlignCenter, tcell.ColorDimGray)
 
 	app.SetFocus(logoBox)

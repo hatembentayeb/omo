@@ -64,9 +64,10 @@ func NewProgressModal(pages *tview.Pages, app *tview.Application, title string, 
 		SetText("")
 
 	// Create a flex for the progress and status
-	contentFlex := tview.NewFlex().
-		SetDirection(tview.FlexRow).
-		AddItem(pm.progressBar, 1, 0, false).
+	contentFlex := tview.NewFlex()
+	contentFlex.SetDirection(tview.FlexRow)
+	contentFlex.SetBackgroundColor(tcell.ColorDefault)
+	contentFlex.AddItem(pm.progressBar, 1, 0, false).
 		AddItem(pm.statusText, 1, 0, false)
 
 	// Create a form for the cancel button
@@ -78,8 +79,8 @@ func NewProgressModal(pages *tview.Pages, app *tview.Application, title string, 
 		}
 		pm.Close()
 	})
-	form.SetBackgroundColor(tcell.ColorBlack)
-	form.SetButtonBackgroundColor(tcell.ColorBlack)
+	form.SetBackgroundColor(tcell.ColorDefault)
+	form.SetButtonBackgroundColor(tcell.ColorDefault)
 
 	// Create the main flex layout
 	innerFlex := tview.NewFlex().
@@ -92,7 +93,7 @@ func NewProgressModal(pages *tview.Pages, app *tview.Application, title string, 
 	frame := tview.NewFrame(innerFlex)
 	frame.SetBorders(2, 2, 2, 2, 4, 4)
 	frame.SetBorderColor(tcell.ColorRed) // Try a more visible color
-	frame.SetBackgroundColor(tcell.ColorBlack)
+	frame.SetBackgroundColor(tcell.ColorDefault)
 	frame.SetBorderPadding(1, 1, 2, 2)
 	frame.AddText(" "+title+" ", true, tview.AlignCenter, tcell.ColorYellow)
 
@@ -100,13 +101,17 @@ func NewProgressModal(pages *tview.Pages, app *tview.Application, title string, 
 	width := 60
 	height := 10
 
-	pm.modal = tview.NewFlex().
-		AddItem(nil, 0, 1, false).
-		AddItem(tview.NewFlex().
-			SetDirection(tview.FlexRow).
-			AddItem(nil, 0, 1, false).
-			AddItem(frame, height, 1, true).
-			AddItem(nil, 0, 1, false), width, 1, true).
+	innerModalFlex := tview.NewFlex()
+	innerModalFlex.SetDirection(tview.FlexRow)
+	innerModalFlex.SetBackgroundColor(tcell.ColorDefault)
+	innerModalFlex.AddItem(nil, 0, 1, false).
+		AddItem(frame, height, 1, true).
+		AddItem(nil, 0, 1, false)
+	
+	pm.modal = tview.NewFlex()
+	pm.modal.SetBackgroundColor(tcell.ColorDefault)
+	pm.modal.AddItem(nil, 0, 1, false).
+		AddItem(innerModalFlex, width, 1, true).
 		AddItem(nil, 0, 1, false)
 
 	// Update the initial progress bar
