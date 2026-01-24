@@ -6,7 +6,7 @@ import (
 
 	"github.com/rivo/tview"
 
-	"omo/ui"
+	"omo/pkg/ui"
 )
 
 // ApplicationView handles the application management view

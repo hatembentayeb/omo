@@ -7,7 +7,7 @@ import (
 
 	"github.com/rivo/tview"
 
-	"omo/ui"
+	"omo/pkg/ui"
 )
 
 // BrokerView manages the UI for viewing Kafka brokers

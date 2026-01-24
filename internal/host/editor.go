@@ -1,4 +1,4 @@
-package main
+package host
 
 import (
 	"log"
@@ -7,14 +7,14 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/pgavlin/femto"
 	"github.com/pgavlin/femto/runtime"
+	"github.com/rivo/tview"
 )
 
 func saveBuffer(b *femto.Buffer, path string) error {
 	return os.WriteFile(path, []byte(b.String()), 0600)
 }
 
-func newEditor(path string) *femto.View {
-
+func newEditor(app *tview.Application, path string) *femto.View {
 	content, err := os.ReadFile(path)
 	if err != nil {
 		log.Fatalf("could not read %v: %v", path, err)

@@ -7,7 +7,7 @@ import (
 
 	"github.com/rivo/tview"
 
-	"omo/ui"
+	"omo/pkg/ui"
 )
 
 // ConsumerInfo represents information about a Kafka consumer

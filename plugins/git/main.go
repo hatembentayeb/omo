@@ -3,22 +3,11 @@ package main
 import (
 	"time"
 
+	"omo/pkg/pluginapi"
+
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
-
-// PluginMetadata defines metadata for OhmyopsPlugin
-type PluginMetadata struct {
-	Name        string    // Name of the plugin
-	Version     string    // Version of the plugin
-	Description string    // Short description of the plugin
-	Author      string    // Author of the plugin
-	License     string    // License of the plugin
-	Tags        []string  // Tags for categorizing the plugin
-	Arch        []string  // Supported architectures
-	LastUpdated time.Time // Last update time
-	URL         string    // URL to the plugin repository or documentation
-}
 
 // GitPlugin represents the Git management plugin
 type GitPlugin struct {
@@ -131,8 +120,8 @@ func (g *GitPlugin) Stop() {
 }
 
 // GetMetadata returns plugin metadata
-func (g *GitPlugin) GetMetadata() PluginMetadata {
-	return PluginMetadata{
+func (g *GitPlugin) GetMetadata() pluginapi.PluginMetadata {
+	return pluginapi.PluginMetadata{
 		Name:        "git",
 		Version:     "1.0.0",
 		Description: "Git repository management plugin",
@@ -153,18 +142,17 @@ func init() {
 	OhmyopsPlugin.Description = "Manage Git repositories and monitor status"
 }
 
-// GetMetadata is exported as a function to be called directly by the main application
-// when the direct type assertion of OhmyopsPlugin fails
-func GetMetadata() interface{} {
-	return map[string]interface{}{
-		"Name":        "git",
-		"Version":     "1.0.0",
-		"Description": "Git repository management plugin",
-		"Author":      "Git Plugin Team",
-		"License":     "MIT",
-		"Tags":        []string{"version-control", "git", "development"},
-		"Arch":        []string{"amd64", "arm64"},
-		"LastUpdated": time.Now().Format(time.RFC3339),
-		"URL":         "https://github.com/hatembentayeb/omo/plugins/git",
+// GetMetadata is exported for legacy loaders.
+func GetMetadata() pluginapi.PluginMetadata {
+	return pluginapi.PluginMetadata{
+		Name:        "git",
+		Version:     "1.0.0",
+		Description: "Git repository management plugin",
+		Author:      "Git Plugin Team",
+		License:     "MIT",
+		Tags:        []string{"version-control", "git", "development"},
+		Arch:        []string{"amd64", "arm64"},
+		LastUpdated: time.Now(),
+		URL:         "https://github.com/hatembentayeb/omo/plugins/git",
 	}
 }

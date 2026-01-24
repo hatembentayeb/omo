@@ -1,4 +1,4 @@
-package main
+package host
 
 import (
 	"github.com/gdamore/tcell/v2"
@@ -26,8 +26,8 @@ const (
 • Select a plugin to activate its features[white]`
 )
 
-// Cover returns the cover page
-func Cover() tview.Primitive {
+// Cover returns the cover page.
+func Cover(app *tview.Application) tview.Primitive {
 	// Create styled logo with glow effect
 	logoBox := tview.NewTextView()
 	logoBox.SetDynamicColors(true)
@@ -100,6 +100,7 @@ func Cover() tview.Primitive {
 	return frame
 }
 
+// Center returns a centered primitive within a container.
 func Center(width, height int, p tview.Primitive) tview.Primitive {
 	return tview.NewFlex().
 		AddItem(nil, 0, 1, false).

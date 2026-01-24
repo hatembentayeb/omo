@@ -6,7 +6,7 @@ import (
 
 	"github.com/rivo/tview"
 
-	"omo/ui"
+	"omo/pkg/ui"
 )
 
 // TopicInfo represents information about a Kafka topic

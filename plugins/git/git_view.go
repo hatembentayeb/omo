@@ -10,7 +10,7 @@ import (
 
 	"github.com/rivo/tview"
 
-	"omo/ui"
+	"omo/pkg/ui"
 )
 
 // GitRepository represents a Git repository

@@ -3,22 +3,11 @@ package main
 import (
 	"time"
 
+	"omo/pkg/pluginapi"
+
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
-
-// PluginMetadata defines metadata for OhmyopsPlugin
-type PluginMetadata struct {
-	Name        string    // Name of the plugin
-	Version     string    // Version of the plugin
-	Description string    // Short description of the plugin
-	Author      string    // Author of the plugin
-	License     string    // License of the plugin
-	Tags        []string  // Tags for categorizing the plugin
-	Arch        []string  // Supported architectures
-	LastUpdated time.Time // Last update time
-	URL         string    // URL to the plugin repository or documentation
-}
 
 // DockerPlugin represents the Docker management plugin
 type DockerPlugin struct {
@@ -94,8 +83,8 @@ func (d *DockerPlugin) Stop() {
 }
 
 // GetMetadata returns plugin metadata
-func (d *DockerPlugin) GetMetadata() PluginMetadata {
-	return PluginMetadata{
+func (d *DockerPlugin) GetMetadata() pluginapi.PluginMetadata {
+	return pluginapi.PluginMetadata{
 		Name:        "docker",
 		Version:     "1.0.0",
 		Description: "Docker container and image management plugin",
@@ -116,18 +105,17 @@ func init() {
 	OhmyopsPlugin.Description = "Manage Docker containers, images, networks and volumes"
 }
 
-// GetMetadata is exported as a function to be called directly by the main application
-// when the direct type assertion of OhmyopsPlugin fails
-func GetMetadata() interface{} {
-	return map[string]interface{}{
-		"Name":        "docker",
-		"Version":     "1.0.0",
-		"Description": "Docker container and image management plugin",
-		"Author":      "Docker Plugin Team",
-		"License":     "MIT",
-		"Tags":        []string{"containers", "docker", "devops", "infrastructure"},
-		"Arch":        []string{"amd64", "arm64"},
-		"LastUpdated": time.Now().Format(time.RFC3339),
-		"URL":         "https://github.com/hatembentayeb/omo/plugins/docker",
+// GetMetadata is exported for legacy loaders.
+func GetMetadata() pluginapi.PluginMetadata {
+	return pluginapi.PluginMetadata{
+		Name:        "docker",
+		Version:     "1.0.0",
+		Description: "Docker container and image management plugin",
+		Author:      "Docker Plugin Team",
+		License:     "MIT",
+		Tags:        []string{"containers", "docker", "devops", "infrastructure"},
+		Arch:        []string{"amd64", "arm64"},
+		LastUpdated: time.Now(),
+		URL:         "https://github.com/hatembentayeb/omo/plugins/docker",
 	}
 }

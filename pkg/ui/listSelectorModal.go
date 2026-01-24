@@ -76,7 +76,7 @@ func ShowStandardListSelectorModal(
 		AddItem(list, height-2, 1, true).
 		AddItem(helpText, 1, 0, false).
 		AddItem(nil, 0, 1, false)
-	
+
 	flex := tview.NewFlex()
 	flex.SetBackgroundColor(tcell.ColorDefault)
 	flex.AddItem(nil, 0, 1, false).

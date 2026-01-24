@@ -73,7 +73,7 @@ func ShowErrorModal(
 		AddItem(textView, height-3, 1, false).
 		AddItem(form, 3, 0, true).
 		AddItem(nil, 0, 1, false)
-	
+
 	flex := tview.NewFlex()
 	flex.SetBackgroundColor(tcell.ColorDefault)
 	flex.AddItem(nil, 0, 1, false).
@@ -167,7 +167,7 @@ func ShowStandardErrorModal(
 		AddItem(textView, height-3, 1, true). // Make text view focused for scrolling
 		AddItem(form, 3, 0, true).
 		AddItem(nil, 0, 1, false)
-	
+
 	flex := tview.NewFlex()
 	flex.SetBackgroundColor(tcell.ColorDefault)
 	flex.AddItem(nil, 0, 1, false).

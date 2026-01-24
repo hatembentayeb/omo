@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"omo/ui"
+	"omo/pkg/ui"
 )
 
 // showSortModal displays the sort options modal

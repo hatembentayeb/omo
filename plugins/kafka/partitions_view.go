@@ -6,7 +6,7 @@ import (
 
 	"github.com/rivo/tview"
 
-	"omo/ui"
+	"omo/pkg/ui"
 )
 
 // PartitionInfo represents information about a Kafka partition

@@ -84,14 +84,14 @@ func ShowSortModal(
 	// Create a flexbox container for the modal, with reduced margins
 	width := 45
 	height := 12
-	
+
 	innerFlex := tview.NewFlex()
 	innerFlex.SetDirection(tview.FlexRow)
 	innerFlex.SetBackgroundColor(tcell.ColorDefault)
 	innerFlex.AddItem(nil, 0, 1, false).
 		AddItem(form, height, 1, true).
 		AddItem(nil, 0, 1, false)
-	
+
 	flex := tview.NewFlex()
 	flex.SetBackgroundColor(tcell.ColorDefault)
 	flex.AddItem(nil, 0, 1, false).

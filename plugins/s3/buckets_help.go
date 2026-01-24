@@ -1,7 +1,7 @@
 package main
 
 import (
-	"omo/ui"
+	"omo/pkg/ui"
 )
 
 // showHelp displays the help modal with bucket view hints

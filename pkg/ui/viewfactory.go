@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rivo/tview"
 	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 )
 
 // ViewType represents the type of view to create

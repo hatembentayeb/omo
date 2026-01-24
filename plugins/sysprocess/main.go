@@ -11,7 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"omo/ui"
+	"omo/pkg/pluginapi"
+	"omo/pkg/ui"
 
 	"github.com/rivo/tview"
 	"github.com/shirou/gopsutil/v3/cpu"
@@ -116,18 +117,29 @@ func (p *Plugin) Start(app *tview.Application) tview.Primitive {
 	return p.pages
 }
 
-// GetMetadata returns plugin metadata
-func (p *Plugin) GetMetadata() interface{} {
+// GetMetadata returns plugin metadata.
+func (p *Plugin) GetMetadata() pluginapi.PluginMetadata {
 	logger.Println("GetMetadata called")
-	return map[string]interface{}{
-		"Name":        "sysprocess",
-		"Version":     "1.0.0",
-		"Description": "System process and resource monitor",
-		"Author":      "OhMyOps",
-		"License":     "MIT",
-		"Tags":        []string{"system", "monitoring", "process"},
-		"LastUpdated": time.Now().Format("Jan 2006"),
+	return pluginapi.PluginMetadata{
+		Name:        "sysprocess",
+		Version:     "1.0.0",
+		Description: "System process and resource monitor",
+		Author:      "OhMyOps",
+		License:     "MIT",
+		Tags:        []string{"system", "monitoring", "process"},
+		Arch:        []string{"amd64", "arm64"},
+		LastUpdated: time.Now(),
+		URL:         "",
 	}
+}
+
+// Stop cleans up resources when the plugin unloads.
+func (p *Plugin) Stop() {
+	if p.cores != nil {
+		p.cores.StopAutoRefresh()
+		p.cores.UnregisterHandlers()
+	}
+	cleanup()
 }
 
 // initializeMainView creates the main process list view

@@ -8,7 +8,8 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 
-	"omo/ui"
+	"omo/pkg/pluginapi"
+	"omo/pkg/ui"
 )
 
 // OhmyopsPlugin is expected by the main application
@@ -179,16 +180,62 @@ func (p *ArgocdPlugin) Start(app *tview.Application) tview.Primitive {
 	return p.pages
 }
 
-// GetMetadata returns plugin metadata
-func (p *ArgocdPlugin) GetMetadata() interface{} {
-	return map[string]interface{}{
-		"Name":        "argocd",
-		"Version":     "1.0.0",
-		"Description": "ArgoCD management plugin",
-		"Author":      "OhMyOps",
-		"License":     "MIT",
-		"Tags":        []string{"argocd", "gitops", "kubernetes", "deployment"},
-		"LastUpdated": time.Now().Format("Jan 2006"),
+// Stop cleans up resources when the plugin is unloaded.
+func (p *ArgocdPlugin) Stop() {
+	if p.cores != nil {
+		p.cores.StopAutoRefresh()
+		p.cores.UnregisterHandlers()
+	}
+
+	if debugLogger != nil {
+		debugLogger.Close()
+	}
+
+	if p.pages != nil {
+		pageIDs := []string{
+			"main",
+			"debug-logs-modal",
+			"create-account-modal",
+			"create-token-modal",
+			"project-roles-modal",
+			"create-project-modal",
+			"confirm-modal",
+			"confirmation-modal",
+			"error-modal",
+			"info-modal",
+			"list-selector-modal",
+			"progress-modal",
+			"sort-modal",
+			"compact-modal",
+		}
+		for _, pageID := range pageIDs {
+			if p.pages.HasPage(pageID) {
+				p.pages.RemovePage(pageID)
+			}
+		}
+	}
+
+	p.accountView = nil
+	p.projectView = nil
+	p.applicationView = nil
+	p.apiClient = nil
+	p.cores = nil
+	p.pages = nil
+	p.app = nil
+}
+
+// GetMetadata returns plugin metadata.
+func (p *ArgocdPlugin) GetMetadata() pluginapi.PluginMetadata {
+	return pluginapi.PluginMetadata{
+		Name:        "argocd",
+		Version:     "1.0.0",
+		Description: "ArgoCD management plugin",
+		Author:      "OhMyOps",
+		License:     "MIT",
+		Tags:        []string{"argocd", "gitops", "kubernetes", "deployment"},
+		Arch:        []string{"amd64", "arm64"},
+		LastUpdated: time.Now(),
+		URL:         "",
 	}
 }
 
