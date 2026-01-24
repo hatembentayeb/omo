@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 
-	"omo/ui"
+	"omo/pkg/ui"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"

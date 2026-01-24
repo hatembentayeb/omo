@@ -107,7 +107,7 @@ func NewProgressModal(pages *tview.Pages, app *tview.Application, title string, 
 	innerModalFlex.AddItem(nil, 0, 1, false).
 		AddItem(frame, height, 1, true).
 		AddItem(nil, 0, 1, false)
-	
+
 	pm.modal = tview.NewFlex()
 	pm.modal.SetBackgroundColor(tcell.ColorDefault)
 	pm.modal.AddItem(nil, 0, 1, false).

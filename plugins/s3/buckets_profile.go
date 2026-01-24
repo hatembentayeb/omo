@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"omo/ui"
+	"omo/pkg/ui"
 )
 
 // ShowProfileSelector shows the profile selector modal

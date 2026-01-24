@@ -8,7 +8,7 @@ import (
 
 	"github.com/rivo/tview"
 
-	"omo/ui"
+	"omo/pkg/ui"
 )
 
 // RedisView manages the UI for interacting with Redis

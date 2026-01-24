@@ -38,7 +38,7 @@ func ShowInfoModal(
 	innerFlex.AddItem(nil, 0, 1, false).
 		AddItem(textView, height, 1, true).
 		AddItem(nil, 0, 1, false)
-	
+
 	flex := tview.NewFlex()
 	flex.SetBackgroundColor(tcell.ColorDefault)
 	flex.AddItem(nil, 0, 1, false).

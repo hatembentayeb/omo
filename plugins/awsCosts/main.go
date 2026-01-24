@@ -5,13 +5,14 @@ import (
 	"strconv"
 	"time"
 
+	"omo/pkg/pluginapi"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/costexplorer"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 
-	"omo/ui"
+	"omo/pkg/ui"
 )
 
 // OhmyopsPlugin is expected by the main application
@@ -93,16 +94,49 @@ func (p *AWSCostsPlugin) Start(app *tview.Application) tview.Primitive {
 	return p.pages
 }
 
-// GetMetadata returns plugin metadata
-func (p *AWSCostsPlugin) GetMetadata() interface{} {
-	return map[string]interface{}{
-		"Name":        "awsCosts",
-		"Version":     "1.0.0",
-		"Description": "AWS Cost Explorer and Budget Analyzer",
-		"Author":      "OhMyOps",
-		"License":     "MIT",
-		"Tags":        []string{"aws", "cost", "monitoring", "billing"},
-		"LastUpdated": time.Now().Format("Jan 2006"),
+// Stop cleans up resources when the plugin is unloaded.
+func (p *AWSCostsPlugin) Stop() {
+	if p.cores != nil {
+		p.cores.StopAutoRefresh()
+		p.cores.UnregisterHandlers()
+	}
+
+	if p.pages != nil {
+		pageIDs := []string{
+			"main",
+			"confirmation-modal",
+			"error-modal",
+			"info-modal",
+			"list-selector-modal",
+			"progress-modal",
+			"sort-modal",
+			"compact-modal",
+		}
+		for _, pageID := range pageIDs {
+			if p.pages.HasPage(pageID) {
+				p.pages.RemovePage(pageID)
+			}
+		}
+	}
+
+	p.client = nil
+	p.cores = nil
+	p.pages = nil
+	p.app = nil
+}
+
+// GetMetadata returns plugin metadata.
+func (p *AWSCostsPlugin) GetMetadata() pluginapi.PluginMetadata {
+	return pluginapi.PluginMetadata{
+		Name:        "awsCosts",
+		Version:     "1.0.0",
+		Description: "AWS Cost Explorer and Budget Analyzer",
+		Author:      "OhMyOps",
+		License:     "MIT",
+		Tags:        []string{"aws", "cost", "monitoring", "billing"},
+		Arch:        []string{"amd64", "arm64"},
+		LastUpdated: time.Now(),
+		URL:         "",
 	}
 }
 

@@ -5,21 +5,26 @@ import (
 	"github.com/rivo/tview"
 )
 
-// ShowStandardConfirmationModal displays a modal with Yes/No buttons for confirming actions
-func ShowStandardConfirmationModal(
+// ShowCompactStyledInputModal displays a compact, perfectly centered modal with a text input field
+func ShowCompactStyledInputModal(
 	pages *tview.Pages,
 	app *tview.Application,
 	title string,
-	text string,
-	callback func(confirmed bool),
+	inputLabel string,
+	placeholder string,
+	inputFieldWidth int,
+	fieldValidator func(textToCheck string, lastChar rune) bool,
+	callback func(text string, cancelled bool),
 ) {
-	// Create a form with buttons
+	// Create form with input field - matching UI package styling
 	form := tview.NewForm()
 	form.SetItemPadding(0)
 	form.SetButtonsAlign(tview.AlignCenter)
 	form.SetBackgroundColor(tcell.ColorDefault)
 	form.SetButtonBackgroundColor(tcell.ColorDefault)
 	form.SetButtonTextColor(tcell.ColorWhite)
+	form.SetFieldBackgroundColor(tcell.ColorDefault)
+	form.SetFieldTextColor(tcell.ColorWhite)
 	form.SetBorder(true)
 	form.SetTitle(" " + title + " ")
 	form.SetTitleAlign(tview.AlignCenter)
@@ -27,21 +32,30 @@ func ShowStandardConfirmationModal(
 	form.SetTitleColor(tcell.ColorOrange)
 	form.SetBorderPadding(1, 1, 2, 2)
 
-	// Add text with minimal spacing
-	form.AddTextView("", text, 0, 2, true, false)
+	// Add the input field with specified width
+	form.AddInputField(inputLabel, placeholder, inputFieldWidth, fieldValidator, nil)
 
-	// Add buttons
-	form.AddButton("Yes", func() {
-		pages.RemovePage("confirmation-modal")
+	// Add buttons with minimal vertical spacing
+	form.AddButton("OK", func() {
+		value := form.GetFormItem(0).(*tview.InputField).GetText()
+		pages.RemovePage("compact-modal")
+
+		if value == "" {
+			if callback != nil {
+				callback("", true) // Treat empty input as cancelled
+			}
+			return
+		}
+
 		if callback != nil {
-			callback(true)
+			callback(value, false)
 		}
 	})
 
-	form.AddButton("No", func() {
-		pages.RemovePage("confirmation-modal")
+	form.AddButton("Cancel", func() {
+		pages.RemovePage("compact-modal")
 		if callback != nil {
-			callback(false)
+			callback("", true)
 		}
 	})
 
@@ -57,7 +71,7 @@ func ShowStandardConfirmationModal(
 
 	// Set a width for the modal
 	width := 50
-	height := 8 // Fixed height for confirmation dialog
+	height := 8 // Compact height
 
 	// Create a flexbox container to center the components
 	innerFlex := tview.NewFlex()
@@ -66,17 +80,16 @@ func ShowStandardConfirmationModal(
 	innerFlex.AddItem(nil, 0, 1, false).
 		AddItem(form, height, 1, true).
 		AddItem(nil, 0, 1, false)
-	
 	flex := tview.NewFlex()
 	flex.SetBackgroundColor(tcell.ColorDefault)
 	flex.AddItem(nil, 0, 1, false).
 		AddItem(innerFlex, width, 1, true).
 		AddItem(nil, 0, 1, false)
 
-	const pageID = "confirmation-modal"
+	const pageID = "compact-modal"
 	RemovePage(pages, app, pageID, func() {
 		if callback != nil {
-			callback(false)
+			callback("", true)
 		}
 	})
 

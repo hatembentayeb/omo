@@ -7,8 +7,8 @@ BUILD_MODE := -buildmode=plugin
 all:
 	@echo "Building omo"
 	@go mod tidy
-	@go build -o omo 
-	@go install .
+	@go build -o omo ./cmd/omo
+	@go install ./cmd/omo
 	@echo "Building plugins"
 	@mkdir -p $(COMPILED_PLUGINS_DIR)
 	@for plugin in $(wildcard $(PLUGINS_DIR)/*); do \

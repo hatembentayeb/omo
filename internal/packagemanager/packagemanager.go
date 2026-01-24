@@ -1,4 +1,4 @@
-package main
+package packagemanager
 
 import (
 	"os"
@@ -7,13 +7,15 @@ import (
 	"strconv"
 	"time"
 
-	"omo/ui"
+	"omo/internal/registry"
+	"omo/pkg/pluginapi"
+	"omo/pkg/ui"
 
 	"github.com/rivo/tview"
 )
 
-// NewPackageManager creates and returns a configured package manager UI component
-func NewPackageManager(app *tview.Application, pages *tview.Pages) *ui.Cores {
+// NewPackageManager creates and returns a configured package manager UI component.
+func NewPackageManager(app *tview.Application, pages *tview.Pages, pluginsDir string) *ui.Cores {
 	// Create a new Cores UI component
 	core := ui.NewCores(app, "Package Manager")
 
@@ -31,10 +33,10 @@ func NewPackageManager(app *tview.Application, pages *tview.Pages) *ui.Cores {
 	// Set refresh callback to load plugin data
 	core.SetRefreshCallback(func() ([][]string, error) {
 		// First, make sure we load all available plugins from the plugins directory
-		loadAllPluginsMetadata()
+		loadAllPluginsMetadata(pluginsDir)
 
 		// Get actual plugin metadata from the global registry
-		plugins := GetAllPluginsMetadata()
+		plugins := registry.GetAllPluginsMetadata()
 		pluginData := make([][]string, 0, len(plugins))
 
 		// Add metadata for each plugin
@@ -170,7 +172,7 @@ func NewPackageManager(app *tview.Application, pages *tview.Pages) *ui.Cores {
 	return core
 }
 
-// updateInfoPanel updates the info panel with current stats
+// updateInfoPanel updates the info panel with current stats.
 func updateInfoPanel(core *ui.Cores, data [][]string) {
 	// Count stats
 	total := len(data)
@@ -204,13 +206,13 @@ func updateInfoPanel(core *ui.Cores, data [][]string) {
 	core.SetInfoText(infoText)
 }
 
-// loadAllPluginsMetadata scans the plugins directory and loads metadata from all plugin files
+// loadAllPluginsMetadata scans the plugins directory and loads metadata from all plugin files.
 // This function:
 // 1. Reads all files in the plugins directory
 // 2. Attempts to load each file as a Go plugin
-// 3. Extracts metadata from plugins using either the GetMetadata function or OhmyopsPlugin interface
+// 3. Extracts metadata from plugins using either the OhmyopsPlugin interface or GetMetadata function
 // 4. Registers valid plugins in the GlobalPluginRegistry
-func loadAllPluginsMetadata() {
+func loadAllPluginsMetadata(pluginsDir string) {
 	files, err := os.ReadDir(pluginsDir)
 	if err != nil {
 		return
@@ -225,7 +227,7 @@ func loadAllPluginsMetadata() {
 		pluginPath := filepath.Join(pluginsDir, pluginName)
 
 		// Skip if already loaded
-		if _, exists := GetPluginMetadata(pluginName); exists {
+		if _, exists := registry.GetPluginMetadata(pluginName); exists {
 			continue
 		}
 
@@ -235,17 +237,33 @@ func loadAllPluginsMetadata() {
 			continue
 		}
 
-		// Try to get metadata directly via GetMetadata function
+		// Try to get metadata via the OhmyopsPlugin interface
+		if pluginSymbol, err := p.Lookup("OhmyopsPlugin"); err == nil {
+			if ohmyopsPlugin, ok := pluginSymbol.(pluginapi.Plugin); ok {
+				metadata := ohmyopsPlugin.GetMetadata()
+				registry.RegisterPlugin(pluginName, metadata)
+				continue
+			}
+		}
+
+		// Try to get metadata directly via GetMetadata function (legacy support)
 		if metadataFunc, err := p.Lookup("GetMetadata"); err == nil {
+			if getter, ok := metadataFunc.(func() pluginapi.PluginMetadata); ok {
+				metadata := getter()
+				if metadata.Name == "" {
+					metadata.Name = pluginName
+				}
+				registry.RegisterPlugin(pluginName, metadata)
+				continue
+			}
+
 			if getter, ok := metadataFunc.(func() interface{}); ok {
 				if rawMetadata := getter(); rawMetadata != nil {
-					// Try to extract fields from the metadata
 					if m, ok := rawMetadata.(map[string]interface{}); ok {
-						metadata := PluginMetadata{
+						metadata := pluginapi.PluginMetadata{
 							Name: pluginName,
 						}
 
-						// Extract all available fields from map to metadata struct
 						if name, ok := m["Name"].(string); ok {
 							metadata.Name = name
 						}
@@ -270,25 +288,22 @@ func loadAllPluginsMetadata() {
 						if url, ok := m["URL"].(string); ok {
 							metadata.URL = url
 						}
-						if lastUpdated, ok := m["LastUpdated"].(time.Time); ok {
-							metadata.LastUpdated = lastUpdated
-						} else {
-							metadata.LastUpdated = time.Now() // Default to now
+						switch value := m["LastUpdated"].(type) {
+						case time.Time:
+							metadata.LastUpdated = value
+						case string:
+							if parsed, parseErr := time.Parse(time.RFC3339, value); parseErr == nil {
+								metadata.LastUpdated = parsed
+							} else {
+								metadata.LastUpdated = time.Now()
+							}
+						default:
+							metadata.LastUpdated = time.Now()
 						}
 
-						// Register the plugin metadata
-						RegisterPlugin(pluginName, metadata)
+						registry.RegisterPlugin(pluginName, metadata)
 					}
 				}
-			}
-			continue
-		}
-
-		// Alternative: try to get via the OhmyopsPlugin interface
-		if pluginSymbol, err := p.Lookup("OhmyopsPlugin"); err == nil {
-			if ohmyopsPlugin, ok := pluginSymbol.(OhmyopsPlugin); ok {
-				metadata := ohmyopsPlugin.GetMetadata()
-				RegisterPlugin(pluginName, metadata)
 			}
 		}
 	}
