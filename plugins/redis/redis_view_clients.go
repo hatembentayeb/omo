@@ -17,6 +17,11 @@ func (rv *RedisView) newClientsView() *ui.Cores {
 	cores.AddKeyBinding("M", "Memory", rv.showMemory)
 	cores.AddKeyBinding("P", "Persistence", rv.showPersistence)
 	cores.AddKeyBinding("Y", "Replication", rv.showReplication)
+	cores.AddKeyBinding("B", "PubSub", rv.showPubSub)
+	cores.AddKeyBinding("A", "Key Analysis", rv.showKeyAnalysis)
+	cores.AddKeyBinding("W", "Databases", rv.showDatabases)
+	cores.AddKeyBinding("X", "Cmd Stats", rv.showCommandStats)
+	cores.AddKeyBinding("Z", "Latency", rv.showLatency)
 	cores.SetActionCallback(rv.handleAction)
 	cores.RegisterHandlers()
 	return cores
