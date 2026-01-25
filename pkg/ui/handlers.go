@@ -19,13 +19,10 @@ import (
 // - ESC for navigation back
 // - Any custom key bindings defined for the instance
 func (c *Cores) RegisterHandlers() {
-	// Save the current input capture if there is one
-	oldCapture := c.app.GetInputCapture()
-
-	// Set up a new input capture that handles our keys and passes through others
-	c.app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		// Use the standardized key handler
-		return c.StandardKeyHandler(event, oldCapture)
+	// Set input capture directly on the table - this is more reliable
+	// than app-level capture which can get overwritten
+	c.table.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		return c.StandardKeyHandler(event, nil)
 	})
 }
 
