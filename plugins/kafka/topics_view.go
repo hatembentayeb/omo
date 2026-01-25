@@ -45,6 +45,7 @@ func NewTopicsView(app *tview.Application, pages *tview.Pages, kafkaClient *Kafk
 
 	// Create Cores UI component
 	tv.cores = ui.NewCores(app, "")
+	tv.cores.SetModalPages(pages)
 
 	// Set table headers
 	tv.cores.SetTableHeaders([]string{"Name", "Partitions", "Replication", "Leader", "Status", "Size", "Messages", "Consumers"})
