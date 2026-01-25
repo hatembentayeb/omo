@@ -5,16 +5,21 @@ import (
 )
 
 const (
-	viewRoot    = "redis"
-	viewKeys    = "keys"
-	viewInfo    = "info"
-	viewSlowlog = "slowlog"
-	viewStats   = "stats"
-	viewClients = "clients"
-	viewConfig  = "config"
-	viewMemory  = "memory"
-	viewRepl    = "replication"
-	viewPersist = "persistence"
+	viewRoot       = "redis"
+	viewKeys       = "keys"
+	viewInfo       = "info"
+	viewSlowlog    = "slowlog"
+	viewStats      = "stats"
+	viewClients    = "clients"
+	viewConfig     = "config"
+	viewMemory     = "memory"
+	viewRepl       = "replication"
+	viewPersist    = "persistence"
+	viewPubSub     = "pubsub"
+	viewKeyAnalysis = "keyanalysis"
+	viewDatabases  = "databases"
+	viewCmdStats   = "commandstats"
+	viewLatency    = "latency"
 )
 
 func (rv *RedisView) currentCores() *ui.Cores {
@@ -35,6 +40,16 @@ func (rv *RedisView) currentCores() *ui.Cores {
 		return rv.replicationView
 	case viewPersist:
 		return rv.persistenceView
+	case viewPubSub:
+		return rv.pubsubView
+	case viewKeyAnalysis:
+		return rv.keyAnalysisView
+	case viewDatabases:
+		return rv.databasesView
+	case viewCmdStats:
+		return rv.commandStatsView
+	case viewLatency:
+		return rv.latencyView
 	default:
 		return rv.keysView
 	}
@@ -100,3 +115,24 @@ func (rv *RedisView) showPersistence() {
 func (rv *RedisView) showKeys() {
 	rv.switchView(viewKeys)
 }
+
+func (rv *RedisView) showPubSub() {
+	rv.switchView(viewPubSub)
+}
+
+func (rv *RedisView) showKeyAnalysis() {
+	rv.switchView(viewKeyAnalysis)
+}
+
+func (rv *RedisView) showDatabases() {
+	rv.switchView(viewDatabases)
+}
+
+func (rv *RedisView) showCommandStats() {
+	rv.switchView(viewCmdStats)
+}
+
+func (rv *RedisView) showLatency() {
+	rv.switchView(viewLatency)
+}
+
