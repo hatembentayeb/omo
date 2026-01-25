@@ -63,13 +63,12 @@ func (c *Cores) highlightRow(row int, highlight bool) {
 	for col := 0; col < len(c.tableHeaders); col++ {
 		cell := c.table.GetCell(row, col)
 		if highlight {
-			// Remove the background color highlight but keep text slightly brighter
-			cell.SetBackgroundColor(tcell.ColorDefault)
-			cell.SetTextColor(tcell.ColorWhite).SetAttributes(tcell.AttrBold)
+			cell.SetBackgroundColor(tcell.ColorAqua)
+			cell.SetTextColor(tcell.ColorBlack).SetAttributes(tcell.AttrBold)
 		} else {
 			cell.SetBackgroundColor(tcell.ColorDefault)
 			cell.SetAttributes(tcell.AttrNone)
-			cell.SetTextColor(tcell.ColorWhite)
+			cell.SetTextColor(tcell.ColorAqua)
 		}
 	}
 }
