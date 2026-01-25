@@ -52,6 +52,8 @@ type TableViewConfig struct {
 func (f *ViewFactory) CreateTableView(config TableViewConfig) *Cores {
 	// Create new Cores UI component
 	cores := NewCores(f.app, config.Title)
+	cores.SetModalPages(f.pages)
+	cores.SetModalPages(f.pages)
 
 	// Set table headers
 	if config.TableHeaders != nil {
@@ -115,10 +117,12 @@ type SplitViewConfig struct {
 func (f *ViewFactory) CreateSplitView(config SplitViewConfig) tview.Primitive {
 	// Create left panel (master)
 	leftCores := NewCores(f.app, config.LeftTitle)
+	leftCores.SetModalPages(f.pages)
 	leftCores.SetTableHeaders(config.LeftHeaders)
 
 	// Create right panel (detail)
 	rightCores := NewCores(f.app, config.RightTitle)
+	rightCores.SetModalPages(f.pages)
 	rightCores.SetTableHeaders(config.RightHeaders)
 
 	// Set up left panel refresh
@@ -185,6 +189,7 @@ type DetailViewConfig struct {
 func (f *ViewFactory) CreateDetailView(config DetailViewConfig) *Cores {
 	// Create new Cores UI component
 	cores := NewCores(f.app, config.Title)
+	cores.SetModalPages(f.pages)
 
 	// Set info text
 	if config.HeaderText != "" {
