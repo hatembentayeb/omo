@@ -87,15 +87,115 @@ func (c *Cores) StopAutoRefresh() *Cores {
 // Returns:
 //   - The Cores instance for method chaining
 func (c *Cores) RefreshData() *Cores {
+	c.dataMutex.Lock()
+	if c.isLoading {
+		c.dataMutex.Unlock()
+		c.Log("[yellow]Loading in progress...")
+		return c
+	}
+	c.isLoading = true
+	c.dataMutex.Unlock()
+
+	if c.lazyLoader != nil {
+		c.Log("Refreshing data...")
+		data, err := c.lazyLoader(0, c.lazyPageSize)
+
+		c.dataMutex.Lock()
+		c.isLoading = false
+		if err != nil {
+			c.dataMutex.Unlock()
+			c.Log(fmt.Sprintf("[red]Error refreshing data: %v", err))
+			return c
+		}
+		c.lazyOffset = len(data)
+		c.lazyHasMore = len(data) >= c.lazyPageSize
+		c.rawTableData = data
+		c.tableData = c.applyFilter(data)
+		c.refreshTable()
+		c.dataMutex.Unlock()
+		c.Log("[green]Data refreshed successfully")
+		return c
+	}
+
 	if c.onRefresh != nil {
 		c.Log("Refreshing data...")
 		data, err := c.onRefresh()
+
+		c.dataMutex.Lock()
+		c.isLoading = false
 		if err != nil {
+			c.dataMutex.Unlock()
 			c.Log(fmt.Sprintf("[red]Error refreshing data: %v", err))
-		} else {
-			c.SetTableData(data)
-			c.Log("[green]Data refreshed successfully")
+			return c
 		}
+		c.rawTableData = data
+		c.tableData = c.applyFilter(data)
+		c.refreshTable()
+		c.dataMutex.Unlock()
+		c.Log("[green]Data refreshed successfully")
+		return c
 	}
+
+	c.dataMutex.Lock()
+	c.isLoading = false
+	c.dataMutex.Unlock()
+	return c
+}
+
+// SetLazyLoader enables lazy loading with a page size and loader function.
+func (c *Cores) SetLazyLoader(pageSize int, loader func(offset, limit int) ([][]string, error)) *Cores {
+	if pageSize <= 0 {
+		pageSize = 500
+	}
+	c.lazyPageSize = pageSize
+	c.lazyLoader = loader
+	c.lazyHasMore = true
+	c.keyBindings["PgDn"] = "Load more"
+	return c
+}
+
+// LoadMore fetches the next page when lazy loading is enabled.
+func (c *Cores) LoadMore() *Cores {
+	if c.lazyLoader == nil {
+		return c
+	}
+	c.dataMutex.Lock()
+	if c.isLoading {
+		c.dataMutex.Unlock()
+		return c
+	}
+	if !c.lazyHasMore {
+		c.dataMutex.Unlock()
+		c.Log("[yellow]No more rows to load")
+		return c
+	}
+	c.isLoading = true
+	c.dataMutex.Unlock()
+
+	// Fetch data outside lock
+	data, err := c.lazyLoader(c.lazyOffset, c.lazyPageSize)
+
+	c.dataMutex.Lock()
+	c.isLoading = false
+	if err != nil {
+		c.dataMutex.Unlock()
+		c.Log(fmt.Sprintf("[red]Error loading more: %v", err))
+		return c
+	}
+	if len(data) == 0 {
+		c.lazyHasMore = false
+		c.dataMutex.Unlock()
+		c.Log("[yellow]No more rows to load")
+		return c
+	}
+	c.rawTableData = append(c.rawTableData, data...)
+	c.tableData = c.applyFilter(c.rawTableData)
+	c.lazyOffset += len(data)
+	if len(data) < c.lazyPageSize {
+		c.lazyHasMore = false
+	}
+	c.refreshTable()
+	c.dataMutex.Unlock()
+	c.Log(fmt.Sprintf("[green]Loaded %d more rows", len(data)))
 	return c
 }
