@@ -3,27 +3,22 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 
-	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
 // selectRow selects a table row by its data index.
 // This function handles the selection logic including:
-// - Visual highlighting of the selected row
 // - Triggering the row selection callback if set
 // - Triggering the action callback with selection data
 //
 // Parameters:
 //   - dataRow: The index of the row in the data array (0-based, excluding header)
 func (c *Cores) selectRow(dataRow int) {
-	// No need to clear selection since we'll just apply highlighting
-	// where needed. The selectedRow is now set by SetSelectionChangedFunc.
-
-	// Apply highlighting to this row
 	if dataRow >= 0 && dataRow < len(c.tableData) {
-		c.highlightRow(dataRow+1, true) // +1 for header row
+		c.selectedRow = dataRow
 
 		// Trigger callback if set
 		if c.onRowSelected != nil {
@@ -53,34 +48,9 @@ func (c *Cores) selectRow(dataRow int) {
 	}
 }
 
-// highlightRow visually highlights or unhighlights a row.
-// This function applies visual styling to a row to indicate selection state.
-//
-// Parameters:
-//   - row: The table row index (1-based, including header)
-//   - highlight: Whether to highlight (true) or unhighlight (false) the row
-func (c *Cores) highlightRow(row int, highlight bool) {
-	for col := 0; col < len(c.tableHeaders); col++ {
-		cell := c.table.GetCell(row, col)
-		if highlight {
-			cell.SetBackgroundColor(tcell.ColorAqua)
-			cell.SetTextColor(tcell.ColorBlack).SetAttributes(tcell.AttrBold)
-		} else {
-			cell.SetBackgroundColor(tcell.ColorDefault)
-			cell.SetAttributes(tcell.AttrNone)
-			cell.SetTextColor(tcell.ColorAqua)
-		}
-	}
-}
-
 // clearSelection clears the current row selection.
-// This removes any visual highlighting from the currently selected row
-// and resets the selected row index.
 func (c *Cores) clearSelection() {
-	if c.selectedRow >= 0 {
-		c.highlightRow(c.selectedRow+1, false) // +1 for header row
-		c.selectedRow = -1
-	}
+	c.selectedRow = -1
 }
 
 // getRowSignature creates a unique identifier for a row.
@@ -113,71 +83,38 @@ func (c *Cores) getRowSignature(row []string) string {
 }
 
 // refreshTable updates the table display with current data.
-// This function rebuilds the entire table with the current headers and data,
-// preserving selection where possible by matching row signatures.
+// This function updates the virtual table content and preserves selection.
 func (c *Cores) refreshTable() {
 	// Save current selection signature for restoring later
 	var selectedSignature string
+	selectedIndex := c.selectedRow
 	if c.selectedRow >= 0 && c.selectedRow < len(c.tableData) {
 		selectedSignature = c.getRowSignature(c.tableData[c.selectedRow])
 	}
 
-	// Clear the table
-	c.table.Clear()
-
-	// Add headers - convert to uppercase
-	for i, header := range c.tableHeaders {
-		headerText := strings.ToUpper(header)
-
-		cell := tview.NewTableCell(headerText).
-			SetTextColor(tcell.ColorYellow).
-			SetBackgroundColor(tcell.ColorDefault).
-			SetAttributes(tcell.AttrBold).
-			SetSelectable(false)
-
-		// First column gets more space, others share equally
-		if i == 0 {
-			cell.SetExpansion(2) // Give first column more space
-		} else {
-			cell.SetExpansion(1) // Other columns share equally
-		}
-
-		c.table.SetCell(0, i, cell)
-	}
-
-	// Add data rows
-	for rowIdx, row := range c.tableData {
-		for colIdx, cellData := range row {
-			if colIdx >= len(c.tableHeaders) {
-				continue
-			}
-
-			cell := tview.NewTableCell(cellData).
-				SetTextColor(tcell.ColorAqua).
-				SetBackgroundColor(tcell.ColorDefault).
-				SetSelectable(true).
-				SetAlign(tview.AlignLeft)
-
-			// First column gets more space, others share equally
-			if colIdx == 0 {
-				cell.SetExpansion(2) // Give first column more space
-			} else {
-				cell.SetExpansion(1) // Other columns share equally
-			}
-
-			c.table.SetCell(rowIdx+1, colIdx, cell)
-		}
-	}
+	// Update virtual table content
+	c.tableContent.SetHeaders(c.tableHeaders)
+	c.tableContent.SetData(c.tableData)
 
 	// Try to restore selection by matching signature
+	restored := false
 	if selectedSignature != "" {
 		for i, row := range c.tableData {
 			if c.getRowSignature(row) == selectedSignature {
-				c.selectRow(i)
+				c.selectedRow = i
 				c.table.Select(i+1, 0) // +1 for header
+				restored = true
 				break
 			}
 		}
+	}
+	if !restored && selectedIndex >= 0 && len(c.tableData) > 0 {
+		// Fallback to previous index if signature isn't available
+		if selectedIndex >= len(c.tableData) {
+			selectedIndex = len(c.tableData) - 1
+		}
+		c.selectedRow = selectedIndex
+		c.table.Select(selectedIndex+1, 0) // +1 for header
 	}
 }
 
@@ -204,13 +141,77 @@ func (c *Cores) SetTableHeaders(headers []string) *Cores {
 // Returns:
 //   - The Cores instance for method chaining
 func (c *Cores) SetTableData(data [][]string) *Cores {
-	c.tableData = data
+	c.dataMutex.Lock()
+	defer c.dataMutex.Unlock()
+	c.rawTableData = data
+	c.tableData = c.applyFilter(data)
 	c.refreshTable()
 	return c
 }
 
+// AppendTableData appends rows to the current data set.
+func (c *Cores) AppendTableData(data [][]string) *Cores {
+	if len(data) == 0 {
+		return c
+	}
+	c.dataMutex.Lock()
+	defer c.dataMutex.Unlock()
+	c.rawTableData = append(c.rawTableData, data...)
+	c.tableData = c.applyFilter(c.rawTableData)
+	c.refreshTable()
+	return c
+}
+
+// SetFilterQuery applies or clears the current table filter.
+// Filters only already-loaded data - no blocking, instant response.
+func (c *Cores) SetFilterQuery(query string) *Cores {
+	c.dataMutex.Lock()
+	defer c.dataMutex.Unlock()
+	if c.isLoading {
+		c.Log("[yellow]Loading in progress...")
+		return c
+	}
+	c.filterQuery = strings.TrimSpace(query)
+	beforeCount := len(c.rawTableData)
+	c.tableData = c.applyFilter(c.rawTableData)
+	c.refreshTable()
+	afterCount := len(c.tableData)
+	if c.filterQuery == "" {
+		c.Log("[yellow]Filter cleared")
+		c.table.SetTitle(fmt.Sprintf(" [yellow]%s[white] ", c.title))
+	} else {
+		c.Log(fmt.Sprintf("[green]Filter '%s': %d/%d rows", c.filterQuery, afterCount, beforeCount))
+		c.table.SetTitle(fmt.Sprintf(" [yellow]%s[white] [gray](filter: %s)[white] ", c.title, c.filterQuery))
+		if afterCount == 0 && c.lazyHasMore {
+			c.Log("[gray]More data available - use PgDn to load more")
+		}
+	}
+	return c
+}
+
+func (c *Cores) applyFilter(data [][]string) [][]string {
+	if c.filterQuery == "" {
+		c.filteredIndices = nil
+		return data
+	}
+	query := strings.ToLower(c.filterQuery)
+	filtered := make([][]string, 0, len(data))
+	c.filteredIndices = make([]int, 0, len(data))
+	for i, row := range data {
+		for _, cell := range row {
+			if strings.Contains(strings.ToLower(cell), query) {
+				filtered = append(filtered, row)
+				c.filteredIndices = append(c.filteredIndices, i)
+				break
+			}
+		}
+	}
+	return filtered
+}
+
 // GetSelectedRowData returns the data of the currently selected row, or nil if none.
-// This provides access to the underlying data for the selected row.
+// This is the preferred method to access selected row data as it works correctly
+// with both filtered and unfiltered views.
 //
 // Returns:
 //   - The selected row data array, or nil if no row is selected
@@ -263,8 +264,8 @@ func (c *Cores) SetSelectionKey(columnName string) *Cores {
 }
 
 // UpdateRow updates a single row in the table.
-// This function updates both the underlying data and the visual display
-// for the specified row.
+// This function updates the underlying data - the virtual table will
+// pick up the change on next draw.
 //
 // Parameters:
 //   - index: The index of the row to update
@@ -277,16 +278,8 @@ func (c *Cores) UpdateRow(index int, rowData []string) {
 
 	// Update the data in the table
 	c.tableData[index] = rowData
-
-	// Update the visual table
-	for j, value := range rowData {
-		if j < c.table.GetColumnCount() {
-			c.table.SetCell(index+1, j, // +1 for header row
-				tview.NewTableCell(value).
-					SetTextColor(tcell.ColorWhite).
-					SetAlign(tview.AlignLeft))
-		}
-	}
+	// Virtual table content will read from tableData on next draw
+	c.tableContent.SetData(c.tableData)
 }
 
 // Table wraps tview.Table to provide additional functionality.
