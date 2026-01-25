@@ -49,6 +49,46 @@ type ClientInfo struct {
 	DB    string
 }
 
+// PubSubChannel represents a PubSub channel with subscriber count
+type PubSubChannel struct {
+	Channel     string
+	Subscribers int64
+	Pattern     bool
+}
+
+// KeyPattern represents aggregated statistics for a key pattern
+type KeyPattern struct {
+	Pattern      string
+	Count        int
+	SampleKeys   []string
+	AvgTTL       int64
+	Types        map[string]int
+	TotalSize    int64
+}
+
+// DatabaseInfo represents information about a Redis database
+type DatabaseInfo struct {
+	ID      int
+	Keys    int64
+	Expires int64
+	AvgTTL  int64
+}
+
+// CommandStat represents statistics for a Redis command
+type CommandStat struct {
+	Command string
+	Calls   int64
+	Usec    int64
+	UsecPerCall float64
+}
+
+// LatencyEvent represents a latency event
+type LatencyEvent struct {
+	Event     string
+	Timestamp time.Time
+	Latency   int64
+}
+
 // NewRedisClient creates a new Redis client
 func NewRedisClient() *RedisClient {
 	return &RedisClient{
@@ -228,6 +268,21 @@ func (c *RedisClient) GetKeys(pattern string) ([]string, error) {
 	}
 
 	return keys, nil
+}
+
+// ScanKeys retrieves a page of keys using Redis SCAN.
+func (c *RedisClient) ScanKeys(pattern string, cursor uint64, count int64) ([]string, uint64, error) {
+	if !c.connected || c.client == nil {
+		return nil, 0, errors.New("not connected to any Redis server")
+	}
+	if count <= 0 {
+		count = 100
+	}
+	keys, nextCursor, err := c.client.Scan(c.ctx, cursor, pattern, count).Result()
+	if err != nil {
+		return nil, 0, fmt.Errorf("error scanning keys: %v", err)
+	}
+	return keys, nextCursor, nil
 }
 
 // GetKeyInfo gets information about a key
@@ -691,3 +746,268 @@ func (c *RedisClient) GetMemoryDoctor() (string, error) {
 		return fmt.Sprintf("%v", result), nil
 	}
 }
+
+// GetPubSubChannels returns all active PubSub channels with subscriber counts
+func (c *RedisClient) GetPubSubChannels() ([]PubSubChannel, error) {
+	if !c.connected || c.client == nil {
+		return nil, errors.New("not connected to any Redis server")
+	}
+
+	// Get all channels
+	channels, err := c.client.PubSubChannels(c.ctx, "*").Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pubsub channels: %v", err)
+	}
+
+	result := make([]PubSubChannel, 0, len(channels))
+	
+	// Get subscriber counts for each channel
+	if len(channels) > 0 {
+		numSub, err := c.client.PubSubNumSub(c.ctx, channels...).Result()
+		if err == nil {
+			for channel, count := range numSub {
+				result = append(result, PubSubChannel{
+					Channel:     channel,
+					Subscribers: count,
+					Pattern:     false,
+				})
+			}
+		}
+	}
+
+	// Get pattern subscriptions
+	patterns, err := c.client.PubSubNumPat(c.ctx).Result()
+	if err == nil && patterns > 0 {
+		result = append(result, PubSubChannel{
+			Channel:     "*",
+			Subscribers: patterns,
+			Pattern:     true,
+		})
+	}
+
+	return result, nil
+}
+
+// AnalyzeKeyPatterns analyzes keys and groups them by pattern prefix
+func (c *RedisClient) AnalyzeKeyPatterns(maxKeys int) ([]KeyPattern, error) {
+	if !c.connected || c.client == nil {
+		return nil, errors.New("not connected to any Redis server")
+	}
+
+	if maxKeys <= 0 {
+		maxKeys = 1000
+	}
+
+	// Scan keys
+	keys, err := c.GetKeys("*")
+	if err != nil {
+		return nil, err
+	}
+
+	if len(keys) > maxKeys {
+		keys = keys[:maxKeys]
+	}
+
+	// Group keys by pattern (prefix before first colon)
+	patterns := make(map[string]*KeyPattern)
+	
+	for _, key := range keys {
+		// Extract pattern (prefix before first colon or full key if no colon)
+		pattern := key
+		if idx := strings.Index(key, ":"); idx > 0 {
+			pattern = key[:idx] + ":*"
+		}
+
+		if _, exists := patterns[pattern]; !exists {
+			patterns[pattern] = &KeyPattern{
+				Pattern:    pattern,
+				Count:      0,
+				SampleKeys: make([]string, 0, 3),
+				Types:      make(map[string]int),
+			}
+		}
+
+		p := patterns[pattern]
+		p.Count++
+
+		// Add sample keys (max 3)
+		if len(p.SampleKeys) < 3 {
+			p.SampleKeys = append(p.SampleKeys, key)
+		}
+
+		// Get key type
+		keyType, err := c.client.Type(c.ctx, key).Result()
+		if err == nil {
+			p.Types[keyType]++
+		}
+
+		// Get TTL for average calculation
+		ttl, err := c.client.TTL(c.ctx, key).Result()
+		if err == nil && ttl > 0 {
+			p.AvgTTL += int64(ttl.Seconds())
+		}
+	}
+
+	// Convert map to slice and calculate averages
+	result := make([]KeyPattern, 0, len(patterns))
+	for _, p := range patterns {
+		if p.Count > 0 && p.AvgTTL > 0 {
+			p.AvgTTL = p.AvgTTL / int64(p.Count)
+		}
+		result = append(result, *p)
+	}
+
+	return result, nil
+}
+
+// GetAllDatabases returns information about all databases
+func (c *RedisClient) GetAllDatabases() ([]DatabaseInfo, error) {
+	if !c.connected || c.client == nil {
+		return nil, errors.New("not connected to any Redis server")
+	}
+
+	infoMap, err := c.GetInfoMap()
+	if err != nil {
+		return nil, err
+	}
+
+	databases := make([]DatabaseInfo, 0)
+	
+	// Parse keyspace section for database info
+	for key, value := range infoMap {
+		if strings.HasPrefix(key, "db") {
+			dbNum, err := strconv.Atoi(strings.TrimPrefix(key, "db"))
+			if err != nil {
+				continue
+			}
+
+			dbInfo := DatabaseInfo{ID: dbNum}
+			
+			// Parse the value: "keys=123,expires=45,avg_ttl=67890"
+			parts := strings.Split(value, ",")
+			for _, part := range parts {
+				kv := strings.SplitN(part, "=", 2)
+				if len(kv) != 2 {
+					continue
+				}
+				
+				switch kv[0] {
+				case "keys":
+					if val, err := strconv.ParseInt(kv[1], 10, 64); err == nil {
+						dbInfo.Keys = val
+					}
+				case "expires":
+					if val, err := strconv.ParseInt(kv[1], 10, 64); err == nil {
+						dbInfo.Expires = val
+					}
+				case "avg_ttl":
+					if val, err := strconv.ParseInt(kv[1], 10, 64); err == nil {
+						dbInfo.AvgTTL = val / 1000 // Convert to seconds
+					}
+				}
+			}
+			
+			databases = append(databases, dbInfo)
+		}
+	}
+
+	return databases, nil
+}
+
+// GetCommandStats returns statistics for all Redis commands
+func (c *RedisClient) GetCommandStats() ([]CommandStat, error) {
+	if !c.connected || c.client == nil {
+		return nil, errors.New("not connected to any Redis server")
+	}
+
+	infoMap, err := c.GetInfoMap()
+	if err != nil {
+		return nil, err
+	}
+
+	stats := make([]CommandStat, 0)
+	
+	// Parse commandstats section
+	for key, value := range infoMap {
+		if strings.HasPrefix(key, "cmdstat_") {
+			cmdName := strings.TrimPrefix(key, "cmdstat_")
+			
+			stat := CommandStat{Command: cmdName}
+			
+			// Parse value: "calls=123,usec=456,usec_per_call=3.71"
+			parts := strings.Split(value, ",")
+			for _, part := range parts {
+				kv := strings.SplitN(part, "=", 2)
+				if len(kv) != 2 {
+					continue
+				}
+				
+				switch kv[0] {
+				case "calls":
+					if val, err := strconv.ParseInt(kv[1], 10, 64); err == nil {
+						stat.Calls = val
+					}
+				case "usec":
+					if val, err := strconv.ParseInt(kv[1], 10, 64); err == nil {
+						stat.Usec = val
+					}
+				case "usec_per_call":
+					if val, err := strconv.ParseFloat(kv[1], 64); err == nil {
+						stat.UsecPerCall = val
+					}
+				}
+			}
+			
+			stats = append(stats, stat)
+		}
+	}
+
+	return stats, nil
+}
+
+// GetLatencyHistory returns latency history for all events
+func (c *RedisClient) GetLatencyHistory() ([]LatencyEvent, error) {
+	if !c.connected || c.client == nil {
+		return nil, errors.New("not connected to any Redis server")
+	}
+
+	// Get latest latency events
+	result, err := c.client.Do(c.ctx, "LATENCY", "LATEST").Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get latency history: %v", err)
+	}
+
+	events := make([]LatencyEvent, 0)
+	
+	// Parse result
+	list, ok := result.([]interface{})
+	if !ok {
+		return events, nil
+	}
+
+	for _, item := range list {
+		eventData, ok := item.([]interface{})
+		if !ok || len(eventData) < 3 {
+			continue
+		}
+
+		event := LatencyEvent{}
+		
+		if name, ok := eventData[0].(string); ok {
+			event.Event = name
+		}
+		
+		if ts, ok := eventData[1].(int64); ok {
+			event.Timestamp = time.Unix(ts, 0)
+		}
+		
+		if latency, ok := eventData[2].(int64); ok {
+			event.Latency = latency
+		}
+		
+		events = append(events, event)
+	}
+
+	return events, nil
+}
+
