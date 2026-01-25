@@ -1,0 +1,25 @@
+---
+hosts:
+  - name: "local"
+    description: "Local Docker Daemon"
+    host: "unix:///var/run/docker.sock"
+    tls: false
+    tls_verify: false
+    cert_path: ""
+
+  # Example remote Docker host:
+  # - name: "remote-server"
+  #   description: "Remote Docker Server"
+  #   host: "tcp://192.168.1.100:2376"
+  #   tls: true
+  #   tls_verify: true
+  #   cert_path: "~/.docker/certs"
+
+ui:
+  refresh_interval: 5
+  max_containers_display: 100
+  max_images_display: 100
+  show_all_containers: true
+  log_tail_lines: 500
+  enable_stats: true
+  enable_compose: true
