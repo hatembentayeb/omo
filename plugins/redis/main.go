@@ -54,15 +54,7 @@ func (r *RedisPlugin) Start(app *tview.Application) tview.Primitive {
 // Stop cleans up resources used by the Redis plugin
 func (r *RedisPlugin) Stop() {
 	if r.redisView != nil {
-		// If redisView has a redis client, disconnect
-		if r.redisView.redisClient != nil {
-			r.redisView.redisClient.Disconnect()
-		}
-
-		// Stop the auto-refresh timer
-		if r.redisView.refreshTimer != nil {
-			r.redisView.refreshTimer.Stop()
-		}
+		r.redisView.Stop()
 	}
 }
 
