@@ -64,8 +64,8 @@ func ShowCompactStyledInputModal(
 		if b := form.GetButton(i); b != nil {
 			b.SetBackgroundColor(tcell.ColorDefault)
 			b.SetLabelColor(tcell.ColorWhite)
-			b.SetBackgroundColorActivated(tcell.ColorWhite)
-			b.SetLabelColorActivated(tcell.ColorDefault)
+			b.SetBackgroundColorActivated(tcell.ColorAqua)
+			b.SetLabelColorActivated(tcell.ColorBlack)
 		}
 	}
 
