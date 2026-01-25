@@ -29,6 +29,7 @@ func NewPackageManager(app *tview.Application, pages *tview.Pages, pluginsDir st
 	core.AddKeyBinding("R", "Remove", nil)
 	core.AddKeyBinding("Z", "Updateall", nil)
 	core.AddKeyBinding("Q", "Back", nil)
+	core.AddKeyBinding("?", "Help", nil)
 
 	// Set refresh callback to load plugin data
 	core.SetRefreshCallback(func() ([][]string, error) {
@@ -153,6 +154,16 @@ func NewPackageManager(app *tview.Application, pages *tview.Pages, pluginsDir st
 					core.UnregisterHandlers() // Remove key handlers
 					core.StopAutoRefresh()    // Stop background refresh
 					pages.SwitchToPage("main")
+				case "?":
+					ui.ShowInfoModal(
+						pages,
+						app,
+						"Package Manager Help",
+						packageManagerHelpText(),
+						func() {
+							app.SetFocus(core.GetTable())
+						},
+					)
 				}
 			}
 		}
@@ -170,6 +181,23 @@ func NewPackageManager(app *tview.Application, pages *tview.Pages, pluginsDir st
 	core.StartAutoRefresh(30 * time.Second)
 
 	return core
+}
+
+func packageManagerHelpText() string {
+	return `[yellow]Package Manager Help[white]
+
+[green]Key Bindings:[white]
+I       - Install selected plugin
+U       - Update selected plugin
+R       - Remove selected plugin
+Z       - Update all plugins
+Q       - Back to main UI
+?       - Show this help
+
+[green]Navigation:[white]
+Arrow keys - Navigate list
+Enter      - Select plugin
+Esc        - Close modal dialogs`
 }
 
 // updateInfoPanel updates the info panel with current stats.
