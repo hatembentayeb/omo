@@ -66,11 +66,27 @@ func (c *Cores) StandardKeyHandler(event *tcell.EventKey, oldCapture func(*tcell
 		}
 		return event
 
+	case tcell.KeyPgDn:
+		if c.lazyLoader != nil {
+			c.LoadMore()
+			return nil
+		}
 	case tcell.KeyRune:
 		// Handle standard key bindings
 		switch event.Rune() {
 		case 'R':
 			c.RefreshData()
+			return nil
+		case '/':
+			if c.onAction != nil {
+				handled := c.onAction("keypress", map[string]interface{}{
+					"key": "/",
+				})
+				if handled == nil {
+					return nil
+				}
+			}
+			c.showFilterModal()
 			return nil
 		case '?':
 			// First check if there's a custom handler for the '?' key
