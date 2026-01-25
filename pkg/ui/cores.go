@@ -18,6 +18,7 @@ import (
 type Cores struct {
 	// Core components
 	app        *tview.Application // Reference to the main application
+	pages      *tview.Pages       // Modal container (optional)
 	mainLayout *tview.Flex        // Main component layout
 	title      string             // Plugin title
 
@@ -28,13 +29,17 @@ type Cores struct {
 	breadcrumbs *tview.TextView // Navigation breadcrumbs
 
 	// Table view
-	table *Table
+	table        *Table
+	tableContent *VirtualTableContent
 
 	// Table data
-	tableHeaders []string
-	tableData    [][]string
-	selectionKey string // Column to track selected rows
-	selectedRow  int    // Currently selected row index (-1 if none)
+	tableHeaders    []string
+	tableData       [][]string
+	rawTableData    [][]string
+	selectionKey    string // Column to track selected rows
+	selectedRow     int    // Currently selected row index (-1 if none)
+	filterQuery     string
+	filteredIndices []int
 
 	// Key binding management
 	keyBindings map[string]string
@@ -45,12 +50,22 @@ type Cores struct {
 	stopRefresh   chan struct{}
 	onRefresh     func() ([][]string, error)
 
+	// Data operation lock - prevents concurrent load/refresh/filter
+	dataMutex sync.Mutex
+	isLoading bool
+
 	// Callbacks for plugin integration
 	onRowSelected func(row int)
 	onAction      func(action string, payload map[string]interface{}) error
 
 	// Navigation stack
 	navStack []string
+
+	// Lazy loading
+	lazyLoader   func(offset, limit int) ([][]string, error)
+	lazyPageSize int
+	lazyOffset   int
+	lazyHasMore  bool
 }
 
 // NewCores creates a new Cores UI component with the specified plugin title
@@ -79,6 +94,7 @@ func NewCores(app *tview.Application, title string) *Cores {
 		"R":   "Refresh",
 		"ESC": "Back",
 		"?":   "Help",
+		"/":   "Filter",
 	}
 
 	// Initialize UI components
@@ -133,11 +149,21 @@ func (c *Cores) GetTable() *Table {
 	return c.table
 }
 
-// GetSelectedRow returns the currently selected row in the table.
-// This is useful for plugins to determine which row the user has selected.
+// GetSelectedRow returns the index of the currently selected row in the RAW (unfiltered) data.
+// When filtering is active, this returns the original index in rawTableData, not the filtered index.
+// Use GetSelectedRowData() to get the actual row data instead of indexing manually.
 //
 // Returns:
-//   - The index of the currently selected row
+//   - The raw data index of the selected row, or -1 if none selected
 func (c *Cores) GetSelectedRow() int {
-	return c.table.GetSelectedRow()
+	if c.selectedRow < 0 {
+		return -1
+	}
+	if len(c.filteredIndices) > 0 {
+		if c.selectedRow >= len(c.filteredIndices) {
+			return -1
+		}
+		return c.filteredIndices[c.selectedRow]
+	}
+	return c.selectedRow
 }
