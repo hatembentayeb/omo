@@ -80,6 +80,10 @@ func (c *Cores) initUI() {
 	c.table.SetTitleAlign(tview.AlignCenter)
 	c.table.SetTitleColor(tcell.ColorYellow)
 
+	// Use virtual table content for better performance with large datasets
+	c.tableContent = NewVirtualTableContent()
+	c.table.SetContent(c.tableContent)
+
 	// Update selection whenever cursor moves to a new row
 	c.table.SetSelectionChangedFunc(func(row, column int) {
 		if row <= 0 { // Ignore header row
@@ -96,8 +100,7 @@ func (c *Cores) initUI() {
 		if row <= 0 { // Ignore header row
 			return
 		}
-		// This now just calls the full highlightRow function for visual emphasis
-		// and triggers any registered callbacks
+		// Triggers any registered callbacks
 		c.selectRow(row - 1) // Adjust for header row
 	})
 
