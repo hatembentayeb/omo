@@ -16,6 +16,8 @@ func ShowCompactStyledInputModal(
 	fieldValidator func(textToCheck string, lastChar rune) bool,
 	callback func(text string, cancelled bool),
 ) {
+	const pageID = "compact-modal"
+
 	// Create form with input field - matching UI package styling
 	form := tview.NewForm()
 	form.SetItemPadding(0)
@@ -34,28 +36,33 @@ func ShowCompactStyledInputModal(
 
 	// Add the input field with specified width
 	form.AddInputField(inputLabel, placeholder, inputFieldWidth, fieldValidator, nil)
+	inputField := form.GetFormItem(0).(*tview.InputField)
+
+	// Shared cleanup and callback invocation
+	closeModal := func(value string, cancelled bool) {
+		pages.RemovePage(pageID)
+		if callback != nil {
+			callback(value, cancelled)
+		}
+	}
 
 	// Add buttons with minimal vertical spacing
 	form.AddButton("OK", func() {
-		value := form.GetFormItem(0).(*tview.InputField).GetText()
-		pages.RemovePage("compact-modal")
-
-		if value == "" {
-			if callback != nil {
-				callback("", true) // Treat empty input as cancelled
-			}
-			return
-		}
-
-		if callback != nil {
-			callback(value, false)
-		}
+		value := inputField.GetText()
+		closeModal(value, value == "")
 	})
 
 	form.AddButton("Cancel", func() {
-		pages.RemovePage("compact-modal")
-		if callback != nil {
-			callback("", true)
+		closeModal("", true)
+	})
+
+	// Handle Enter key in input field
+	inputField.SetDoneFunc(func(key tcell.Key) {
+		if key == tcell.KeyEnter {
+			value := inputField.GetText()
+			closeModal(value, value == "")
+		} else if key == tcell.KeyEscape {
+			closeModal("", true)
 		}
 	})
 
@@ -86,14 +93,7 @@ func ShowCompactStyledInputModal(
 		AddItem(innerFlex, width, 1, true).
 		AddItem(nil, 0, 1, false)
 
-	const pageID = "compact-modal"
-	RemovePage(pages, app, pageID, func() {
-		if callback != nil {
-			callback("", true)
-		}
-	})
-
 	// Show the modal
 	pages.AddPage(pageID, flex, true, true)
-	app.SetFocus(form)
+	app.SetFocus(inputField)
 }
