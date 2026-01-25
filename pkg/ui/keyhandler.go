@@ -75,6 +75,17 @@ func (c *Cores) StandardKeyHandler(event *tcell.EventKey, oldCapture func(*tcell
 		// Handle standard key bindings
 		switch event.Rune() {
 		case 'R':
+			// First check if there's a custom handler for the 'R' key
+			if c.onAction != nil {
+				handled := c.onAction("keypress", map[string]interface{}{
+					"key": "R",
+				})
+				// If the custom handler returns nil, it means it handled the key
+				if handled == nil {
+					return nil
+				}
+			}
+			// Default behavior - refresh data
 			c.RefreshData()
 			return nil
 		case '/':
