@@ -33,4 +33,15 @@ redis_cmd SET metrics:requests 1200
 redis_cmd INCRBY metrics:requests 350
 redis_cmd SET cache:hit_rate "0.92"
 
+SEED_KEYS="${SEED_KEYS:-10000}"
+echo "Seeding ${SEED_KEYS} keys per type..."
+
+for i in $(seq 1 "${SEED_KEYS}"); do
+  redis_cmd SET "bench:string:${i}" "value-${i}"
+  redis_cmd HSET "bench:hash:${i}" field "value-${i}" count "${i}"
+  redis_cmd LPUSH "bench:list:${i}" "item-${i}" "item-$((i + 1))"
+  redis_cmd SADD "bench:set:${i}" "member-${i}" "member-$((i + 1))"
+  redis_cmd ZADD "bench:zset:${i}" "${i}" "member-${i}"
+done
+
 echo "Seed data loaded into Redis at ${REDIS_HOST}:${REDIS_PORT}"
