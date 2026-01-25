@@ -150,14 +150,14 @@ func (h *Host) HelpList() *tview.List {
 
 			// Create editor for the selected config file
 			_, initialConfigPath := configList.GetItemText(0)
-			editor = newEditor(h.App, initialConfigPath)
+			editor = newEditor(h.App, h.Pages, initialConfigPath)
 
 			// Handle selection of config files
 			configList.SetSelectedFunc(func(i int, s1, s2 string, r rune) {
 				// s2 contains the full path to the config file
 				if s2 != "" {
 					settingsGrid.RemoveItem(editor)
-					editor = newEditor(h.App, s2)
+					editor = newEditor(h.App, h.Pages, s2)
 					settingsGrid.AddItem(editor, 0, 1, 3, 2, 0, 100, true)
 				}
 			})
