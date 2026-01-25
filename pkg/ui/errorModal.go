@@ -57,8 +57,8 @@ func ShowErrorModal(
 	if b := form.GetButton(0); b != nil {
 		b.SetBackgroundColor(tcell.ColorDefault)
 		b.SetLabelColor(tcell.ColorWhite)
-		b.SetBackgroundColorActivated(tcell.ColorWhite)
-		b.SetLabelColorActivated(tcell.ColorDefault)
+		b.SetBackgroundColorActivated(tcell.ColorAqua)
+		b.SetLabelColorActivated(tcell.ColorBlack)
 	}
 
 	// Set a width for the modal
@@ -147,9 +147,9 @@ func ShowStandardErrorModal(
 	// Style the button with standardized focus colors
 	if b := form.GetButton(0); b != nil {
 		b.SetBackgroundColor(tcell.ColorDefault)
-		b.SetLabelColor(tcell.ColorRed)
-		b.SetBackgroundColorActivated(tcell.ColorRed)
-		b.SetLabelColorActivated(tcell.ColorDefault)
+		b.SetLabelColor(tcell.ColorWhite)
+		b.SetBackgroundColorActivated(tcell.ColorAqua)
+		b.SetLabelColorActivated(tcell.ColorBlack)
 	}
 
 	// Calculate appropriate dimensions based on content
