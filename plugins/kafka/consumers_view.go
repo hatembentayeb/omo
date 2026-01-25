@@ -46,6 +46,7 @@ func NewConsumersView(app *tview.Application, pages *tview.Pages, kafkaClient *K
 
 	// Create Cores UI component
 	cv.cores = ui.NewCores(app, "")
+	cv.cores.SetModalPages(pages)
 
 	// Set table headers
 	cv.cores.SetTableHeaders([]string{"Group ID", "Topic", "Partitions", "Lag", "Status", "Members", "Pattern"})
