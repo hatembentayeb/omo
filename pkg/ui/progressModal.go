@@ -81,6 +81,7 @@ func NewProgressModal(pages *tview.Pages, app *tview.Application, title string, 
 	})
 	form.SetBackgroundColor(tcell.ColorDefault)
 	form.SetButtonBackgroundColor(tcell.ColorDefault)
+	form.SetButtonTextColor(tcell.ColorWhite)
 
 	// Create the main flex layout
 	innerFlex := tview.NewFlex().
