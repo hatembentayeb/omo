@@ -45,6 +45,7 @@ func NewBrokerView(app *tview.Application, pages *tview.Pages) *BrokerView {
 
 	// Create Cores UI component
 	bv.cores = ui.NewCores(app, "")
+	bv.cores.SetModalPages(pages)
 
 	// Initialize with root view
 	bv.cores.PushView("kafka")
