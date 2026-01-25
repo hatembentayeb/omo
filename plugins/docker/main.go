@@ -28,18 +28,25 @@ func (d *DockerPlugin) Start(app *tview.Application) tview.Primitive {
 
 	// Add keyboard handling to the pages
 	pages.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		// Check for specific Docker shortcuts
+		// Check for Ctrl+T to open host selector
+		if event.Key() == tcell.KeyCtrlT {
+			if d.dockerView != nil {
+				d.dockerView.ShowHostSelector()
+			}
+			return nil
+		}
+
+		// Check for Ctrl+D for refresh
 		if event.Key() == tcell.KeyCtrlD {
-			// Special Docker keyboard shortcut
 			if d.dockerView != nil {
 				go func() {
-					// Run in goroutine with delay to prevent UI freeze
 					time.Sleep(50 * time.Millisecond)
-					d.dockerView.RefreshAll()
+					d.dockerView.refresh()
 				}()
 			}
-			return nil // Consume the event
+			return nil
 		}
+
 		// Pass all other keys through
 		return event
 	})
@@ -47,26 +54,27 @@ func (d *DockerPlugin) Start(app *tview.Application) tview.Primitive {
 	pages.AddPage("docker", mainUI, true, true)
 
 	// Set initial focus to the table explicitly
-	app.SetFocus(d.dockerView.cores.GetTable())
+	app.SetFocus(d.dockerView.containersView.GetTable())
 
-	// Show a detailed welcome message and instructions with better formatting
-	d.dockerView.cores.Log("[blue]Docker plugin initialized")
-	d.dockerView.cores.Log("[yellow]⏳ Connecting to Docker daemon...")
+	// Show a detailed welcome message and instructions
+	d.dockerView.containersView.Log("[blue]Docker plugin initialized")
+	d.dockerView.containersView.Log("[yellow]Connecting to Docker daemon...")
 
-	// Run initial refresh in a goroutine to prevent UI freeze on startup
+	// Run initial connection in a goroutine
 	go func() {
-		// Small delay for UI to render first
 		time.Sleep(100 * time.Millisecond)
+		d.dockerView.AutoConnectToDefaultHost()
 
-		d.dockerView.cores.Log("[yellow]⏳ Loading Docker resources...")
-		d.dockerView.RefreshAll()
-
-		// Add usage help
-		d.dockerView.cores.Log("[green]✓ Docker plugin ready")
-		d.dockerView.cores.Log("[aqua]Navigation Keys:")
-		d.dockerView.cores.Log("   [yellow]C[white] - View Containers")
-		d.dockerView.cores.Log("   [yellow]I[white] - View Images")
-		d.dockerView.cores.Log("   [yellow]?[white] - Show help screen")
+		d.dockerView.containersView.Log("[green]Docker plugin ready")
+		d.dockerView.containersView.Log("[aqua]Navigation Keys:")
+		d.dockerView.containersView.Log("   [yellow]C[white] - Containers")
+		d.dockerView.containersView.Log("   [yellow]I[white] - Images")
+		d.dockerView.containersView.Log("   [yellow]N[white] - Networks")
+		d.dockerView.containersView.Log("   [yellow]V[white] - Volumes")
+		d.dockerView.containersView.Log("   [yellow]T[white] - Stats")
+		d.dockerView.containersView.Log("   [yellow]O[white] - Compose")
+		d.dockerView.containersView.Log("   [yellow]Y[white] - System")
+		d.dockerView.containersView.Log("   [yellow]?[white] - Help")
 	}()
 
 	return pages
@@ -75,10 +83,7 @@ func (d *DockerPlugin) Start(app *tview.Application) tview.Primitive {
 // Stop cleans up resources used by the Docker plugin
 func (d *DockerPlugin) Stop() {
 	if d.dockerView != nil {
-		// Clean up any resources
-		if d.dockerView.refreshTimer != nil {
-			d.dockerView.refreshTimer.Stop()
-		}
+		d.dockerView.Stop()
 	}
 }
 
@@ -86,11 +91,11 @@ func (d *DockerPlugin) Stop() {
 func (d *DockerPlugin) GetMetadata() pluginapi.PluginMetadata {
 	return pluginapi.PluginMetadata{
 		Name:        "docker",
-		Version:     "1.0.0",
-		Description: "Docker container and image management plugin",
-		Author:      "Docker Plugin Team",
+		Version:     "2.0.0",
+		Description: "Docker container, image, network, volume, and compose management",
+		Author:      "OhMyOps Team",
 		License:     "MIT",
-		Tags:        []string{"containers", "docker", "devops", "infrastructure"},
+		Tags:        []string{"containers", "docker", "devops", "infrastructure", "compose"},
 		Arch:        []string{"amd64", "arm64"},
 		LastUpdated: time.Now(),
 		URL:         "https://github.com/hatembentayeb/omo/plugins/docker",
@@ -102,18 +107,18 @@ var OhmyopsPlugin DockerPlugin
 
 func init() {
 	OhmyopsPlugin.Name = "Docker Manager"
-	OhmyopsPlugin.Description = "Manage Docker containers, images, networks and volumes"
+	OhmyopsPlugin.Description = "Manage Docker containers, images, networks, volumes, and compose projects"
 }
 
 // GetMetadata is exported for legacy loaders.
 func GetMetadata() pluginapi.PluginMetadata {
 	return pluginapi.PluginMetadata{
 		Name:        "docker",
-		Version:     "1.0.0",
-		Description: "Docker container and image management plugin",
-		Author:      "Docker Plugin Team",
+		Version:     "2.0.0",
+		Description: "Docker container, image, network, volume, and compose management",
+		Author:      "OhMyOps Team",
 		License:     "MIT",
-		Tags:        []string{"containers", "docker", "devops", "infrastructure"},
+		Tags:        []string{"containers", "docker", "devops", "infrastructure", "compose"},
 		Arch:        []string{"amd64", "arm64"},
 		LastUpdated: time.Now(),
 		URL:         "https://github.com/hatembentayeb/omo/plugins/docker",
