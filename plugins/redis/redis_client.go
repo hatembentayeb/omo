@@ -28,6 +28,27 @@ type RedisClient struct {
 	lastRefresh time.Time
 }
 
+// SlowLogEntry represents a Redis slowlog entry
+type SlowLogEntry struct {
+	ID        int64
+	Timestamp time.Time
+	Duration  time.Duration
+	Command   string
+	Client    string
+}
+
+// ClientInfo represents a Redis client connection summary.
+type ClientInfo struct {
+	ID    string
+	Addr  string
+	Name  string
+	Age   string
+	Idle  string
+	Flags string
+	Cmd   string
+	DB    string
+}
+
 // NewRedisClient creates a new Redis client
 func NewRedisClient() *RedisClient {
 	return &RedisClient{
@@ -419,15 +440,49 @@ func (c *RedisClient) GetServerInfo() (map[string]string, error) {
 		return nil, errors.New("not connected to any Redis server")
 	}
 
-	info, err := c.client.Info(c.ctx).Result()
+	infoMap, err := c.GetInfoMap()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get server info: %v", err)
+		return nil, err
 	}
 
-	// Parse the INFO response into a map
+	// Extract the most important fields
+	result := map[string]string{
+		"redis_version":     infoMap["redis_version"],
+		"uptime_in_days":    infoMap["uptime_in_days"],
+		"connected_clients": infoMap["connected_clients"],
+		"used_memory_human": infoMap["used_memory_human"],
+	}
+
+	return result, nil
+}
+
+// GetInfoRaw returns the raw INFO response.
+func (c *RedisClient) GetInfoRaw() (string, error) {
+	if !c.connected || c.client == nil {
+		return "", errors.New("not connected to any Redis server")
+	}
+
+	info, err := c.client.Info(c.ctx).Result()
+	if err != nil {
+		return "", fmt.Errorf("failed to get server info: %v", err)
+	}
+
+	return info, nil
+}
+
+// GetInfoMap retrieves the Redis INFO data as a map.
+func (c *RedisClient) GetInfoMap() (map[string]string, error) {
+	if !c.connected || c.client == nil {
+		return nil, errors.New("not connected to any Redis server")
+	}
+
+	info, err := c.GetInfoRaw()
+	if err != nil {
+		return nil, err
+	}
+
 	infoMap := make(map[string]string)
 	lines := strings.Split(info, "\n")
-
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -440,13 +495,199 @@ func (c *RedisClient) GetServerInfo() (map[string]string, error) {
 		}
 	}
 
-	// Extract the most important fields
-	result := map[string]string{
-		"redis_version":     infoMap["redis_version"],
-		"uptime_in_days":    infoMap["uptime_in_days"],
-		"connected_clients": infoMap["connected_clients"],
-		"used_memory_human": infoMap["used_memory_human"],
+	return infoMap, nil
+}
+
+// GetInfoSectionMap returns INFO data for a specific section (e.g. replication, persistence).
+func (c *RedisClient) GetInfoSectionMap(section string) (map[string]string, error) {
+	info, err := c.GetInfoRaw()
+	if err != nil {
+		return nil, err
 	}
 
-	return result, nil
+	section = strings.ToLower(strings.TrimSpace(section))
+	infoMap := make(map[string]string)
+	lines := strings.Split(info, "\n")
+	inSection := false
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		if strings.HasPrefix(line, "#") {
+			sectionName := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(line, "#")))
+			inSection = sectionName == section
+			continue
+		}
+
+		if !inSection {
+			continue
+		}
+
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) == 2 {
+			infoMap[parts[0]] = parts[1]
+		}
+	}
+
+	return infoMap, nil
+}
+
+// GetSlowLog returns recent slowlog entries.
+func (c *RedisClient) GetSlowLog(limit int64) ([]SlowLogEntry, error) {
+	if !c.connected || c.client == nil {
+		return nil, errors.New("not connected to any Redis server")
+	}
+
+	logs, err := c.client.SlowLogGet(c.ctx, limit).Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get slowlog: %v", err)
+	}
+
+	entries := make([]SlowLogEntry, 0, len(logs))
+	for _, entry := range logs {
+		command := strings.TrimSpace(strings.Join(entry.Args, " "))
+		client := entry.ClientAddr
+		if entry.ClientName != "" {
+			client = fmt.Sprintf("%s (%s)", entry.ClientAddr, entry.ClientName)
+		}
+		entries = append(entries, SlowLogEntry{
+			ID:        entry.ID,
+			Timestamp: entry.Time,
+			Duration:  entry.Duration,
+			Command:   command,
+			Client:    client,
+		})
+	}
+
+	return entries, nil
+}
+
+// GetClients returns a list of connected clients.
+func (c *RedisClient) GetClients() ([]ClientInfo, error) {
+	if !c.connected || c.client == nil {
+		return nil, errors.New("not connected to any Redis server")
+	}
+
+	raw, err := c.client.ClientList(c.ctx).Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get client list: %v", err)
+	}
+
+	clients := make([]ClientInfo, 0)
+	lines := strings.Split(raw, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		fields := strings.Fields(line)
+		entry := ClientInfo{}
+		for _, field := range fields {
+			parts := strings.SplitN(field, "=", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			switch parts[0] {
+			case "id":
+				entry.ID = parts[1]
+			case "addr":
+				entry.Addr = parts[1]
+			case "name":
+				entry.Name = parts[1]
+			case "age":
+				entry.Age = parts[1]
+			case "idle":
+				entry.Idle = parts[1]
+			case "flags":
+				entry.Flags = parts[1]
+			case "cmd":
+				entry.Cmd = parts[1]
+			case "db":
+				entry.DB = parts[1]
+			}
+		}
+
+		clients = append(clients, entry)
+	}
+
+	return clients, nil
+}
+
+// GetConfig returns Redis config values matching a pattern.
+func (c *RedisClient) GetConfig(pattern string) (map[string]string, error) {
+	if !c.connected || c.client == nil {
+		return nil, errors.New("not connected to any Redis server")
+	}
+
+	if pattern == "" {
+		pattern = "*"
+	}
+
+	values, err := c.client.ConfigGet(c.ctx, pattern).Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get config: %v", err)
+	}
+
+	config := make(map[string]string)
+	if len(values) == 0 {
+		return config, nil
+	}
+
+	// go-redis returns map[string]string for ConfigGet.
+	for key, value := range values {
+		config[key] = value
+	}
+
+	return config, nil
+}
+
+// GetMemoryStats returns MEMORY STATS as a map.
+func (c *RedisClient) GetMemoryStats() (map[string]string, error) {
+	if !c.connected || c.client == nil {
+		return nil, errors.New("not connected to any Redis server")
+	}
+
+	values, err := c.client.Do(c.ctx, "MEMORY", "STATS").Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get memory stats: %v", err)
+	}
+
+	stats := make(map[string]string)
+	list, ok := values.([]interface{})
+	if !ok {
+		return stats, nil
+	}
+
+	for i := 0; i+1 < len(list); i += 2 {
+		key, ok := list[i].(string)
+		if !ok {
+			continue
+		}
+		stats[key] = fmt.Sprintf("%v", list[i+1])
+	}
+
+	return stats, nil
+}
+
+// GetMemoryDoctor returns MEMORY DOCTOR output.
+func (c *RedisClient) GetMemoryDoctor() (string, error) {
+	if !c.connected || c.client == nil {
+		return "", errors.New("not connected to any Redis server")
+	}
+
+	result, err := c.client.Do(c.ctx, "MEMORY", "DOCTOR").Result()
+	if err != nil {
+		return "", fmt.Errorf("failed to run memory doctor: %v", err)
+	}
+
+	switch v := result.(type) {
+	case string:
+		return v, nil
+	default:
+		return fmt.Sprintf("%v", result), nil
+	}
 }
