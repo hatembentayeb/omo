@@ -39,7 +39,7 @@ func ShowStandardListSelectorModal(
 	list := tview.NewList()
 	list.SetHighlightFullLine(true)
 	list.SetSelectedBackgroundColor(tcell.ColorAqua)
-	list.SetSelectedTextColor(tcell.ColorDefault)
+	list.SetSelectedTextColor(tcell.ColorBlack)
 	list.SetBorder(true)
 	list.SetBorderColor(tcell.ColorAqua)
 	list.SetTitle(" " + title + " ")
