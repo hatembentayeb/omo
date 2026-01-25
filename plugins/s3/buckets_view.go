@@ -31,6 +31,7 @@ func NewBucketsView(app *tview.Application, pages *tview.Pages) *BucketsView {
 
 	// Create Cores UI component
 	bv.cores = ui.NewCores(app, "S3 Buckets")
+	bv.cores.SetModalPages(pages)
 
 	// Set table headers
 	bv.cores.SetTableHeaders([]string{"Name", "Creation Date", "Region"})
