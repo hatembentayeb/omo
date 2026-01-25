@@ -363,7 +363,7 @@ func (dv *DockerView) showContainerDetails() {
 	}
 
 	if len(inspect.Networks) > 0 {
-		details.WriteString(fmt.Sprintf("\n[yellow]Networks:[white]\n"))
+		details.WriteString(fmt.Sprintf("\n[yellow]Networks:[white]\n"))	
 		for _, network := range inspect.Networks {
 			details.WriteString(fmt.Sprintf("  %s\n", network))
 		}
