@@ -41,6 +41,9 @@ func InitializeView(pattern ViewPattern) *Cores {
 	if cores == nil {
 		cores = NewCores(pattern.App, pattern.Title)
 	}
+	if pattern.Pages != nil {
+		cores.SetModalPages(pattern.Pages)
+	}
 
 	// Set table headers
 	if pattern.TableHeaders != nil {
