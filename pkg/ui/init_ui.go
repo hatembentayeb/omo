@@ -70,7 +70,7 @@ func (c *Cores) initUI() {
 	// Set selection style to match Redis plugin
 	c.table.SetSelectedStyle(
 		tcell.StyleDefault.
-			Foreground(tcell.ColorDefault).
+			Foreground(tcell.ColorBlack).
 			Background(tcell.ColorAqua).
 			Attributes(tcell.AttrBold),
 	)
