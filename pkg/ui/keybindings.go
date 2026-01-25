@@ -20,7 +20,7 @@ func (c *Cores) ClearKeyBindings() *Cores {
 	standardBindings := make(map[string]string)
 
 	// Preserve standard key bindings if they exist
-	standardKeys := []string{"R", "?", "ESC"}
+	standardKeys := []string{"R", "?", "ESC", "/", "PgDn"}
 	for _, key := range standardKeys {
 		if desc, exists := c.keyBindings[key]; exists {
 			standardBindings[key] = desc
