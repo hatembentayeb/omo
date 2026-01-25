@@ -1,0 +1,14 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7.2-alpine
+    container_name: omo-redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "no", "--save", ""]
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data: {}
