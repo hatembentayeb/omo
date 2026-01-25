@@ -46,6 +46,7 @@ func NewPartitionsView(app *tview.Application, pages *tview.Pages, kafkaClient *
 
 	// Create Cores UI component
 	pv.cores = ui.NewCores(app, "")
+	pv.cores.SetModalPages(pages)
 
 	// Set table headers
 	pv.cores.SetTableHeaders([]string{"ID", "Leader", "Replicas", "ISR", "Size", "First Offset", "Last Offset", "Messages"})
