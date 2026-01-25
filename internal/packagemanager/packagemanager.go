@@ -18,6 +18,7 @@ import (
 func NewPackageManager(app *tview.Application, pages *tview.Pages, pluginsDir string) *ui.Cores {
 	// Create a new Cores UI component
 	core := ui.NewCores(app, "Package Manager")
+	core.SetModalPages(pages)
 
 	// Set up table headers and data
 	core.SetTableHeaders([]string{"Name", "Version", "Latest", "Status", "Description"})
