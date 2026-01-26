@@ -284,40 +284,48 @@ func (dv *DockerView) execInSelectedContainer() {
 
 	name := dv.getSelectedContainerName()
 
+	// Check if container is running
+	row := dv.containersView.GetSelectedRowData()
+	if len(row) < 4 || row[3] != "running" {
+		dv.containersView.Log("[red]Container must be running to exec into it")
+		return
+	}
+
 	ui.ShowCompactStyledInputModal(
 		dv.pages,
 		dv.app,
-		"Execute Command",
-		"Command",
+		"Shell",
+		"Shell",
 		"sh",
 		30,
 		nil,
-		func(command string, cancelled bool) {
-			if cancelled || command == "" {
+		func(shell string, cancelled bool) {
+			if cancelled || shell == "" {
 				dv.app.SetFocus(dv.containersView.GetTable())
 				return
 			}
 
-			dv.containersView.Log(fmt.Sprintf("[yellow]Executing '%s' in %s...", command, name))
+			dv.containersView.Log(fmt.Sprintf("[yellow]Opening shell '%s' in %s... (type 'exit' to return)", shell, name))
 
-			output, err := dv.dockerClient.ExecInContainer(id, command)
-			if err != nil {
-				dv.containersView.Log(fmt.Sprintf("[red]Command failed: %v", err))
-			}
+			// Suspend the TUI app
+			dv.app.Suspend(func() {
+				// Clear screen before exec
+				fmt.Print("\033[H\033[2J")
+				fmt.Printf("Connecting to container %s with %s...\n", name, shell)
+				fmt.Println("Type 'exit' to return to the app.")
 
-			if output != "" {
-				ui.ShowInfoModal(
-					dv.pages,
-					dv.app,
-					fmt.Sprintf("Output: %s", command),
-					output,
-					func() {
-						dv.app.SetFocus(dv.containersView.GetTable())
-					},
-				)
-			} else {
-				dv.app.SetFocus(dv.containersView.GetTable())
-			}
+				// Run interactive shell
+				err := dv.dockerClient.ExecInteractiveShell(id, shell)
+				if err != nil {
+					fmt.Printf("\nShell exited with error: %v\n", err)
+					fmt.Println("Press Enter to return to the app...")
+					fmt.Scanln()
+				}
+			})
+
+			// After returning from shell, refresh and restore focus
+			dv.containersView.Log(fmt.Sprintf("[green]Returned from shell in %s", name))
+			dv.app.SetFocus(dv.containersView.GetTable())
 		},
 	)
 }
@@ -363,7 +371,7 @@ func (dv *DockerView) showContainerDetails() {
 	}
 
 	if len(inspect.Networks) > 0 {
-		details.WriteString(fmt.Sprintf("\n[yellow]Networks:[white]\n"))	
+		details.WriteString(fmt.Sprintf("\n[yellow]Networks:[white]\n"))
 		for _, network := range inspect.Networks {
 			details.WriteString(fmt.Sprintf("  %s\n", network))
 		}
