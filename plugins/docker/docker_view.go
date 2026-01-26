@@ -241,6 +241,105 @@ func (dv *DockerView) handleAction(action string, payload map[string]interface{}
 		return nil
 	case "keypress":
 		if key, ok := payload["key"].(string); ok {
+			// View-specific actions first (before global keys)
+			
+			// Container actions (only in containers view)
+			if dv.currentViewName == viewContainers {
+				switch key {
+				case "S":
+					dv.startSelectedContainer()
+					return nil
+				case "X":
+					dv.stopSelectedContainer()
+					return nil
+				case "D":
+					dv.removeSelectedContainer()
+					return nil
+				case "L":
+					dv.viewSelectedContainerLogs()
+					return nil
+				case "E":
+					dv.execInSelectedContainer()
+					return nil
+				case "R":
+					dv.restartSelectedContainer()
+					return nil
+				case "P":
+					dv.pauseSelectedContainer()
+					return nil
+				case "U":
+					dv.unpauseSelectedContainer()
+					return nil
+				case "K":
+					dv.killSelectedContainer()
+					return nil
+				}
+			}
+
+			// Image actions (only in images view)
+			if dv.currentViewName == viewImages {
+				switch key {
+				case "D":
+					dv.removeSelectedImage()
+					return nil
+				case "P":
+					dv.pullImage()
+					return nil
+				case "H":
+					dv.showImageHistory()
+					return nil
+				}
+			}
+
+			// Network actions (only in networks view)
+			if dv.currentViewName == viewNetworks {
+				switch key {
+				case "D":
+					dv.removeSelectedNetwork()
+					return nil
+				case "A":
+					dv.createNetwork()
+					return nil
+				}
+			}
+
+			// Volume actions (only in volumes view)
+			if dv.currentViewName == viewVolumes {
+				switch key {
+				case "D":
+					dv.removeSelectedVolume()
+					return nil
+				case "A":
+					dv.createVolume()
+					return nil
+				case "P":
+					dv.pruneVolumes()
+					return nil
+				}
+			}
+
+			// Compose actions (only in compose view)
+			if dv.currentViewName == viewCompose {
+				switch key {
+				case "U":
+					dv.composeUp()
+					return nil
+				case "D":
+					dv.composeDown()
+					return nil
+				case "S":
+					dv.composeStop()
+					return nil
+				case "R":
+					dv.composeRestart()
+					return nil
+				case "L":
+					dv.composeLogs()
+					return nil
+				}
+			}
+
+			// Navigation keys (available in all views)
 			switch key {
 			case "C":
 				dv.showContainers()
@@ -262,13 +361,6 @@ func (dv *DockerView) handleAction(action string, payload map[string]interface{}
 				return nil
 			case "Y":
 				dv.showSystem()
-				return nil
-			case "L":
-				if dv.currentViewName == viewContainers {
-					dv.viewSelectedContainerLogs()
-					return nil
-				}
-				dv.showLogs()
 				return nil
 			case "?":
 				dv.showHelp()
@@ -312,7 +404,7 @@ X       - Stop container
 R       - Restart container
 D       - Remove container
 L       - View container logs
-E       - Execute command in container
+E       - Open interactive shell in container
 P       - Pause container
 U       - Unpause container
 K       - Kill container (force)
