@@ -42,7 +42,8 @@ type Cores struct {
 	filteredIndices []int
 
 	// Key binding management
-	keyBindings map[string]string
+	keyBindings  map[string]string
+	keyHandlers  map[string]func()
 
 	// Data refresh management
 	refreshMutex  sync.Mutex
@@ -87,6 +88,7 @@ func NewCores(app *tview.Application, title string) *Cores {
 		tableData:    [][]string{},
 		stopRefresh:  make(chan struct{}),
 		keyBindings:  make(map[string]string),
+		keyHandlers:  make(map[string]func()),
 	}
 
 	// Set default key bindings

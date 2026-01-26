@@ -75,12 +75,16 @@ func (c *Cores) StandardKeyHandler(event *tcell.EventKey, oldCapture func(*tcell
 		// Handle standard key bindings
 		switch event.Rune() {
 		case 'R':
-			// First check if there's a custom handler for the 'R' key
+			// First check if there's a direct handler registered
+			if handler, ok := c.keyHandlers["R"]; ok && handler != nil {
+				handler()
+				return nil
+			}
+			// Then check onAction callback
 			if c.onAction != nil {
 				handled := c.onAction("keypress", map[string]interface{}{
 					"key": "R",
 				})
-				// If the custom handler returns nil, it means it handled the key
 				if handled == nil {
 					return nil
 				}
@@ -89,6 +93,11 @@ func (c *Cores) StandardKeyHandler(event *tcell.EventKey, oldCapture func(*tcell
 			c.RefreshData()
 			return nil
 		case '/':
+			// First check if there's a direct handler registered
+			if handler, ok := c.keyHandlers["/"]; ok && handler != nil {
+				handler()
+				return nil
+			}
 			if c.onAction != nil {
 				handled := c.onAction("keypress", map[string]interface{}{
 					"key": "/",
@@ -100,17 +109,20 @@ func (c *Cores) StandardKeyHandler(event *tcell.EventKey, oldCapture func(*tcell
 			c.showFilterModal()
 			return nil
 		case '?':
-			// First check if there's a custom handler for the '?' key
+			// First check if there's a direct handler registered
+			if handler, ok := c.keyHandlers["?"]; ok && handler != nil {
+				handler()
+				return nil
+			}
+			// Then check onAction callback
 			if c.onAction != nil {
 				handled := c.onAction("keypress", map[string]interface{}{
 					"key": "?",
 				})
-				// If the custom handler returns nil, it means it handled the key
 				if handled == nil {
 					return nil
 				}
 			}
-
 			// Default behavior - toggle help expanded/collapsed
 			c.ToggleHelpExpanded()
 			return nil
@@ -118,6 +130,12 @@ func (c *Cores) StandardKeyHandler(event *tcell.EventKey, oldCapture func(*tcell
 			// Check for registered key bindings
 			key := string(event.Rune())
 			if _, exists := c.keyBindings[key]; exists {
+				// Call direct handler if registered
+				if handler, ok := c.keyHandlers[key]; ok && handler != nil {
+					handler()
+					return nil
+				}
+				// Fall back to onAction callback
 				if c.onAction != nil {
 					c.onAction("keypress", map[string]interface{}{
 						"key": key,
