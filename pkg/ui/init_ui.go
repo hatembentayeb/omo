@@ -84,6 +84,9 @@ func (c *Cores) initUI() {
 	c.tableContent = NewVirtualTableContent()
 	c.table.SetContent(c.tableContent)
 
+	// Fix the header row so it doesn't scroll - this makes navigation smooth
+	c.table.SetFixed(1, 0)
+
 	// Update selection whenever cursor moves to a new row
 	c.table.SetSelectionChangedFunc(func(row, column int) {
 		if row <= 0 { // Ignore header row
