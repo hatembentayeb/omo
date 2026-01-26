@@ -510,6 +510,22 @@ func (d *DockerClient) GetContainerLogs(containerID string) (string, error) {
 	return string(logs), nil
 }
 
+// ExecInteractiveShell opens an interactive shell in a container.
+// This function spawns `docker exec -it` and connects it to the terminal.
+// The caller should suspend any TUI before calling this and resume after.
+func (d *DockerClient) ExecInteractiveShell(containerID, shell string) error {
+	if shell == "" {
+		shell = "sh"
+	}
+
+	cmd := exec.Command("docker", "exec", "-it", containerID, shell)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	return cmd.Run()
+}
+
 // ExecInContainer executes a command in a running container
 func (d *DockerClient) ExecInContainer(containerID, command string) (string, error) {
 	// Create a context with timeout
