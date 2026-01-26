@@ -56,14 +56,29 @@ type PubSubChannel struct {
 	Pattern     bool
 }
 
+// PubSubMessage represents a message received from a PubSub channel
+type PubSubMessage struct {
+	Channel   string
+	Pattern   string
+	Payload   string
+	Timestamp time.Time
+}
+
+// PubSubSubscription represents an active subscription
+type PubSubSubscription struct {
+	pubsub   *redis.PubSub
+	Messages chan PubSubMessage
+	done     chan struct{}
+}
+
 // KeyPattern represents aggregated statistics for a key pattern
 type KeyPattern struct {
-	Pattern      string
-	Count        int
-	SampleKeys   []string
-	AvgTTL       int64
-	Types        map[string]int
-	TotalSize    int64
+	Pattern    string
+	Count      int
+	SampleKeys []string
+	AvgTTL     int64
+	Types      map[string]int
+	TotalSize  int64
 }
 
 // DatabaseInfo represents information about a Redis database
@@ -76,9 +91,9 @@ type DatabaseInfo struct {
 
 // CommandStat represents statistics for a Redis command
 type CommandStat struct {
-	Command string
-	Calls   int64
-	Usec    int64
+	Command     string
+	Calls       int64
+	Usec        int64
 	UsecPerCall float64
 }
 
@@ -760,7 +775,7 @@ func (c *RedisClient) GetPubSubChannels() ([]PubSubChannel, error) {
 	}
 
 	result := make([]PubSubChannel, 0, len(channels))
-	
+
 	// Get subscriber counts for each channel
 	if len(channels) > 0 {
 		numSub, err := c.client.PubSubNumSub(c.ctx, channels...).Result()
@@ -788,6 +803,67 @@ func (c *RedisClient) GetPubSubChannels() ([]PubSubChannel, error) {
 	return result, nil
 }
 
+// SubscribeToChannel subscribes to a Redis PubSub channel and returns a subscription
+// that can be used to receive messages. Call Close() on the subscription when done.
+func (c *RedisClient) SubscribeToChannel(channel string) (*PubSubSubscription, error) {
+	if !c.connected || c.client == nil {
+		return nil, errors.New("not connected to any Redis server")
+	}
+
+	pubsub := c.client.Subscribe(c.ctx, channel)
+
+	// Wait for subscription confirmation
+	_, err := pubsub.Receive(c.ctx)
+	if err != nil {
+		pubsub.Close()
+		return nil, fmt.Errorf("failed to subscribe to channel %s: %v", channel, err)
+	}
+
+	sub := &PubSubSubscription{
+		pubsub:   pubsub,
+		Messages: make(chan PubSubMessage, 100),
+		done:     make(chan struct{}),
+	}
+
+	// Start goroutine to receive messages
+	go func() {
+		ch := pubsub.Channel()
+		for {
+			select {
+			case msg, ok := <-ch:
+				if !ok {
+					return
+				}
+				sub.Messages <- PubSubMessage{
+					Channel:   msg.Channel,
+					Pattern:   msg.Pattern,
+					Payload:   msg.Payload,
+					Timestamp: time.Now(),
+				}
+			case <-sub.done:
+				return
+			}
+		}
+	}()
+
+	return sub, nil
+}
+
+// Close closes the PubSub subscription and releases resources
+func (s *PubSubSubscription) Close() error {
+	close(s.done)
+	return s.pubsub.Close()
+}
+
+// PublishMessage publishes a message to a Redis PubSub channel
+func (c *RedisClient) PublishMessage(channel, message string) error {
+	if !c.connected || c.client == nil {
+		return errors.New("not connected to any Redis server")
+	}
+
+	return c.client.Publish(c.ctx, channel, message).Err()
+}
+
 // AnalyzeKeyPatterns analyzes keys and groups them by pattern prefix
 func (c *RedisClient) AnalyzeKeyPatterns(maxKeys int) ([]KeyPattern, error) {
 	if !c.connected || c.client == nil {
@@ -810,7 +886,7 @@ func (c *RedisClient) AnalyzeKeyPatterns(maxKeys int) ([]KeyPattern, error) {
 
 	// Group keys by pattern (prefix before first colon)
 	patterns := make(map[string]*KeyPattern)
-	
+
 	for _, key := range keys {
 		// Extract pattern (prefix before first colon or full key if no colon)
 		pattern := key
@@ -872,7 +948,7 @@ func (c *RedisClient) GetAllDatabases() ([]DatabaseInfo, error) {
 	}
 
 	databases := make([]DatabaseInfo, 0)
-	
+
 	// Parse keyspace section for database info
 	for key, value := range infoMap {
 		if strings.HasPrefix(key, "db") {
@@ -882,7 +958,7 @@ func (c *RedisClient) GetAllDatabases() ([]DatabaseInfo, error) {
 			}
 
 			dbInfo := DatabaseInfo{ID: dbNum}
-			
+
 			// Parse the value: "keys=123,expires=45,avg_ttl=67890"
 			parts := strings.Split(value, ",")
 			for _, part := range parts {
@@ -890,7 +966,7 @@ func (c *RedisClient) GetAllDatabases() ([]DatabaseInfo, error) {
 				if len(kv) != 2 {
 					continue
 				}
-				
+
 				switch kv[0] {
 				case "keys":
 					if val, err := strconv.ParseInt(kv[1], 10, 64); err == nil {
@@ -906,7 +982,7 @@ func (c *RedisClient) GetAllDatabases() ([]DatabaseInfo, error) {
 					}
 				}
 			}
-			
+
 			databases = append(databases, dbInfo)
 		}
 	}
@@ -926,14 +1002,14 @@ func (c *RedisClient) GetCommandStats() ([]CommandStat, error) {
 	}
 
 	stats := make([]CommandStat, 0)
-	
+
 	// Parse commandstats section
 	for key, value := range infoMap {
 		if strings.HasPrefix(key, "cmdstat_") {
 			cmdName := strings.TrimPrefix(key, "cmdstat_")
-			
+
 			stat := CommandStat{Command: cmdName}
-			
+
 			// Parse value: "calls=123,usec=456,usec_per_call=3.71"
 			parts := strings.Split(value, ",")
 			for _, part := range parts {
@@ -941,7 +1017,7 @@ func (c *RedisClient) GetCommandStats() ([]CommandStat, error) {
 				if len(kv) != 2 {
 					continue
 				}
-				
+
 				switch kv[0] {
 				case "calls":
 					if val, err := strconv.ParseInt(kv[1], 10, 64); err == nil {
@@ -957,7 +1033,7 @@ func (c *RedisClient) GetCommandStats() ([]CommandStat, error) {
 					}
 				}
 			}
-			
+
 			stats = append(stats, stat)
 		}
 	}
@@ -978,7 +1054,7 @@ func (c *RedisClient) GetLatencyHistory() ([]LatencyEvent, error) {
 	}
 
 	events := make([]LatencyEvent, 0)
-	
+
 	// Parse result
 	list, ok := result.([]interface{})
 	if !ok {
@@ -992,22 +1068,21 @@ func (c *RedisClient) GetLatencyHistory() ([]LatencyEvent, error) {
 		}
 
 		event := LatencyEvent{}
-		
+
 		if name, ok := eventData[0].(string); ok {
 			event.Event = name
 		}
-		
+
 		if ts, ok := eventData[1].(int64); ok {
 			event.Timestamp = time.Unix(ts, 0)
 		}
-		
+
 		if latency, ok := eventData[2].(int64); ok {
 			event.Latency = latency
 		}
-		
+
 		events = append(events, event)
 	}
 
 	return events, nil
 }
-

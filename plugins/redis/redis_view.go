@@ -501,6 +501,11 @@ X       - Command Stats view
 Z       - Latency view
 D       - Memory Doctor (memory view)
 
+[green]PubSub View:[white]
+Enter   - Subscribe to channel (view live messages)
+U       - Publish message to channel
+Esc     - Close message viewer / Unsubscribe
+
 [green]Navigation:[white]
 Arrow keys - Navigate keys list
 Enter      - View key content
