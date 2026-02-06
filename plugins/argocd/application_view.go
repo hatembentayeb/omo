@@ -13,13 +13,13 @@ import (
 type ApplicationView struct {
 	app          *tview.Application
 	pages        *tview.Pages
-	cores        *ui.Cores
+	cores        *ui.CoreView
 	apiClient    *ArgoAPIClient
 	applications []Application
 }
 
 // NewApplicationView creates a new application view
-func NewApplicationView(app *tview.Application, pages *tview.Pages, cores *ui.Cores, apiClient *ArgoAPIClient) *ApplicationView {
+func NewApplicationView(app *tview.Application, pages *tview.Pages, cores *ui.CoreView, apiClient *ArgoAPIClient) *ApplicationView {
 	return &ApplicationView{
 		app:          app,
 		pages:        pages,

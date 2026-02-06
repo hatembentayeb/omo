@@ -15,8 +15,8 @@ import (
 //   - callback: A function that returns table data ([][]string) and an error
 //
 // Returns:
-//   - The Cores instance for method chaining
-func (c *Cores) SetRefreshCallback(callback func() ([][]string, error)) *Cores {
+//   - The CoreView instance for method chaining
+func (c *CoreView) SetRefreshCallback(callback func() ([][]string, error)) *CoreView {
 	c.onRefresh = callback
 	return c
 }
@@ -30,8 +30,8 @@ func (c *Cores) SetRefreshCallback(callback func() ([][]string, error)) *Cores {
 //   - interval: The time duration between automatic refreshes
 //
 // Returns:
-//   - The Cores instance for method chaining
-func (c *Cores) StartAutoRefresh(interval time.Duration) *Cores {
+//   - The CoreView instance for method chaining
+func (c *CoreView) StartAutoRefresh(interval time.Duration) *CoreView {
 	c.refreshMutex.Lock()
 	defer c.refreshMutex.Unlock()
 
@@ -62,8 +62,8 @@ func (c *Cores) StartAutoRefresh(interval time.Duration) *Cores {
 // component is no longer needed to prevent resource leaks.
 //
 // Returns:
-//   - The Cores instance for method chaining
-func (c *Cores) StopAutoRefresh() *Cores {
+//   - The CoreView instance for method chaining
+func (c *CoreView) StopAutoRefresh() *CoreView {
 	c.refreshMutex.Lock()
 	defer c.refreshMutex.Unlock()
 
@@ -85,8 +85,8 @@ func (c *Cores) StopAutoRefresh() *Cores {
 // the refresh timer if auto-refresh is enabled.
 //
 // Returns:
-//   - The Cores instance for method chaining
-func (c *Cores) RefreshData() *Cores {
+//   - The CoreView instance for method chaining
+func (c *CoreView) RefreshData() *CoreView {
 	c.dataMutex.Lock()
 	if c.isLoading {
 		c.dataMutex.Unlock()
@@ -143,7 +143,7 @@ func (c *Cores) RefreshData() *Cores {
 }
 
 // SetLazyLoader enables lazy loading with a page size and loader function.
-func (c *Cores) SetLazyLoader(pageSize int, loader func(offset, limit int) ([][]string, error)) *Cores {
+func (c *CoreView) SetLazyLoader(pageSize int, loader func(offset, limit int) ([][]string, error)) *CoreView {
 	if pageSize <= 0 {
 		pageSize = 500
 	}
@@ -155,7 +155,7 @@ func (c *Cores) SetLazyLoader(pageSize int, loader func(offset, limit int) ([][]
 }
 
 // LoadMore fetches the next page when lazy loading is enabled.
-func (c *Cores) LoadMore() *Cores {
+func (c *CoreView) LoadMore() *CoreView {
 	if c.lazyLoader == nil {
 		return c
 	}

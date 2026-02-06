@@ -4,8 +4,8 @@ import (
 	"omo/pkg/ui"
 )
 
-func (rv *RedisView) newInfoView() *ui.Cores {
-	cores := ui.NewCores(rv.app, "Redis Server Info")
+func (rv *RedisView) newInfoView() *ui.CoreView {
+	cores := ui.NewCoreView(rv.app, "Redis Server Info")
 	cores.SetTableHeaders([]string{"Property", "Value"})
 	cores.SetRefreshCallback(rv.refreshServerInfo)
 	cores.AddKeyBinding("K", "Keys", rv.showKeys)

@@ -7,7 +7,7 @@ import (
 )
 
 // getHelpText generates the help text for keybindings
-func (c *Cores) getHelpText() string {
+func (c *CoreView) getHelpText() string {
 	// Prepare keybindings for matrix display
 	type keyBinding struct {
 		key         string
@@ -116,7 +116,7 @@ func (c *Cores) getHelpText() string {
 }
 
 // getExpandedHelpText returns the expanded help text with more detailed information
-func (c *Cores) getExpandedHelpText() string {
+func (c *CoreView) getExpandedHelpText() string {
 	// Start with the basic help text as a foundation
 	var sb strings.Builder
 

@@ -8,8 +8,8 @@ import (
 	"omo/pkg/ui"
 )
 
-func (rv *RedisView) newKeyAnalysisView() *ui.Cores {
-	cores := ui.NewCores(rv.app, "Redis Key Analysis")
+func (rv *RedisView) newKeyAnalysisView() *ui.CoreView {
+	cores := ui.NewCoreView(rv.app, "Redis Key Analysis")
 	cores.SetTableHeaders([]string{"Pattern", "Count", "Types", "Avg TTL", "Sample Keys"})
 	cores.SetRefreshCallback(rv.refreshKeyAnalysis)
 	cores.AddKeyBinding("K", "Keys", rv.showKeys)

@@ -7,8 +7,8 @@ import (
 	"omo/pkg/ui"
 )
 
-func (dv *DockerView) newImagesView() *ui.Cores {
-	cores := ui.NewCores(dv.app, "Docker Images")
+func (dv *DockerView) newImagesView() *ui.CoreView {
+	cores := ui.NewCoreView(dv.app, "Docker Images")
 	cores.SetTableHeaders([]string{"ID", "Repository", "Tag", "Size", "Created"})
 	cores.SetRefreshCallback(dv.refreshImagesData)
 	cores.SetSelectionKey("ID")

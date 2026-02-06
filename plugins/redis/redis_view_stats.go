@@ -8,8 +8,8 @@ import (
 	"omo/pkg/ui"
 )
 
-func (rv *RedisView) newStatsView() *ui.Cores {
-	cores := ui.NewCores(rv.app, "Redis Stats")
+func (rv *RedisView) newStatsView() *ui.CoreView {
+	cores := ui.NewCoreView(rv.app, "Redis Stats")
 	cores.SetTableHeaders([]string{"Metric", "Value"})
 	cores.SetRefreshCallback(rv.refreshStats)
 	cores.AddKeyBinding("K", "Keys", rv.showKeys)

@@ -9,7 +9,7 @@ import (
 	"github.com/rivo/tview"
 )
 
-// initUI initializes all UI components for the Cores instance.
+// initUI initializes all UI components for the CoreView instance.
 // This function sets up the primary UI components including:
 //   - Breadcrumbs for navigation history
 //   - Info panel for status and context information
@@ -21,7 +21,7 @@ import (
 // The UI follows a consistent design pattern used throughout OMO,
 // with a header section, main data view (table), and navigation breadcrumbs.
 // Colors, borders, and styles are configured to maintain visual consistency.
-func (c *Cores) initUI() {
+func (c *CoreView) initUI() {
 	// Initialize breadcrumbs
 	c.breadcrumbs = tview.NewTextView()
 	c.breadcrumbs.SetDynamicColors(true)

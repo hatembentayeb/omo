@@ -7,8 +7,8 @@ import (
 	"omo/pkg/ui"
 )
 
-func (dv *DockerView) newVolumesView() *ui.Cores {
-	cores := ui.NewCores(dv.app, "Docker Volumes")
+func (dv *DockerView) newVolumesView() *ui.CoreView {
+	cores := ui.NewCoreView(dv.app, "Docker Volumes")
 	cores.SetTableHeaders([]string{"Name", "Driver", "Mountpoint", "Scope", "Created"})
 	cores.SetRefreshCallback(dv.refreshVolumesData)
 	cores.SetSelectionKey("Name")

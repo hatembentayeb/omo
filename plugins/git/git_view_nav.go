@@ -16,7 +16,7 @@ const (
 	viewDiff     = "diff"
 )
 
-func (gv *GitView) currentCores() *ui.Cores {
+func (gv *GitView) currentCores() *ui.CoreView {
 	switch gv.currentViewName {
 	case viewStatus:
 		return gv.statusView
@@ -35,7 +35,7 @@ func (gv *GitView) currentCores() *ui.Cores {
 	}
 }
 
-func (gv *GitView) setViewStack(cores *ui.Cores, viewName string) {
+func (gv *GitView) setViewStack(cores *ui.CoreView, viewName string) {
 	if cores == nil {
 		return
 	}

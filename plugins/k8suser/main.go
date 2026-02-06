@@ -18,7 +18,7 @@ var OhmyopsPlugin K8sUserPlugin
 type K8sUserPlugin struct {
 	app            *tview.Application
 	pages          *tview.Pages
-	cores          *ui.Cores
+	cores          *ui.CoreView
 	currentView    string
 	userView       *UserView
 	roleView       *RoleView
@@ -137,52 +137,36 @@ func (p *K8sUserPlugin) GetMetadata() pluginapi.PluginMetadata {
 
 // initializeMainView creates the main view
 func (p *K8sUserPlugin) initializeMainView() {
-	// Create pattern for initializing the main view
-	pattern := ui.ViewPattern{
-		App:          p.app,
-		Pages:        p.pages,
-		Title:        "Kubernetes User Manager",
-		HeaderText:   "Manage Kubernetes users with certificate-based authentication",
-		TableHeaders: []string{"Username", "Certificate Expiry", "Namespaces", "Roles"},
-		RefreshFunc:  p.fetchUsers,
-		KeyHandlers: map[string]string{
-			"R":  "Refresh",
-			"C":  "Create User",
-			"D":  "Delete User",
-			"A":  "Assign Role",
-			"V":  "View Details",
-			"T":  "Test Access",
-			"E":  "Export Config",
-			"K":  "Connection Command",
-			"M":  "Role Management",
-			"^T": "Switch Context",
-			"?":  "Help",
-			"^B": "Back",
-		},
-		SelectedFunc: p.onUserSelected,
-	}
+	p.cores = ui.NewCoreView(p.app, "Kubernetes User Manager")
+	p.cores.SetModalPages(p.pages)
+	p.cores.SetTableHeaders([]string{"Username", "Certificate Expiry", "Namespaces", "Roles"})
+	p.cores.SetRefreshCallback(p.fetchUsers)
+	p.cores.SetRowSelectedCallback(p.onUserSelected)
+	p.cores.SetInfoText("Manage Kubernetes users with certificate-based authentication")
 
-	// Initialize the UI
-	p.cores = ui.InitializeView(pattern)
+	// Key bindings
+	p.cores.AddKeyBinding("C", "Create User", nil)
+	p.cores.AddKeyBinding("D", "Delete User", nil)
+	p.cores.AddKeyBinding("A", "Assign Role", nil)
+	p.cores.AddKeyBinding("V", "View Details", nil)
+	p.cores.AddKeyBinding("T", "Test Access", nil)
+	p.cores.AddKeyBinding("E", "Export Config", nil)
+	p.cores.AddKeyBinding("K", "Connection Command", nil)
+	p.cores.AddKeyBinding("M", "Role Management", nil)
+	p.cores.AddKeyBinding("^T", "Switch Context", nil)
+	p.cores.AddKeyBinding("^B", "Back", nil)
 
-	// Set the table selection handler with the right signature
+	// Enter key to show user details
 	p.cores.GetTable().Select(0, 0).SetSelectedFunc(func(row, column int) {
 		p.onUserSelected(row)
 	})
 
-	// Set up action handler
 	p.setupActionHandler()
+	p.cores.RegisterHandlers()
 
-	// Add the core UI to the pages
 	p.pages.AddPage("main", p.cores.GetLayout(), true, true)
-
-	// Push initial view to navigation stack
 	p.cores.PushView("K8s Users")
-
-	// Set the current view to users
 	p.currentView = "users"
-
-	// Log initial state
 	p.cores.Log("Plugin initialized")
 }
 

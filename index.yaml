@@ -1,0 +1,100 @@
+# OhMyOps Official Plugin Index
+# This file is the source of truth for all official plugins.
+# The omo package manager fetches this index to discover available plugins.
+#
+# To add a new plugin:
+#   1. Create a new repo under github.com/ohmyops/
+#   2. Build the .so for each supported platform
+#   3. Create a GitHub release with the .so as an asset
+#   4. Add an entry below
+
+api_version: v1
+
+# URL template for downloading plugin binaries.
+# {{name}}    → plugin name (e.g. "redis")
+# {{version}} → semver (e.g. "0.1.0")
+# {{os}}      → runtime.GOOS (e.g. "linux")
+# {{arch}}    → runtime.GOARCH (e.g. "amd64")
+download_url_template: "https://github.com/ohmyops/omo-{{name}}/releases/download/v{{version}}/{{name}}-{{os}}-{{arch}}.so"
+
+plugins:
+  - name: redis
+    version: "0.1.0"
+    description: "Manage Redis instances and monitor performance"
+    author: "ohmyops"
+    license: "MIT"
+    url: "https://github.com/ohmyops/omo-redis"
+    tags: ["database", "cache", "monitoring"]
+    arch: ["amd64", "arm64"]
+
+  - name: docker
+    version: "0.1.0"
+    description: "Manage Docker containers, images, networks, and volumes"
+    author: "ohmyops"
+    license: "MIT"
+    url: "https://github.com/ohmyops/omo-docker"
+    tags: ["containers", "devops", "infrastructure"]
+    arch: ["amd64", "arm64"]
+
+  - name: git
+    version: "0.1.0"
+    description: "Manage Git repositories, branches, and commits"
+    author: "ohmyops"
+    license: "MIT"
+    url: "https://github.com/ohmyops/omo-git"
+    tags: ["vcs", "developer-tools"]
+    arch: ["amd64", "arm64"]
+
+  - name: argocd
+    version: "0.1.0"
+    description: "Manage ArgoCD applications, projects, and accounts"
+    author: "ohmyops"
+    license: "MIT"
+    url: "https://github.com/ohmyops/omo-argocd"
+    tags: ["gitops", "kubernetes", "cd"]
+    arch: ["amd64", "arm64"]
+
+  - name: kafka
+    version: "0.1.0"
+    description: "Monitor Kafka brokers, topics, and consumer groups"
+    author: "ohmyops"
+    license: "MIT"
+    url: "https://github.com/ohmyops/omo-kafka"
+    tags: ["streaming", "messaging", "monitoring"]
+    arch: ["amd64", "arm64"]
+
+  - name: s3
+    version: "0.1.0"
+    description: "Browse and manage AWS S3 buckets and objects"
+    author: "ohmyops"
+    license: "MIT"
+    url: "https://github.com/ohmyops/omo-s3"
+    tags: ["aws", "storage", "cloud"]
+    arch: ["amd64", "arm64"]
+
+  - name: k8suser
+    version: "0.1.0"
+    description: "Manage Kubernetes users with certificate-based authentication"
+    author: "ohmyops"
+    license: "MIT"
+    url: "https://github.com/ohmyops/omo-k8suser"
+    tags: ["kubernetes", "security", "rbac"]
+    arch: ["amd64", "arm64"]
+
+  - name: sysprocess
+    version: "0.1.0"
+    description: "Monitor and analyze system processes"
+    author: "ohmyops"
+    license: "MIT"
+    url: "https://github.com/ohmyops/omo-sysprocess"
+    tags: ["system", "monitoring", "processes"]
+    arch: ["amd64", "arm64"]
+
+  - name: awsCosts
+    version: "0.1.0"
+    description: "Monitor AWS costs, forecasts, and budgets"
+    author: "ohmyops"
+    license: "MIT"
+    url: "https://github.com/ohmyops/omo-awscosts"
+    tags: ["aws", "finops", "cloud"]
+    arch: ["amd64", "arm64"]

@@ -3,7 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
+
+	"omo/pkg/pluginapi"
 
 	"gopkg.in/yaml.v2"
 )
@@ -31,45 +32,21 @@ type ArgocdInstance struct {
 	Password string `yaml:"password"`
 }
 
-// LoadArgocdConfig loads the ArgoCD configuration from the config file
+// LoadArgocdConfig loads the ArgoCD configuration.
+// Default path: ~/.omo/configs/argocd/argocd.yaml
 func LoadArgocdConfig() (*ArgocdConfig, error) {
-	// Determine config file path
-	homeDir, err := os.UserHomeDir()
+	configPath := pluginapi.PluginConfigPath("argocd")
+
+	data, err := os.ReadFile(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get home directory: %v", err)
+		return nil, fmt.Errorf("no ArgoCD config found at %s: %v", configPath, err)
 	}
 
-	// Try to find config file in different locations
-	configPaths := []string{
-		"config/argocd.yml", // Project directory
-		filepath.Join(homeDir, ".config/omo/argocd.yml"), // User config directory
-		filepath.Join(homeDir, ".omo/argocd.yml"),        // User hidden directory
-	}
-
-	var configData []byte
-	var configFilePath string
-
-	// Try each path until we find a valid config file
-	for _, path := range configPaths {
-		data, err := os.ReadFile(path)
-		if err == nil {
-			configData = data
-			configFilePath = path
-			break
-		}
-	}
-
-	if configData == nil {
-		return nil, fmt.Errorf("no ArgoCD configuration file found")
-	}
-
-	// Parse the YAML
 	var config ArgocdConfig
-	if err := yaml.Unmarshal(configData, &config); err != nil {
-		return nil, fmt.Errorf("failed to parse config file %s: %v", configFilePath, err)
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return nil, fmt.Errorf("failed to parse config %s: %v", configPath, err)
 	}
 
-	// Check if config has at least one instance
 	if len(config.Instances) == 0 {
 		return nil, fmt.Errorf("no ArgoCD instances defined in config")
 	}

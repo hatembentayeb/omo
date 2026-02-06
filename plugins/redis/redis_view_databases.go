@@ -7,8 +7,8 @@ import (
 	"omo/pkg/ui"
 )
 
-func (rv *RedisView) newDatabasesView() *ui.Cores {
-	cores := ui.NewCores(rv.app, "Redis Databases")
+func (rv *RedisView) newDatabasesView() *ui.CoreView {
+	cores := ui.NewCoreView(rv.app, "Redis Databases")
 	cores.SetTableHeaders([]string{"DB", "Keys", "Expires", "Avg TTL"})
 	cores.SetRefreshCallback(rv.refreshDatabases)
 	cores.AddKeyBinding("K", "Keys", rv.showKeys)

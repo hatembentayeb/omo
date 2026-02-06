@@ -6,8 +6,8 @@ import (
 	"omo/pkg/ui"
 )
 
-func (rv *RedisView) newLatencyView() *ui.Cores {
-	cores := ui.NewCores(rv.app, "Redis Latency")
+func (rv *RedisView) newLatencyView() *ui.CoreView {
+	cores := ui.NewCoreView(rv.app, "Redis Latency")
 	cores.SetTableHeaders([]string{"Event", "Timestamp", "Latency (ms)"})
 	cores.SetRefreshCallback(rv.refreshLatency)
 	cores.AddKeyBinding("K", "Keys", rv.showKeys)

@@ -1,10 +1,20 @@
 package pluginapi
 
 import (
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/rivo/tview"
 )
+
+// OmoHome is the root directory for all omo data under the user's home.
+// Layout:
+//
+//	~/.omo/
+//	├── plugins/<name>/<name>.so     ← compiled plugin shared libraries
+//	└── configs/<name>/<name>.yaml   ← per-plugin configuration files
+const OmoHome = ".omo"
 
 // PluginMetadata defines metadata for OhMyOps plugins.
 // This struct is shared between the host and plugins.
@@ -29,4 +39,51 @@ type Plugin interface {
 // Stoppable is an optional lifecycle hook for plugins that need cleanup.
 type Stoppable interface {
 	Stop()
+}
+
+// OmoDir returns the absolute path to ~/.omo.
+// It panics if the user home directory cannot be resolved, which should
+// never happen on a properly configured system.
+func OmoDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		panic("cannot resolve user home directory: " + err.Error())
+	}
+	return filepath.Join(home, OmoHome)
+}
+
+// PluginsDir returns the absolute path to ~/.omo/plugins.
+func PluginsDir() string {
+	return filepath.Join(OmoDir(), "plugins")
+}
+
+// ConfigsDir returns the absolute path to ~/.omo/configs.
+func ConfigsDir() string {
+	return filepath.Join(OmoDir(), "configs")
+}
+
+// PluginConfigPath returns the config file path for a given plugin name.
+// e.g. PluginConfigPath("redis") → ~/.omo/configs/redis/redis.yaml
+func PluginConfigPath(pluginName string) string {
+	return filepath.Join(ConfigsDir(), pluginName, pluginName+".yaml")
+}
+
+// PluginSOPath returns the shared library path for a given plugin name.
+// e.g. PluginSOPath("redis") → ~/.omo/plugins/redis/redis.so
+func PluginSOPath(pluginName string) string {
+	return filepath.Join(PluginsDir(), pluginName, pluginName+".so")
+}
+
+// EnsurePluginDirs creates the plugin and config directories for a given plugin.
+func EnsurePluginDirs(pluginName string) error {
+	dirs := []string{
+		filepath.Join(PluginsDir(), pluginName),
+		filepath.Join(ConfigsDir(), pluginName),
+	}
+	for _, dir := range dirs {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return err
+		}
+	}
+	return nil
 }

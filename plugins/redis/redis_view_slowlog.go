@@ -6,8 +6,8 @@ import (
 	"omo/pkg/ui"
 )
 
-func (rv *RedisView) newSlowlogView() *ui.Cores {
-	cores := ui.NewCores(rv.app, "Redis Slowlog")
+func (rv *RedisView) newSlowlogView() *ui.CoreView {
+	cores := ui.NewCoreView(rv.app, "Redis Slowlog")
 	cores.SetTableHeaders([]string{"ID", "Timestamp", "Duration", "Command", "Client"})
 	cores.SetRefreshCallback(rv.refreshSlowlog)
 	cores.AddKeyBinding("K", "Keys", rv.showKeys)

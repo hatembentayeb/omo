@@ -16,7 +16,7 @@ import (
 //
 // Parameters:
 //   - dataRow: The index of the row in the data array (0-based, excluding header)
-func (c *Cores) selectRow(dataRow int) {
+func (c *CoreView) selectRow(dataRow int) {
 	if dataRow >= 0 && dataRow < len(c.tableData) {
 		c.selectedRow = dataRow
 
@@ -49,7 +49,7 @@ func (c *Cores) selectRow(dataRow int) {
 }
 
 // clearSelection clears the current row selection.
-func (c *Cores) clearSelection() {
+func (c *CoreView) clearSelection() {
 	c.selectedRow = -1
 }
 
@@ -63,7 +63,7 @@ func (c *Cores) clearSelection() {
 //
 // Returns:
 //   - A string identifier for the row
-func (c *Cores) getRowSignature(row []string) string {
+func (c *CoreView) getRowSignature(row []string) string {
 	// If a specific selection key column is set, use that
 	if c.selectionKey != "" {
 		for i, header := range c.tableHeaders {
@@ -84,7 +84,7 @@ func (c *Cores) getRowSignature(row []string) string {
 
 // refreshTable updates the table display with current data.
 // This function updates the virtual table content and preserves selection.
-func (c *Cores) refreshTable() {
+func (c *CoreView) refreshTable() {
 	// Save current selection signature for restoring later
 	var selectedSignature string
 	selectedIndex := c.selectedRow
@@ -125,8 +125,8 @@ func (c *Cores) refreshTable() {
 //   - headers: Array of header strings
 //
 // Returns:
-//   - The Cores instance for method chaining
-func (c *Cores) SetTableHeaders(headers []string) *Cores {
+//   - The CoreView instance for method chaining
+func (c *CoreView) SetTableHeaders(headers []string) *CoreView {
 	c.tableHeaders = headers
 	c.refreshTable()
 	return c
@@ -139,8 +139,8 @@ func (c *Cores) SetTableHeaders(headers []string) *Cores {
 //   - data: 2D array of data strings
 //
 // Returns:
-//   - The Cores instance for method chaining
-func (c *Cores) SetTableData(data [][]string) *Cores {
+//   - The CoreView instance for method chaining
+func (c *CoreView) SetTableData(data [][]string) *CoreView {
 	c.dataMutex.Lock()
 	defer c.dataMutex.Unlock()
 	c.rawTableData = data
@@ -150,7 +150,7 @@ func (c *Cores) SetTableData(data [][]string) *Cores {
 }
 
 // AppendTableData appends rows to the current data set.
-func (c *Cores) AppendTableData(data [][]string) *Cores {
+func (c *CoreView) AppendTableData(data [][]string) *CoreView {
 	if len(data) == 0 {
 		return c
 	}
@@ -164,7 +164,7 @@ func (c *Cores) AppendTableData(data [][]string) *Cores {
 
 // SetFilterQuery applies or clears the current table filter.
 // Filters only already-loaded data - no blocking, instant response.
-func (c *Cores) SetFilterQuery(query string) *Cores {
+func (c *CoreView) SetFilterQuery(query string) *CoreView {
 	c.dataMutex.Lock()
 	defer c.dataMutex.Unlock()
 	if c.isLoading {
@@ -189,7 +189,7 @@ func (c *Cores) SetFilterQuery(query string) *Cores {
 	return c
 }
 
-func (c *Cores) applyFilter(data [][]string) [][]string {
+func (c *CoreView) applyFilter(data [][]string) [][]string {
 	if c.filterQuery == "" {
 		c.filteredIndices = nil
 		return data
@@ -215,7 +215,7 @@ func (c *Cores) applyFilter(data [][]string) [][]string {
 //
 // Returns:
 //   - The selected row data array, or nil if no row is selected
-func (c *Cores) GetSelectedRowData() []string {
+func (c *CoreView) GetSelectedRowData() []string {
 	if c.selectedRow >= 0 && c.selectedRow < len(c.tableData) {
 		return c.tableData[c.selectedRow]
 	}
@@ -226,7 +226,7 @@ func (c *Cores) GetSelectedRowData() []string {
 //
 // Returns:
 //   - Array of header strings
-func (c *Cores) GetTableHeaders() []string {
+func (c *CoreView) GetTableHeaders() []string {
 	return c.tableHeaders
 }
 
@@ -234,7 +234,7 @@ func (c *Cores) GetTableHeaders() []string {
 //
 // Returns:
 //   - 2D array of data strings
-func (c *Cores) GetTableData() [][]string {
+func (c *CoreView) GetTableData() [][]string {
 	return c.tableData
 }
 
@@ -244,8 +244,8 @@ func (c *Cores) GetTableData() [][]string {
 //   - title: The title string to display
 //
 // Returns:
-//   - The Cores instance for method chaining
-func (c *Cores) SetTableTitle(title string) *Cores {
+//   - The CoreView instance for method chaining
+func (c *CoreView) SetTableTitle(title string) *CoreView {
 	c.table.SetTitle(title)
 	return c
 }
@@ -257,8 +257,8 @@ func (c *Cores) SetTableTitle(title string) *Cores {
 //   - columnName: The name of the column to use as selection key
 //
 // Returns:
-//   - The Cores instance for method chaining
-func (c *Cores) SetSelectionKey(columnName string) *Cores {
+//   - The CoreView instance for method chaining
+func (c *CoreView) SetSelectionKey(columnName string) *CoreView {
 	c.selectionKey = columnName
 	return c
 }
@@ -270,7 +270,7 @@ func (c *Cores) SetSelectionKey(columnName string) *Cores {
 // Parameters:
 //   - index: The index of the row to update
 //   - rowData: The new data for the row
-func (c *Cores) UpdateRow(index int, rowData []string) {
+func (c *CoreView) UpdateRow(index int, rowData []string) {
 	// Ensure index is valid
 	if index < 0 || index >= len(c.tableData) {
 		return

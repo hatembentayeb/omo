@@ -14,15 +14,15 @@ type DockerView struct {
 	app             *tview.Application
 	pages           *tview.Pages
 	viewPages       *tview.Pages
-	containersView  *ui.Cores
-	imagesView      *ui.Cores
-	networksView    *ui.Cores
-	volumesView     *ui.Cores
-	statsView       *ui.Cores
-	composeView     *ui.Cores
-	systemView      *ui.Cores
-	logsView        *ui.Cores
-	inspectView     *ui.Cores
+	containersView  *ui.CoreView
+	imagesView      *ui.CoreView
+	networksView    *ui.CoreView
+	volumesView     *ui.CoreView
+	statsView       *ui.CoreView
+	composeView     *ui.CoreView
+	systemView      *ui.CoreView
+	logsView        *ui.CoreView
+	inspectView     *ui.CoreView
 	dockerClient    *DockerClient
 	currentHost     *DockerHost
 	currentViewName string
@@ -58,7 +58,7 @@ func NewDockerView(app *tview.Application, pages *tview.Pages) *DockerView {
 	dv.logsView = dv.newLogsView()
 
 	// Set modal pages for all views
-	views := []*ui.Cores{
+	views := []*ui.CoreView{
 		dv.containersView,
 		dv.imagesView,
 		dv.networksView,
@@ -115,7 +115,7 @@ func (dv *DockerView) Stop() {
 		dv.refreshTimer.Stop()
 	}
 
-	views := []*ui.Cores{
+	views := []*ui.CoreView{
 		dv.containersView,
 		dv.imagesView,
 		dv.networksView,

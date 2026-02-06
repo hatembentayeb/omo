@@ -6,8 +6,8 @@ import (
 	"omo/pkg/ui"
 )
 
-func (dv *DockerView) newStatsView() *ui.Cores {
-	cores := ui.NewCores(dv.app, "Container Stats")
+func (dv *DockerView) newStatsView() *ui.CoreView {
+	cores := ui.NewCoreView(dv.app, "Container Stats")
 	cores.SetTableHeaders([]string{"Container", "CPU %", "Memory", "Mem %", "Net I/O", "Block I/O", "PIDs"})
 	cores.SetRefreshCallback(dv.refreshStatsData)
 	cores.SetSelectionKey("Container")

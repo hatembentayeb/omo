@@ -17,8 +17,8 @@ var (
 	pubsubMutex              sync.Mutex
 )
 
-func (rv *RedisView) newPubSubView() *ui.Cores {
-	cores := ui.NewCores(rv.app, "Redis PubSub")
+func (rv *RedisView) newPubSubView() *ui.CoreView {
+	cores := ui.NewCoreView(rv.app, "Redis PubSub")
 	cores.SetTableHeaders([]string{"Channel", "Subscribers", "Type"})
 	cores.SetRefreshCallback(rv.refreshPubSub)
 	cores.AddKeyBinding("K", "Keys", rv.showKeys)

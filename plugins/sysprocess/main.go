@@ -92,7 +92,7 @@ func safeGo(f func()) {
 type Plugin struct {
 	app         *tview.Application
 	pages       *tview.Pages
-	cores       *ui.Cores
+	cores       *ui.CoreView
 	processes   []*process.Process
 	lastCPU     map[int32]float64
 	selectedPID int32
@@ -144,42 +144,28 @@ func (p *Plugin) Stop() {
 
 // initializeMainView creates the main process list view
 func (p *Plugin) initializeMainView() {
-	// Create pattern for initializing the main view
-	pattern := ui.ViewPattern{
-		App:          p.app,
-		Pages:        p.pages,
-		Title:        "System Process Monitor",
-		HeaderText:   "Monitor and analyze system processes",
-		TableHeaders: []string{"PID", "Name", "CPU%", "Memory%", "Status", "Threads", "Created"},
-		RefreshFunc:  p.fetchProcessData,
-		KeyHandlers: map[string]string{
-			"R":  "Refresh",
-			"K":  "Kill Process",
-			"I":  "Process Info",
-			"S":  "System Info",
-			"D":  "Resource Dashboard",
-			"N":  "Kernel Info",
-			"T":  "Sort by CPU",
-			"M":  "Sort by Memory",
-			"?":  "Help",
-			"^B": "Back",
-		},
-		SelectedFunc: p.onProcessSelected,
-	}
+	p.cores = ui.NewCoreView(p.app, "System Process Monitor")
+	p.cores.SetModalPages(p.pages)
+	p.cores.SetTableHeaders([]string{"PID", "Name", "CPU%", "Memory%", "Status", "Threads", "Created"})
+	p.cores.SetRefreshCallback(p.fetchProcessData)
+	p.cores.SetRowSelectedCallback(p.onProcessSelected)
+	p.cores.SetInfoText("Monitor and analyze system processes")
 
-	// Initialize the UI
-	p.cores = ui.InitializeView(pattern)
+	// Key bindings
+	p.cores.AddKeyBinding("K", "Kill Process", nil)
+	p.cores.AddKeyBinding("I", "Process Info", nil)
+	p.cores.AddKeyBinding("S", "System Info", nil)
+	p.cores.AddKeyBinding("D", "Resource Dashboard", nil)
+	p.cores.AddKeyBinding("N", "Kernel Info", nil)
+	p.cores.AddKeyBinding("T", "Sort by CPU", nil)
+	p.cores.AddKeyBinding("M", "Sort by Memory", nil)
+	p.cores.AddKeyBinding("^B", "Back", nil)
 
-	// Set up action handler
 	p.setupActionHandler()
+	p.cores.RegisterHandlers()
 
-	// Add the core UI to the pages
 	p.pages.AddPage("main", p.cores.GetLayout(), true, true)
-
-	// Push initial view to navigation stack
 	p.cores.PushView("Process List")
-
-	// Log initial state
 	p.cores.Log("Plugin initialized")
 	p.updateSystemInfo()
 }
