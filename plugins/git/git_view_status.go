@@ -7,8 +7,8 @@ import (
 	"omo/pkg/ui"
 )
 
-func (gv *GitView) newStatusView() *ui.Cores {
-	cores := ui.NewCores(gv.app, "Git Status")
+func (gv *GitView) newStatusView() *ui.CoreView {
+	cores := ui.NewCoreView(gv.app, "Git Status")
 	cores.SetTableHeaders([]string{"Status", "File", "Type"})
 	cores.SetRefreshCallback(gv.refreshStatusData)
 	cores.SetSelectionKey("File")

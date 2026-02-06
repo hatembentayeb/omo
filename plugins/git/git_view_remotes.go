@@ -6,8 +6,8 @@ import (
 	"omo/pkg/ui"
 )
 
-func (gv *GitView) newRemotesView() *ui.Cores {
-	cores := ui.NewCores(gv.app, "Git Remotes")
+func (gv *GitView) newRemotesView() *ui.CoreView {
+	cores := ui.NewCoreView(gv.app, "Git Remotes")
 	cores.SetTableHeaders([]string{"Remote", "Fetch URL", "Push URL"})
 	cores.SetRefreshCallback(gv.refreshRemotesData)
 	cores.SetSelectionKey("Remote")

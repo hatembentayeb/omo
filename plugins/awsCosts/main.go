@@ -22,7 +22,7 @@ var OhmyopsPlugin AWSCostsPlugin
 type AWSCostsPlugin struct {
 	app         *tview.Application
 	pages       *tview.Pages
-	cores       *ui.Cores
+	cores       *ui.CoreView
 	currentView string
 	client      *costexplorer.CostExplorer
 	profile     string
@@ -142,43 +142,29 @@ func (p *AWSCostsPlugin) GetMetadata() pluginapi.PluginMetadata {
 
 // initializeMainView creates the main costs list view
 func (p *AWSCostsPlugin) initializeMainView() {
-	// Create pattern for initializing the main view
-	pattern := ui.ViewPattern{
-		App:          p.app,
-		Pages:        p.pages,
-		Title:        "AWS Cost Explorer",
-		HeaderText:   fmt.Sprintf("Monitor AWS costs: Profile: %s | Region: %s", p.profile, p.region),
-		TableHeaders: []string{"Service", "Cost", "Trend", "Chart", "Forecast", "Budget Status"},
-		RefreshFunc:  p.fetchCostData,
-		KeyHandlers: map[string]string{
-			"R":  "Refresh",
-			"D":  "Details",
-			"S":  "Services",
-			"P":  "Time Period",
-			"G":  "Granularity",
-			"B":  "Budget",
-			"T":  "Cost Types",
-			"F":  "Forecast",
-			"^T": "Profile",
-			"?":  "Help",
-			"^B": "Back",
-		},
-		SelectedFunc: p.onServiceSelected,
-	}
+	p.cores = ui.NewCoreView(p.app, "AWS Cost Explorer")
+	p.cores.SetModalPages(p.pages)
+	p.cores.SetTableHeaders([]string{"Service", "Cost", "Trend", "Chart", "Forecast", "Budget Status"})
+	p.cores.SetRefreshCallback(p.fetchCostData)
+	p.cores.SetRowSelectedCallback(p.onServiceSelected)
+	p.cores.SetInfoText(fmt.Sprintf("Monitor AWS costs: Profile: %s | Region: %s", p.profile, p.region))
 
-	// Initialize the UI
-	p.cores = ui.InitializeView(pattern)
+	// Key bindings
+	p.cores.AddKeyBinding("D", "Details", nil)
+	p.cores.AddKeyBinding("S", "Services", nil)
+	p.cores.AddKeyBinding("P", "Time Period", nil)
+	p.cores.AddKeyBinding("G", "Granularity", nil)
+	p.cores.AddKeyBinding("B", "Budget", nil)
+	p.cores.AddKeyBinding("T", "Cost Types", nil)
+	p.cores.AddKeyBinding("F", "Forecast", nil)
+	p.cores.AddKeyBinding("^T", "Profile", nil)
+	p.cores.AddKeyBinding("^B", "Back", nil)
 
-	// Set up action handler
 	p.setupActionHandler()
+	p.cores.RegisterHandlers()
 
-	// Add the core UI to the pages
 	p.pages.AddPage("main", p.cores.GetLayout(), true, true)
-
-	// Push initial view to navigation stack
 	p.cores.PushView("AWS Costs")
-
-	// Log initial state
 	p.cores.Log("Plugin initialized")
 }
 

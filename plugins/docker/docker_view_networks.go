@@ -7,8 +7,8 @@ import (
 	"omo/pkg/ui"
 )
 
-func (dv *DockerView) newNetworksView() *ui.Cores {
-	cores := ui.NewCores(dv.app, "Docker Networks")
+func (dv *DockerView) newNetworksView() *ui.CoreView {
+	cores := ui.NewCoreView(dv.app, "Docker Networks")
 	cores.SetTableHeaders([]string{"ID", "Name", "Driver", "Scope", "Subnet", "Gateway"})
 	cores.SetRefreshCallback(dv.refreshNetworksData)
 	cores.SetSelectionKey("ID")

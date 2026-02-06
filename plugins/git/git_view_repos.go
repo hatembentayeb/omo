@@ -11,8 +11,8 @@ import (
 	"omo/pkg/ui"
 )
 
-func (gv *GitView) newReposView() *ui.Cores {
-	cores := ui.NewCores(gv.app, "Git Repositories")
+func (gv *GitView) newReposView() *ui.CoreView {
+	cores := ui.NewCoreView(gv.app, "Git Repositories")
 	cores.SetTableHeaders([]string{"Repository", "Branch", "Status", "Modified", "Staged", "Untracked", "Last Commit"})
 	cores.SetRefreshCallback(gv.refreshReposData)
 	cores.SetSelectionKey("Repository")

@@ -1,7 +1,7 @@
 package ui
 
 // AddKeyBinding adds a custom key binding with description and handler
-func (c *Cores) AddKeyBinding(key string, description string, handler func()) *Cores {
+func (c *CoreView) AddKeyBinding(key string, description string, handler func()) *CoreView {
 	// Add to the key bindings for help text
 	c.keyBindings[key] = description
 
@@ -17,7 +17,7 @@ func (c *Cores) AddKeyBinding(key string, description string, handler func()) *C
 }
 
 // ClearKeyBindings removes all custom key bindings while preserving standard ones
-func (c *Cores) ClearKeyBindings() *Cores {
+func (c *CoreView) ClearKeyBindings() *CoreView {
 	// Create new maps with just the standard bindings
 	standardBindings := make(map[string]string)
 	standardHandlers := make(map[string]func())
@@ -42,13 +42,13 @@ func (c *Cores) ClearKeyBindings() *Cores {
 }
 
 // SetActionCallback sets a function to be called for various plugin actions
-func (c *Cores) SetActionCallback(callback func(action string, payload map[string]interface{}) error) *Cores {
+func (c *CoreView) SetActionCallback(callback func(action string, payload map[string]interface{}) error) *CoreView {
 	c.onAction = callback
 	return c
 }
 
 // SetRowSelectedCallback sets a function to be called when a row is selected
-func (c *Cores) SetRowSelectedCallback(callback func(row int)) *Cores {
+func (c *CoreView) SetRowSelectedCallback(callback func(row int)) *CoreView {
 	c.onRowSelected = callback
 	return c
 }

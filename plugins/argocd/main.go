@@ -19,7 +19,7 @@ var OhmyopsPlugin ArgocdPlugin
 type ArgocdPlugin struct {
 	app             *tview.Application
 	pages           *tview.Pages
-	cores           *ui.Cores
+	cores           *ui.CoreView
 	currentView     string
 	accountView     *AccountView
 	projectView     *ProjectView
@@ -241,46 +241,30 @@ func (p *ArgocdPlugin) GetMetadata() pluginapi.PluginMetadata {
 
 // initializeMainView creates the main view
 func (p *ArgocdPlugin) initializeMainView() {
-	// Create pattern for initializing the main view
-	pattern := ui.ViewPattern{
-		App:          p.app,
-		Pages:        p.pages,
-		Title:        "ArgoCD Manager",
-		HeaderText:   "Manage your ArgoCD server",
-		TableHeaders: []string{"Name", "Project", "Health", "Sync Status"},
-		RefreshFunc:  p.fetchApplications,
-		KeyHandlers: map[string]string{
-			"R":  "Refresh",
-			"C":  "Create Application",
-			"D":  "Delete Application",
-			"S":  "Sync Application",
-			"V":  "View Details",
-			"F":  "Refresh Status",
-			"A":  "Accounts",
-			"P":  "Projects",
-			"^T": "Select Instance	",
-			"^D": "Debug Logs",
-			"?":  "Help",
-			"^B": "Back",
-		},
-	}
+	p.cores = ui.NewCoreView(p.app, "ArgoCD Manager")
+	p.cores.SetModalPages(p.pages)
+	p.cores.SetTableHeaders([]string{"Name", "Project", "Health", "Sync Status"})
+	p.cores.SetRefreshCallback(p.fetchApplications)
+	p.cores.SetInfoText("Manage your ArgoCD server")
 
-	// Initialize the UI
-	p.cores = ui.InitializeView(pattern)
+	// Key bindings
+	p.cores.AddKeyBinding("C", "Create Application", nil)
+	p.cores.AddKeyBinding("D", "Delete Application", nil)
+	p.cores.AddKeyBinding("S", "Sync Application", nil)
+	p.cores.AddKeyBinding("V", "View Details", nil)
+	p.cores.AddKeyBinding("F", "Refresh Status", nil)
+	p.cores.AddKeyBinding("A", "Accounts", nil)
+	p.cores.AddKeyBinding("P", "Projects", nil)
+	p.cores.AddKeyBinding("^T", "Select Instance", nil)
+	p.cores.AddKeyBinding("^D", "Debug Logs", nil)
+	p.cores.AddKeyBinding("^B", "Back", nil)
 
-	// Set up action handler
 	p.setupActionHandler()
+	p.cores.RegisterHandlers()
 
-	// Add the core UI to the pages
 	p.pages.AddPage("main", p.cores.GetLayout(), true, true)
-
-	// Push initial view to navigation stack
 	p.cores.PushView("Applications")
-
-	// Set the current view to applications
 	p.currentView = "applications"
-
-	// Log initial state
 	p.cores.Log("Plugin initialized")
 }
 
@@ -491,7 +475,7 @@ func (p *ArgocdPlugin) showInstanceSelector() {
 	// Check if we have instances configured
 	if p.config == nil || len(p.config.Instances) == 0 {
 		// No config file or no instances, show error message
-		p.cores.Log("[red]No ArgoCD instances configured. Please add instances to config/argocd.yml")
+		p.cores.Log("[red]No ArgoCD instances configured. Please add instances to ~/.omo/configs/argocd/argocd.yaml")
 		return
 	}
 
@@ -622,7 +606,7 @@ func (p *ArgocdPlugin) showHelpModal() {
   [aqua]P[white] - Switch to projects view
 
 [green]Configuration[white]
-  ArgoCD instances are configured in config/argocd.yml
+  ArgoCD instances are configured in ~/.omo/configs/argocd/argocd.yaml
   To add new instances, edit this file directly
 
 [green]Troubleshooting[white]

@@ -3,7 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
+
+	"omo/pkg/pluginapi"
 
 	"gopkg.in/yaml.v3"
 )
@@ -64,7 +65,7 @@ func DefaultDockerConfig() *DockerConfig {
 func LoadDockerConfig(configPath string) (*DockerConfig, error) {
 	// If no path is specified, use the default config path
 	if configPath == "" {
-		configPath = filepath.Join("config", "docker.yaml")
+		configPath = pluginapi.PluginConfigPath("docker")
 	}
 
 	// Check if the file exists

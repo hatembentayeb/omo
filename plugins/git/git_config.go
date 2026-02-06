@@ -6,14 +6,16 @@ import (
 	"path/filepath"
 	"strings"
 
+	"omo/pkg/pluginapi"
+
 	"gopkg.in/yaml.v3"
 )
 
 // GitConfig represents the configuration for the Git plugin
 type GitConfig struct {
-	SearchPaths []string  `yaml:"search_paths"`
-	UI          UIConfig  `yaml:"ui"`
-	DefaultRepo string    `yaml:"default_repo"`
+	SearchPaths []string `yaml:"search_paths"`
+	UI          UIConfig `yaml:"ui"`
+	DefaultRepo string   `yaml:"default_repo"`
 }
 
 // UIConfig represents UI configuration options
@@ -53,7 +55,7 @@ func DefaultGitConfig() *GitConfig {
 func LoadGitConfig(configPath string) (*GitConfig, error) {
 	// If no path is specified, use the default config path
 	if configPath == "" {
-		configPath = filepath.Join("config", "git.yaml")
+		configPath = pluginapi.PluginConfigPath("git")
 	}
 
 	// Check if the file exists

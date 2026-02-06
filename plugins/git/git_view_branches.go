@@ -6,8 +6,8 @@ import (
 	"omo/pkg/ui"
 )
 
-func (gv *GitView) newBranchesView() *ui.Cores {
-	cores := ui.NewCores(gv.app, "Git Branches")
+func (gv *GitView) newBranchesView() *ui.CoreView {
+	cores := ui.NewCoreView(gv.app, "Git Branches")
 	cores.SetTableHeaders([]string{"Branch", "Current", "Tracking", "Ahead", "Behind"})
 	cores.SetRefreshCallback(gv.refreshBranchesData)
 	cores.SetSelectionKey("Branch")

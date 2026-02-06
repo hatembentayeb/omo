@@ -1,217 +1,375 @@
 package packagemanager
 
 import (
+	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
-	"plugin"
 	"strconv"
 	"time"
 
-	"omo/internal/registry"
 	"omo/pkg/pluginapi"
 	"omo/pkg/ui"
 
 	"github.com/rivo/tview"
 )
 
-// NewPackageManager creates and returns a configured package manager UI component.
-func NewPackageManager(app *tview.Application, pages *tview.Pages, pluginsDir string) *ui.Cores {
-	// Create a new Cores UI component
-	core := ui.NewCores(app, "Package Manager")
+// NewPackageManager creates the package manager UI view.
+func NewPackageManager(app *tview.Application, pages *tview.Pages, pluginsDir string) *ui.CoreView {
+	core := ui.NewCoreView(app, "Package Manager")
 	core.SetModalPages(pages)
 
-	// Set up table headers and data
-	core.SetTableHeaders([]string{"Name", "Version", "Latest", "Status", "Description"})
+	core.SetTableHeaders([]string{"Name", "Installed", "Latest", "Status", "Description"})
 	core.SetSelectionKey("Name")
 
-	// Add key bindings - using uppercase letters and Title case descriptions
 	core.AddKeyBinding("I", "Install", nil)
 	core.AddKeyBinding("U", "Update", nil)
-	core.AddKeyBinding("R", "Remove", nil)
-	core.AddKeyBinding("Z", "Updateall", nil)
+	core.AddKeyBinding("D", "Remove", nil)
+	core.AddKeyBinding("S", "Sync Index", nil)
+	core.AddKeyBinding("Z", "Update All", nil)
 	core.AddKeyBinding("Q", "Back", nil)
-	core.AddKeyBinding("?", "Help", nil)
 
-	// Set refresh callback to load plugin data
+	// Shared state: the index, loaded once and refreshed on Sync.
+	var index *pluginapi.PluginIndex
+
 	core.SetRefreshCallback(func() ([][]string, error) {
-		// First, make sure we load all available plugins from the plugins directory
-		loadAllPluginsMetadata(pluginsDir)
+		// Load cached index if we don't have one yet
+		if index == nil {
+			cached, err := pluginapi.LoadLocalIndex()
+			if err == nil && cached != nil {
+				index = cached
+			}
+		}
 
-		// Get actual plugin metadata from the global registry
-		plugins := registry.GetAllPluginsMetadata()
-		pluginData := make([][]string, 0, len(plugins))
+		// If still no index, show a hint
+		if index == nil || len(index.Plugins) == 0 {
+			core.Log("[yellow]No plugin index loaded. Press S to sync from remote.")
+			return [][]string{}, nil
+		}
 
-		// Add metadata for each plugin
-		for _, metadata := range plugins {
-			// Determine status (installed or not)
-			status := "Not Installed"
-			_, err := os.Stat(filepath.Join(pluginsDir, metadata.Name))
-			if err == nil {
-				status = "Installed"
+		rows := make([][]string, 0, len(index.Plugins))
+		for _, entry := range index.Plugins {
+			installedVer := pluginapi.InstalledVersion(entry.Name)
+			installed := pluginapi.IsInstalled(entry.Name)
+
+			status := "[red]Not Installed"
+			verDisplay := "-"
+			if installed {
+				if installedVer != "" {
+					verDisplay = installedVer
+				} else {
+					verDisplay = "?"
+				}
+				if installedVer == entry.Version {
+					status = "[green]Up to date"
+				} else {
+					status = "[yellow]Update available"
+				}
 			}
 
-			// Add the plugin data
-			pluginData = append(pluginData, []string{
-				metadata.Name,
-				metadata.Version,
-				metadata.Version, // Use same version for "latest" for now
+			rows = append(rows, []string{
+				entry.Name,
+				verDisplay,
+				entry.Version,
 				status,
-				metadata.Description,
+				entry.Description,
 			})
 		}
 
-		// Update info panel with stats
-		updateInfoPanel(core, pluginData)
-
-		return pluginData, nil
+		updateInfoPanel(core, rows)
+		return rows, nil
 	})
 
-	// Set action callback to handle user actions
 	core.SetActionCallback(func(action string, payload map[string]interface{}) error {
-		// Handle different actions
-		switch action {
-		case "rowSelected":
-			// Log which plugin was selected
-			if namedData, ok := payload["namedData"].(map[string]string); ok {
-				pluginName := namedData["Name"]
-				core.Log("Selected plugin: " + pluginName)
-			}
-
-		case "keypress":
-			// Handle specific key presses
-			if key, ok := payload["key"].(string); ok {
-				switch key {
-				case "I":
-					// Install logic
-					if rowData := core.GetSelectedRowData(); rowData != nil {
-						pluginName := rowData[0]
-						status := rowData[3]
-						if status == "Not Installed" {
-							// Simulate installation
-							core.Log("Installing plugin: " + pluginName + "...")
-							time.Sleep(500 * time.Millisecond)
-							core.Log("[green]Plugin installed successfully: " + pluginName)
-							core.RefreshData()
-						} else {
-							core.Log("[yellow]Plugin already installed: " + pluginName)
-						}
-					} else {
-						core.Log("[red]No plugin selected")
-					}
-
-				case "U":
-					// Update logic
-					if rowData := core.GetSelectedRowData(); rowData != nil {
-						pluginName := rowData[0]
-						currentVer := rowData[1]
-						latestVer := rowData[2]
-						status := rowData[3]
-
-						if status == "Installed" && currentVer != latestVer {
-							// Simulate update
-							core.Log("Updating plugin: " + pluginName + " from " + currentVer + " to " + latestVer + "...")
-							time.Sleep(500 * time.Millisecond)
-							core.Log("[green]Plugin updated successfully: " + pluginName)
-							core.RefreshData()
-						} else if status != "Installed" {
-							core.Log("[yellow]Plugin not installed: " + pluginName)
-						} else {
-							core.Log("[yellow]Plugin already up to date: " + pluginName)
-						}
-					} else {
-						core.Log("[red]No plugin selected")
-					}
-
-				case "R":
-					// Remove logic
-					if rowData := core.GetSelectedRowData(); rowData != nil {
-						pluginName := rowData[0]
-						status := rowData[3]
-
-						if status == "Installed" {
-							// Simulate removal
-							core.Log("Removing plugin: " + pluginName + "...")
-							time.Sleep(500 * time.Millisecond)
-							core.Log("[green]Plugin removed successfully: " + pluginName)
-							core.RefreshData()
-						} else {
-							core.Log("[yellow]Plugin not installed: " + pluginName)
-						}
-					} else {
-						core.Log("[red]No plugin selected")
-					}
-
-				case "Z":
-					// Update all plugins
-					core.Log("Updating all plugins...")
-					time.Sleep(1 * time.Second)
-					core.Log("[green]All plugins updated successfully")
-					core.RefreshData()
-
-				case "Q":
-					// Quit/back to main UI
-					core.Log("Exiting package manager...")
-					// Return to the main screen
-					core.UnregisterHandlers() // Remove key handlers
-					core.StopAutoRefresh()    // Stop background refresh
-					pages.SwitchToPage("main")
-				case "?":
-					ui.ShowInfoModal(
-						pages,
-						app,
-						"Package Manager Help",
-						packageManagerHelpText(),
-						func() {
-							app.SetFocus(core.GetTable())
-						},
-					)
-				}
-			}
+		if action != "keypress" {
+			return nil
+		}
+		key, ok := payload["key"].(string)
+		if !ok {
+			return nil
 		}
 
+		switch key {
+		case "S":
+			// Sync index from remote
+			core.Log("[yellow]Syncing plugin index...")
+			go func() {
+				fetched, err := pluginapi.FetchIndex("")
+				app.QueueUpdateDraw(func() {
+					if err != nil {
+						core.Log(fmt.Sprintf("[red]Sync failed: %v", err))
+						// Fall back to loading from the repo's local index.yaml
+						localPath := "index.yaml"
+						data, readErr := os.ReadFile(localPath)
+						if readErr != nil {
+							core.Log("[red]No local index.yaml fallback either")
+							return
+						}
+						parsed, parseErr := pluginapi.ParseIndex(data)
+						if parseErr != nil {
+							core.Log(fmt.Sprintf("[red]Failed to parse local index: %v", parseErr))
+							return
+						}
+						index = parsed
+						pluginapi.SaveLocalIndex(index)
+						core.Log(fmt.Sprintf("[green]Loaded %d plugins from local index", len(index.Plugins)))
+						core.RefreshData()
+						return
+					}
+					index = fetched
+					pluginapi.SaveLocalIndex(index)
+					core.Log(fmt.Sprintf("[green]Index synced: %d plugins available", len(index.Plugins)))
+					core.RefreshData()
+				})
+			}()
+
+		case "I":
+			row := core.GetSelectedRowData()
+			if row == nil {
+				core.Log("[red]No plugin selected")
+				return nil
+			}
+			name := row[0]
+			if pluginapi.IsInstalled(name) {
+				core.Log(fmt.Sprintf("[yellow]%s is already installed", name))
+				return nil
+			}
+			if index == nil {
+				core.Log("[red]No index loaded. Press S to sync first.")
+				return nil
+			}
+			entry := findEntry(index, name)
+			if entry == nil {
+				return nil
+			}
+			core.Log(fmt.Sprintf("[yellow]Installing %s v%s...", name, entry.Version))
+			go func() {
+				err := downloadPlugin(entry, index.DownloadURLTemplate)
+				app.QueueUpdateDraw(func() {
+					if err != nil {
+						core.Log(fmt.Sprintf("[red]Install failed: %v", err))
+						return
+					}
+					pluginapi.RecordInstalledVersion(name, entry.Version)
+					core.Log(fmt.Sprintf("[green]%s v%s installed", name, entry.Version))
+					core.RefreshData()
+				})
+			}()
+
+		case "U":
+			row := core.GetSelectedRowData()
+			if row == nil {
+				core.Log("[red]No plugin selected")
+				return nil
+			}
+			name := row[0]
+			if !pluginapi.IsInstalled(name) {
+				core.Log(fmt.Sprintf("[yellow]%s is not installed", name))
+				return nil
+			}
+			if index == nil {
+				core.Log("[red]No index loaded")
+				return nil
+			}
+			entry := findEntry(index, name)
+			if entry == nil {
+				return nil
+			}
+			current := pluginapi.InstalledVersion(name)
+			if current == entry.Version {
+				core.Log(fmt.Sprintf("[yellow]%s is already at v%s", name, current))
+				return nil
+			}
+			core.Log(fmt.Sprintf("[yellow]Updating %s %s → %s...", name, current, entry.Version))
+			go func() {
+				err := downloadPlugin(entry, index.DownloadURLTemplate)
+				app.QueueUpdateDraw(func() {
+					if err != nil {
+						core.Log(fmt.Sprintf("[red]Update failed: %v", err))
+						return
+					}
+					pluginapi.RecordInstalledVersion(name, entry.Version)
+					core.Log(fmt.Sprintf("[green]%s updated to v%s", name, entry.Version))
+					core.RefreshData()
+				})
+			}()
+
+		case "D":
+			row := core.GetSelectedRowData()
+			if row == nil {
+				core.Log("[red]No plugin selected")
+				return nil
+			}
+			name := row[0]
+			if !pluginapi.IsInstalled(name) {
+				core.Log(fmt.Sprintf("[yellow]%s is not installed", name))
+				return nil
+			}
+
+			ui.ShowStandardConfirmationModal(
+				pages, app,
+				"Remove Plugin",
+				fmt.Sprintf("Remove plugin [red]%s[white]?\nThis will delete the .so file.", name),
+				func(confirmed bool) {
+					if !confirmed {
+						app.SetFocus(core.GetTable())
+						return
+					}
+					pluginDir := filepath.Join(pluginapi.PluginsDir(), name)
+					if err := os.RemoveAll(pluginDir); err != nil {
+						core.Log(fmt.Sprintf("[red]Remove failed: %v", err))
+					} else {
+						pluginapi.RemoveInstalledRecord(name)
+						core.Log(fmt.Sprintf("[green]%s removed", name))
+						core.RefreshData()
+					}
+					app.SetFocus(core.GetTable())
+				},
+			)
+
+		case "Z":
+			if index == nil {
+				core.Log("[red]No index loaded")
+				return nil
+			}
+			core.Log("[yellow]Updating all plugins...")
+			go func() {
+				updated := 0
+				for _, entry := range index.Plugins {
+					if !pluginapi.IsInstalled(entry.Name) {
+						continue
+					}
+					current := pluginapi.InstalledVersion(entry.Name)
+					if current == entry.Version {
+						continue
+					}
+					if err := downloadPlugin(&entry, index.DownloadURLTemplate); err != nil {
+						app.QueueUpdateDraw(func() {
+							core.Log(fmt.Sprintf("[red]Failed to update %s: %v", entry.Name, err))
+						})
+						continue
+					}
+					pluginapi.RecordInstalledVersion(entry.Name, entry.Version)
+					updated++
+				}
+				app.QueueUpdateDraw(func() {
+					if updated == 0 {
+						core.Log("[green]All plugins are up to date")
+					} else {
+						core.Log(fmt.Sprintf("[green]Updated %d plugin(s)", updated))
+					}
+					core.RefreshData()
+				})
+			}()
+
+		case "Q":
+			core.UnregisterHandlers()
+			core.StopAutoRefresh()
+			pages.SwitchToPage("main")
+
+		case "?":
+			ui.ShowInfoModal(pages, app, "Package Manager Help", helpText(), func() {
+				app.SetFocus(core.GetTable())
+			})
+		}
 		return nil
 	})
 
-	// Initialize UI by triggering a refresh
 	core.RefreshData()
-
-	// Register key handlers
 	core.RegisterHandlers()
-
-	// Start auto-refresh
-	core.StartAutoRefresh(30 * time.Second)
+	core.StartAutoRefresh(60 * time.Second)
 
 	return core
 }
 
-func packageManagerHelpText() string {
+// downloadPlugin fetches the .so from the release URL and saves it.
+func downloadPlugin(entry *pluginapi.IndexEntry, urlTemplate string) error {
+	url := entry.DownloadURL(urlTemplate)
+
+	if err := pluginapi.EnsurePluginDirs(entry.Name); err != nil {
+		return fmt.Errorf("create dirs: %w", err)
+	}
+
+	destPath := pluginapi.PluginSOPath(entry.Name)
+	tmpPath := destPath + ".tmp"
+
+	client := &http.Client{Timeout: 120 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return fmt.Errorf("download: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("download returned HTTP %d from %s", resp.StatusCode, url)
+	}
+
+	out, err := os.Create(tmpPath)
+	if err != nil {
+		return fmt.Errorf("create file: %w", err)
+	}
+
+	if _, err := io.Copy(out, resp.Body); err != nil {
+		out.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("write: %w", err)
+	}
+	out.Close()
+
+	// Make executable
+	if err := os.Chmod(tmpPath, 0755); err != nil {
+		os.Remove(tmpPath)
+		return err
+	}
+
+	// Atomic rename
+	return os.Rename(tmpPath, destPath)
+}
+
+func findEntry(index *pluginapi.PluginIndex, name string) *pluginapi.IndexEntry {
+	for i := range index.Plugins {
+		if index.Plugins[i].Name == name {
+			return &index.Plugins[i]
+		}
+	}
+	return nil
+}
+
+func helpText() string {
 	return `[yellow]Package Manager Help[white]
 
-[green]Key Bindings:[white]
+[green]Actions:[white]
+S       - Sync plugin index from remote
 I       - Install selected plugin
 U       - Update selected plugin
-R       - Remove selected plugin
-Z       - Update all plugins
+D       - Remove selected plugin
+Z       - Update all installed plugins
 Q       - Back to main UI
 ?       - Show this help
 
 [green]Navigation:[white]
-Arrow keys - Navigate list
-Enter      - Select plugin
-Esc        - Close modal dialogs`
+↑/↓     - Navigate list
+Enter   - Select plugin
+Esc     - Close modal
+
+[green]How it works:[white]
+  1. Press S to sync the official plugin index
+  2. Browse available plugins in the list
+  3. Press I to install, U to update, D to remove
+  4. Plugins are downloaded to ~/.omo/plugins/<name>/
+  5. Configs live at ~/.omo/configs/<name>/`
 }
 
-// updateInfoPanel updates the info panel with current stats.
-func updateInfoPanel(core *ui.Cores, data [][]string) {
-	// Count stats
+func updateInfoPanel(core *ui.CoreView, data [][]string) {
 	total := len(data)
 	installed := 0
 	updates := 0
 
-	for _, plugin := range data {
-		if plugin[3] == "Installed" {
+	for _, row := range data {
+		if row[1] != "-" { // has an installed version
 			installed++
-			if plugin[1] != plugin[2] {
+			if row[1] != row[2] {
 				updates++
 			}
 		}
@@ -219,121 +377,10 @@ func updateInfoPanel(core *ui.Cores, data [][]string) {
 
 	available := total - installed
 
-	// Format the info panel text
-	infoText :=
-		"[aqua::b]Total Plugins:[white::b] " +
-			strconv.Itoa(total) + "\n" +
-			"[aqua::b]Installed:[white::b] " +
-			strconv.Itoa(installed) + "\n" +
-			"[aqua::b]Available:[white::b] " +
-			strconv.Itoa(available) + "\n" +
-			"[aqua::b]Updates:[yellow::b] " +
-			strconv.Itoa(updates) + "\n" +
-			"[aqua::b]Last Check:[white::b] " +
-			time.Now().Format("15:04:05")
-
-	core.SetInfoText(infoText)
-}
-
-// loadAllPluginsMetadata scans the plugins directory and loads metadata from all plugin files.
-// This function:
-// 1. Reads all files in the plugins directory
-// 2. Attempts to load each file as a Go plugin
-// 3. Extracts metadata from plugins using either the OhmyopsPlugin interface or GetMetadata function
-// 4. Registers valid plugins in the GlobalPluginRegistry
-func loadAllPluginsMetadata(pluginsDir string) {
-	files, err := os.ReadDir(pluginsDir)
-	if err != nil {
-		return
-	}
-
-	for _, file := range files {
-		if file.IsDir() {
-			continue
-		}
-
-		pluginName := file.Name()
-		pluginPath := filepath.Join(pluginsDir, pluginName)
-
-		// Skip if already loaded
-		if _, exists := registry.GetPluginMetadata(pluginName); exists {
-			continue
-		}
-
-		// Try to load the plugin
-		p, err := plugin.Open(pluginPath)
-		if err != nil {
-			continue
-		}
-
-		// Try to get metadata via the OhmyopsPlugin interface
-		if pluginSymbol, err := p.Lookup("OhmyopsPlugin"); err == nil {
-			if ohmyopsPlugin, ok := pluginSymbol.(pluginapi.Plugin); ok {
-				metadata := ohmyopsPlugin.GetMetadata()
-				registry.RegisterPlugin(pluginName, metadata)
-				continue
-			}
-		}
-
-		// Try to get metadata directly via GetMetadata function (legacy support)
-		if metadataFunc, err := p.Lookup("GetMetadata"); err == nil {
-			if getter, ok := metadataFunc.(func() pluginapi.PluginMetadata); ok {
-				metadata := getter()
-				if metadata.Name == "" {
-					metadata.Name = pluginName
-				}
-				registry.RegisterPlugin(pluginName, metadata)
-				continue
-			}
-
-			if getter, ok := metadataFunc.(func() interface{}); ok {
-				if rawMetadata := getter(); rawMetadata != nil {
-					if m, ok := rawMetadata.(map[string]interface{}); ok {
-						metadata := pluginapi.PluginMetadata{
-							Name: pluginName,
-						}
-
-						if name, ok := m["Name"].(string); ok {
-							metadata.Name = name
-						}
-						if version, ok := m["Version"].(string); ok {
-							metadata.Version = version
-						}
-						if description, ok := m["Description"].(string); ok {
-							metadata.Description = description
-						}
-						if author, ok := m["Author"].(string); ok {
-							metadata.Author = author
-						}
-						if license, ok := m["License"].(string); ok {
-							metadata.License = license
-						}
-						if tags, ok := m["Tags"].([]string); ok {
-							metadata.Tags = tags
-						}
-						if arch, ok := m["Arch"].([]string); ok {
-							metadata.Arch = arch
-						}
-						if url, ok := m["URL"].(string); ok {
-							metadata.URL = url
-						}
-						switch value := m["LastUpdated"].(type) {
-						case time.Time:
-							metadata.LastUpdated = value
-						case string:
-							if parsed, parseErr := time.Parse(time.RFC3339, value); parseErr == nil {
-								metadata.LastUpdated = parsed
-							} else {
-								metadata.LastUpdated = time.Now()
-							}
-						default:
-							metadata.LastUpdated = time.Now()
-						}
-
-						registry.RegisterPlugin(pluginName, metadata)
-					}
-				}
-			}
-		}
-	}
+	core.SetInfoText(
+		"[aqua::b]Total:[white::b] " + strconv.Itoa(total) + "\n" +
+			"[aqua::b]Installed:[white::b] " + strconv.Itoa(installed) + "\n" +
+			"[aqua::b]Available:[white::b] " + strconv.Itoa(available) + "\n" +
+			"[aqua::b]Updates:[yellow::b] " + strconv.Itoa(updates) + "\n" +
+			"[aqua::b]Last Check:[white::b] " + time.Now().Format("15:04:05"))
 }

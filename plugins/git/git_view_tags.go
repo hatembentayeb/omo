@@ -6,8 +6,8 @@ import (
 	"omo/pkg/ui"
 )
 
-func (gv *GitView) newTagsView() *ui.Cores {
-	cores := ui.NewCores(gv.app, "Git Tags")
+func (gv *GitView) newTagsView() *ui.CoreView {
+	cores := ui.NewCoreView(gv.app, "Git Tags")
 	cores.SetTableHeaders([]string{"Tag", "Type", "Date", "Message"})
 	cores.SetRefreshCallback(gv.refreshTagsData)
 	cores.SetSelectionKey("Tag")

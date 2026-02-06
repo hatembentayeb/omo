@@ -14,7 +14,7 @@ import (
 type BrokerView struct {
 	app            *tview.Application
 	pages          *tview.Pages
-	cores          *ui.Cores
+	cores          *ui.CoreView
 	kafkaClient    *KafkaClient
 	currentCluster string
 	brokers        []BrokerInfo
@@ -44,7 +44,7 @@ func NewBrokerView(app *tview.Application, pages *tview.Pages) *BrokerView {
 	}
 
 	// Create Cores UI component
-	bv.cores = ui.NewCores(app, "")
+	bv.cores = ui.NewCoreView(app, "")
 	bv.cores.SetModalPages(pages)
 
 	// Initialize with root view

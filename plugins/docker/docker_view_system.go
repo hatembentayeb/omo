@@ -7,8 +7,8 @@ import (
 	"omo/pkg/ui"
 )
 
-func (dv *DockerView) newSystemView() *ui.Cores {
-	cores := ui.NewCores(dv.app, "Docker System")
+func (dv *DockerView) newSystemView() *ui.CoreView {
+	cores := ui.NewCoreView(dv.app, "Docker System")
 	cores.SetTableHeaders([]string{"Property", "Value"})
 	cores.SetRefreshCallback(dv.refreshSystemData)
 	cores.SetSelectionKey("Property")

@@ -17,11 +17,6 @@ import (
 	"github.com/rivo/tview"
 )
 
-const (
-	DefaultPluginsDir = "./compiled_plugins"
-	DefaultConfigDir  = "./config"
-)
-
 type Host struct {
 	App          *tview.Application
 	Pages        *tview.Pages
@@ -31,10 +26,10 @@ type Host struct {
 	PluginsList  *tview.List
 	ActivePlugin pluginapi.Plugin
 	PluginsDir   string
-	ConfigDir    string
+	ConfigsDir   string
 }
 
-func New(app *tview.Application, pages *tview.Pages, pluginsDir, configDir string) *Host {
+func New(app *tview.Application, pages *tview.Pages) *Host {
 	mainFrame := tview.NewFrame(nil)
 	mainFrame.SetBackgroundColor(tcell.ColorDefault)
 
@@ -45,25 +40,24 @@ func New(app *tview.Application, pages *tview.Pages, pluginsDir, configDir strin
 	headerView.SetBackgroundColor(tcell.ColorDefault)
 
 	return &Host{
-		App:         app,
-		Pages:       pages,
-		MainFrame:   mainFrame,
-		MainUI:      mainUI,
-		HeaderView:  headerView,
+		App:        app,
+		Pages:      pages,
+		MainFrame:  mainFrame,
+		MainUI:     mainUI,
+		HeaderView: headerView,
 		PluginsList: tview.NewList(),
-		PluginsDir:  pluginsDir,
-		ConfigDir:   configDir,
+		PluginsDir:  pluginapi.PluginsDir(),
+		ConfigsDir:  pluginapi.ConfigsDir(),
 	}
 }
 
 func (h *Host) LoadPlugins() *tview.List {
-	list, err := getPluginsNames(h.PluginsDir)
+	list, err := discoverPlugins(h.PluginsDir)
 	if err != nil || list == nil {
-		// Return empty list instead of nil to prevent crash
 		list = tview.NewList().ShowSecondaryText(false)
 		list.SetMainTextColor(tcell.ColorPurple)
 		list.SetBackgroundColor(tcell.ColorDefault)
-		list.AddItem("No plugins found", "Run 'make all' to build plugins", '0', nil)
+		list.AddItem("No plugins found", "", '0', nil)
 	}
 
 	list.SetSelectedFunc(func(i int, s1, s2 string, r rune) {
@@ -97,11 +91,9 @@ func (h *Host) LoadPlugins() *tview.List {
 		component := ohmyopsPlugin.Start(h.App)
 		h.MainFrame.SetPrimitive(component)
 
-		// Update the header with the selected plugin and its metadata
 		h.UpdateHeader(s1)
 	})
 
-	// Also set the changed function to update the header when selection changes
 	list.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
 		h.UpdateHeader(mainText)
 	})
@@ -132,12 +124,11 @@ func (h *Host) HelpList() *tview.List {
 			settingsGrid.SetBorders(true).SetBordersColor(tcell.ColorGray)
 			settingsGrid.SetBackgroundColor(tcell.ColorDefault)
 
-			configList, err := getPluginsNames(h.ConfigDir)
+			configList, err := discoverConfigs(h.ConfigsDir)
 			if err != nil || configList.GetItemCount() == 0 {
-				// Handle case where no config files are found
 				infoText := tview.NewTextView().
 					SetTextAlign(tview.AlignCenter).
-					SetText("No configuration files found in ./config directory.\n\nCreate at least one .yaml file in the config directory.").
+					SetText(fmt.Sprintf("No configuration files found.\n\nExpected location: %s/<plugin>/<plugin>.yaml", h.ConfigsDir)).
 					SetTextColor(tcell.ColorYellow).
 					SetBackgroundColor(tcell.ColorDefault).
 					SetBorder(true)
@@ -145,16 +136,12 @@ func (h *Host) HelpList() *tview.List {
 				return
 			}
 
-			// Default to first item in the list
 			configList.SetCurrentItem(0)
 
-			// Create editor for the selected config file
 			_, initialConfigPath := configList.GetItemText(0)
 			editor = newEditor(h.App, h.Pages, initialConfigPath)
 
-			// Handle selection of config files
 			configList.SetSelectedFunc(func(i int, s1, s2 string, r rune) {
-				// s2 contains the full path to the config file
 				if s2 != "" {
 					settingsGrid.RemoveItem(editor)
 					editor = newEditor(h.App, h.Pages, s2)
@@ -166,13 +153,8 @@ func (h *Host) HelpList() *tview.List {
 			settingsGrid.AddItem(editor, 0, 1, 3, 2, 0, 100, true)
 			h.MainFrame.SetPrimitive(settingsGrid)
 		case 2:
-			// Create and show the package manager
 			packageManager := packagemanager.NewPackageManager(h.App, h.Pages, h.PluginsDir)
-
-			// Set up the package manager page
 			h.Pages.AddPage("packageManager", packageManager.GetLayout(), true, false)
-
-			// Show the package manager in the main frame
 			h.MainFrame.SetPrimitive(packageManager.GetLayout())
 			h.UpdateHeader("Package Manager")
 		}
@@ -181,8 +163,10 @@ func (h *Host) HelpList() *tview.List {
 	return list
 }
 
-func getPluginsNames(dir string) (*tview.List, error) {
-	files, err := os.ReadDir(dir)
+// discoverPlugins scans ~/.omo/plugins/ for subdirectories containing .so files.
+// Expected layout: ~/.omo/plugins/<name>/<name>.so
+func discoverPlugins(pluginsDir string) (*tview.List, error) {
+	entries, err := os.ReadDir(pluginsDir)
 	if err != nil {
 		return nil, err
 	}
@@ -190,17 +174,74 @@ func getPluginsNames(dir string) (*tview.List, error) {
 	list := tview.NewList().ShowSecondaryText(false)
 	list.SetMainTextColor(tcell.ColorPurple)
 	list.SetBackgroundColor(tcell.ColorDefault)
-	for i, file := range files {
-		if !file.IsDir() {
-			fileName := file.Name()
-			ext := filepath.Ext(fileName)
-			fileNameWithoutExt := strings.TrimSuffix(fileName, ext)
-			fullPath := filepath.Join(dir, fileName)
-			shortcut := rune(0)
-			if i < 9 {
-				shortcut = rune('1' + i)
+
+	shortcutIdx := 0
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		soPath := filepath.Join(pluginsDir, name, name+".so")
+
+		if _, err := os.Stat(soPath); err != nil {
+			continue // no .so in this subdirectory
+		}
+
+		shortcut := rune(0)
+		if shortcutIdx < 9 {
+			shortcut = rune('1' + shortcutIdx)
+		}
+		shortcutIdx++
+
+		list.AddItem(name, soPath, shortcut, nil)
+	}
+
+	return list, nil
+}
+
+// discoverConfigs scans ~/.omo/configs/ for yaml files in plugin subdirectories.
+// Expected layout: ~/.omo/configs/<name>/<name>.yaml
+func discoverConfigs(configsDir string) (*tview.List, error) {
+	entries, err := os.ReadDir(configsDir)
+	if err != nil {
+		return nil, err
+	}
+
+	list := tview.NewList().ShowSecondaryText(false)
+	list.SetMainTextColor(tcell.ColorPurple)
+	list.SetBackgroundColor(tcell.ColorDefault)
+
+	shortcutIdx := 0
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		pluginName := entry.Name()
+		pluginConfigDir := filepath.Join(configsDir, pluginName)
+
+		// Find all yaml files in this plugin's config dir
+		yamlFiles, err := os.ReadDir(pluginConfigDir)
+		if err != nil {
+			continue
+		}
+		for _, yf := range yamlFiles {
+			if yf.IsDir() {
+				continue
 			}
-			list.AddItem(fileNameWithoutExt, fullPath, shortcut, nil)
+			fname := yf.Name()
+			if strings.HasSuffix(fname, ".yaml") || strings.HasSuffix(fname, ".yml") {
+				fullPath := filepath.Join(pluginConfigDir, fname)
+				displayName := pluginName + "/" + fname
+
+				shortcut := rune(0)
+				if shortcutIdx < 9 {
+					shortcut = rune('1' + shortcutIdx)
+				}
+				shortcutIdx++
+
+				list.AddItem(displayName, fullPath, shortcut, nil)
+			}
 		}
 	}
 
@@ -208,17 +249,13 @@ func getPluginsNames(dir string) (*tview.List, error) {
 }
 
 func (h *Host) UpdateHeader(pluginName string) {
-	// Clear the grid
 	h.HeaderView.Clear()
 
-	// Create a plugin header view with metadata provider function
 	pluginHeader := ui.NewPluginHeaderView(func(name string) (interface{}, bool) {
-		// Get metadata directly from registry
 		metadata, exists := registry.GetPluginMetadata(name)
 		return metadata, exists
 	}).SetPluginInfo(pluginName)
 
-	// Add the custom component to the grid
 	h.HeaderView.SetRows(0).SetColumns(0)
 	h.HeaderView.AddItem(pluginHeader, 0, 0, 1, 1, 0, 0, false)
 }

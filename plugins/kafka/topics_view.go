@@ -25,7 +25,7 @@ type TopicInfo struct {
 type TopicsView struct {
 	app            *tview.Application
 	pages          *tview.Pages
-	cores          *ui.Cores
+	cores          *ui.CoreView
 	kafkaClient    *KafkaClient
 	currentCluster string
 	currentBroker  int // -1 means all brokers
@@ -44,7 +44,7 @@ func NewTopicsView(app *tview.Application, pages *tview.Pages, kafkaClient *Kafk
 	}
 
 	// Create Cores UI component
-	tv.cores = ui.NewCores(app, "")
+	tv.cores = ui.NewCoreView(app, "")
 	tv.cores.SetModalPages(pages)
 
 	// Set table headers

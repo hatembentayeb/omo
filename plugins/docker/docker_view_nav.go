@@ -17,7 +17,7 @@ const (
 	viewSystem     = "system"
 )
 
-func (dv *DockerView) currentCores() *ui.Cores {
+func (dv *DockerView) currentCores() *ui.CoreView {
 	switch dv.currentViewName {
 	case viewImages:
 		return dv.imagesView
@@ -40,7 +40,7 @@ func (dv *DockerView) currentCores() *ui.Cores {
 	}
 }
 
-func (dv *DockerView) setViewStack(cores *ui.Cores, viewName string) {
+func (dv *DockerView) setViewStack(cores *ui.CoreView, viewName string) {
 	if cores == nil {
 		return
 	}

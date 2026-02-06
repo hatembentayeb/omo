@@ -33,7 +33,7 @@ redis_cmd SET metrics:requests 1200
 redis_cmd INCRBY metrics:requests 350
 redis_cmd SET cache:hit_rate "0.92"
 
-SEED_KEYS="${SEED_KEYS:-10000}"
+SEED_KEYS="${SEED_KEYS:-1000}"
 echo "Seeding ${SEED_KEYS} keys per type..."
 
 for i in $(seq 1 "${SEED_KEYS}"); do
