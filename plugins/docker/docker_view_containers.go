@@ -7,8 +7,8 @@ import (
 	"omo/pkg/ui"
 )
 
-func (dv *DockerView) newContainersView() *ui.Cores {
-	cores := ui.NewCores(dv.app, "Docker Containers")
+func (dv *DockerView) newContainersView() *ui.CoreView {
+	cores := ui.NewCoreView(dv.app, "Docker Containers")
 	cores.SetTableHeaders([]string{"ID", "Name", "Image", "State", "Status", "Ports"})
 	cores.SetRefreshCallback(dv.refreshContainersData)
 	cores.SetSelectionKey("ID")

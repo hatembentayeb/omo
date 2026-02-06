@@ -11,7 +11,7 @@ import (
 // This function formats and renders the breadcrumb trail that shows the user's
 // current position in the navigation hierarchy. It visually distinguishes
 // the current view from previous views using different colors.
-func (c *Cores) updateBreadcrumbs() {
+func (c *CoreView) updateBreadcrumbs() {
 	if len(c.navStack) == 0 {
 		c.breadcrumbs.SetText("")
 		return
@@ -39,7 +39,7 @@ func (c *Cores) updateBreadcrumbs() {
 //
 // Parameters:
 //   - view: The name of the view to add to the navigation stack
-func (c *Cores) PushView(view string) {
+func (c *CoreView) PushView(view string) {
 	c.navStack = append(c.navStack, view)
 	c.updateBreadcrumbs()
 }
@@ -51,7 +51,7 @@ func (c *Cores) PushView(view string) {
 //
 // Returns:
 //   - The name of the view that was removed, or empty string if no view was removed
-func (c *Cores) PopView() string {
+func (c *CoreView) PopView() string {
 	if len(c.navStack) <= 1 {
 		// Don't pop if we're at root view or have no views
 		return ""
@@ -65,7 +65,7 @@ func (c *Cores) PopView() string {
 // ClearViews removes all views from the navigation stack except the root view.
 // This function resets the navigation history while preserving the root view,
 // effectively returning to the starting point of the navigation.
-func (c *Cores) ClearViews() {
+func (c *CoreView) ClearViews() {
 	if len(c.navStack) > 0 {
 		// Keep only the root view if it exists
 		c.navStack = c.navStack[:1]
@@ -81,7 +81,7 @@ func (c *Cores) ClearViews() {
 //
 // Returns:
 //   - The name of the current view, or empty string if the stack is empty
-func (c *Cores) GetCurrentView() string {
+func (c *CoreView) GetCurrentView() string {
 	if len(c.navStack) == 0 {
 		return ""
 	}
@@ -94,7 +94,7 @@ func (c *Cores) GetCurrentView() string {
 //
 // Parameters:
 //   - stack: The new navigation stack to use
-func (c *Cores) SetViewStack(stack []string) {
+func (c *CoreView) SetViewStack(stack []string) {
 	if len(stack) > 0 {
 		c.navStack = append([]string{}, stack...)
 	} else {
@@ -103,13 +103,13 @@ func (c *Cores) SetViewStack(stack []string) {
 	c.updateBreadcrumbs()
 }
 
-// CopyNavigationStackFrom copies the navigation stack from another Cores instance.
+// CopyNavigationStackFrom copies the navigation stack from another CoreView instance.
 // This function is useful when transitioning between related views or when
 // creating a new view that should inherit the navigation context of another view.
 //
 // Parameters:
-//   - other: The Cores instance to copy the navigation stack from
-func (c *Cores) CopyNavigationStackFrom(other *Cores) {
+//   - other: The CoreView instance to copy the navigation stack from
+func (c *CoreView) CopyNavigationStackFrom(other *CoreView) {
 	if len(other.navStack) > 0 {
 		c.navStack = append([]string{}, other.navStack...)
 	} else {

@@ -6,8 +6,8 @@ import (
 	"omo/pkg/ui"
 )
 
-func (rv *RedisView) newMemoryView() *ui.Cores {
-	cores := ui.NewCores(rv.app, "Redis Memory")
+func (rv *RedisView) newMemoryView() *ui.CoreView {
+	cores := ui.NewCoreView(rv.app, "Redis Memory")
 	cores.SetTableHeaders([]string{"Metric", "Value"})
 	cores.SetRefreshCallback(rv.refreshMemory)
 	cores.AddKeyBinding("D", "Memory Doctor", rv.showMemoryDoctor)

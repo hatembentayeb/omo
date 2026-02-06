@@ -8,19 +8,19 @@ import (
 )
 
 // SetInfoText updates the content of the info panel
-func (c *Cores) SetInfoText(text string) *Cores {
+func (c *CoreView) SetInfoText(text string) *CoreView {
 	c.infoPanel.SetText(text)
 	return c
 }
 
 // SetInfoTitle updates the title of the info panel
-func (c *Cores) SetInfoTitle(title string) *Cores {
+func (c *CoreView) SetInfoTitle(title string) *CoreView {
 	c.infoPanel.SetTitle(title)
 	return c
 }
 
 // Log adds a new message to the log panel
-func (c *Cores) Log(message string) *Cores {
+func (c *CoreView) Log(message string) *CoreView {
 	timestamp := time.Now().Format("15:04:05")
 	content := c.logPanel.GetText(false)
 	if content != "" {
@@ -36,14 +36,14 @@ func (c *Cores) Log(message string) *Cores {
 }
 
 // ClearLogs clears all log messages
-func (c *Cores) ClearLogs() *Cores {
+func (c *CoreView) ClearLogs() *CoreView {
 	c.logPanel.SetText("")
 	return c
 }
 
 // SetInfoMap updates the info panel with a map of key-value pairs
 // Keys will be shown in aqua color, values in white, both in bold
-func (c *Cores) SetInfoMap(infoMap map[string]string) *Cores {
+func (c *CoreView) SetInfoMap(infoMap map[string]string) *CoreView {
 	// Build a stylized string from the map
 	var sb strings.Builder
 

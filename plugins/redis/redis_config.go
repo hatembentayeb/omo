@@ -3,7 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
+
+	"omo/pkg/pluginapi"
 
 	"gopkg.in/yaml.v3"
 )
@@ -45,11 +46,11 @@ func DefaultConfig() *RedisConfig {
 	}
 }
 
-// LoadConfig loads the Redis configuration from the specified file
+// LoadConfig loads the Redis configuration from the specified file.
+// Default path: ~/.omo/configs/redis/redis.yaml
 func LoadConfig(configPath string) (*RedisConfig, error) {
-	// If no path is specified, use the default config path
 	if configPath == "" {
-		configPath = filepath.Join("config", "redis.yaml")
+		configPath = pluginapi.PluginConfigPath("redis")
 	}
 
 	// Check if the file exists

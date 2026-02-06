@@ -6,8 +6,8 @@ import (
 	"omo/pkg/ui"
 )
 
-func (gv *GitView) newStashView() *ui.Cores {
-	cores := ui.NewCores(gv.app, "Git Stash")
+func (gv *GitView) newStashView() *ui.CoreView {
+	cores := ui.NewCoreView(gv.app, "Git Stash")
 	cores.SetTableHeaders([]string{"Index", "Branch", "Message"})
 	cores.SetRefreshCallback(gv.refreshStashData)
 	cores.SetSelectionKey("Index")

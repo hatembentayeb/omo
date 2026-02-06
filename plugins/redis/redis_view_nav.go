@@ -22,7 +22,7 @@ const (
 	viewLatency    = "latency"
 )
 
-func (rv *RedisView) currentCores() *ui.Cores {
+func (rv *RedisView) currentCores() *ui.CoreView {
 	switch rv.currentView {
 	case viewInfo:
 		return rv.infoView
@@ -55,7 +55,7 @@ func (rv *RedisView) currentCores() *ui.Cores {
 	}
 }
 
-func (rv *RedisView) setViewStack(cores *ui.Cores, viewName string) {
+func (rv *RedisView) setViewStack(cores *ui.CoreView, viewName string) {
 	if cores == nil {
 		return
 	}

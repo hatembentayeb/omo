@@ -6,8 +6,8 @@ import (
 	"omo/pkg/ui"
 )
 
-func (gv *GitView) newCommitsView() *ui.Cores {
-	cores := ui.NewCores(gv.app, "Git Commits")
+func (gv *GitView) newCommitsView() *ui.CoreView {
+	cores := ui.NewCoreView(gv.app, "Git Commits")
 	cores.SetTableHeaders([]string{"Hash", "Author", "Date", "Message"})
 	cores.SetRefreshCallback(gv.refreshCommitsData)
 	cores.SetSelectionKey("Hash")

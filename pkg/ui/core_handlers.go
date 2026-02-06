@@ -8,7 +8,7 @@ import (
 )
 
 // RegisterHandlers registers keyboard input handlers.
-// This method sets up input capture for the Cores instance, establishing
+// This method sets up input capture for the CoreView instance, establishing
 // the standard key handlers while preserving any existing input handlers.
 // It implements a chain-of-responsibility pattern where this handler
 // processes relevant keys and passes others to the previous handler.
@@ -18,7 +18,7 @@ import (
 // - ? for help
 // - ESC for navigation back
 // - Any custom key bindings defined for the instance
-func (c *Cores) RegisterHandlers() {
+func (c *CoreView) RegisterHandlers() {
 	// Set input capture directly on the table - this is more reliable
 	// than app-level capture which can get overwritten
 	c.table.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -31,7 +31,7 @@ func (c *Cores) RegisterHandlers() {
 // to prevent interference with other components' keyboard handling.
 // In a complete implementation, this would restore the previous
 // input capture that was saved during registration.
-func (c *Cores) UnregisterHandlers() {
+func (c *CoreView) UnregisterHandlers() {
 	// This would need to be integrated with your main app's focus management
 	// Typically restores the previous input capture
 }

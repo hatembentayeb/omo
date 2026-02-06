@@ -11,11 +11,11 @@ import (
 	"github.com/rivo/tview"
 )
 
-// Cores provides a standardized UI component that can be embedded in plugins
-// with consistent layout and behavior. Cores is the central UI component that
+// CoreView provides a standardized UI component that can be embedded in plugins
+// with consistent layout and behavior. CoreView is the central UI component that
 // handles common UI patterns, user input, data display, and plugin interactions.
 // It manages components like tables, logs, help text, and navigation breadcrumbs.
-type Cores struct {
+type CoreView struct {
 	// Core components
 	app        *tview.Application // Reference to the main application
 	pages      *tview.Pages       // Modal container (optional)
@@ -69,7 +69,7 @@ type Cores struct {
 	lazyHasMore  bool
 }
 
-// NewCores creates a new Cores UI component with the specified plugin title
+// NewCoreView creates a new CoreView UI component with the specified plugin title
 // that can be embedded in the main application. It initializes the UI components
 // and sets up default key bindings.
 //
@@ -78,28 +78,22 @@ type Cores struct {
 //   - title: The title of the plugin to display in the UI
 //
 // Returns:
-//   - A fully initialized Cores instance ready to be used
-func NewCores(app *tview.Application, title string) *Cores {
-	c := &Cores{
-		app:          app,
-		title:        title,
-		selectedRow:  -1,
-		tableHeaders: []string{},
-		tableData:    [][]string{},
-		stopRefresh:  make(chan struct{}),
-		keyBindings:  make(map[string]string),
-		keyHandlers:  make(map[string]func()),
+//   - A fully initialized CoreView instance ready to be used
+func NewCoreView(app *tview.Application, title string) *CoreView {
+	c := &CoreView{
+		app:         app,
+		title:       title,
+		selectedRow: -1,
+		stopRefresh: make(chan struct{}),
+		keyBindings: map[string]string{
+			"R":   "Refresh",
+			"ESC": "Back",
+			"?":   "Help",
+			"/":   "Filter",
+		},
+		keyHandlers: make(map[string]func()),
 	}
 
-	// Set default key bindings
-	c.keyBindings = map[string]string{
-		"R":   "Refresh",
-		"ESC": "Back",
-		"?":   "Help",
-		"/":   "Filter",
-	}
-
-	// Initialize UI components
 	c.initUI()
 
 	return c
@@ -110,14 +104,14 @@ func NewCores(app *tview.Application, title string) *Cores {
 //
 // Returns:
 //   - The main tview.Primitive component that can be added to the application
-func (c *Cores) GetLayout() tview.Primitive {
+func (c *CoreView) GetLayout() tview.Primitive {
 	return c.mainLayout
 }
 
 // Destroy cleans up resources used by this component.
 // This method should be called when the plugin is unloaded to prevent resource leaks
 // by stopping background processes and unregistering handlers.
-func (c *Cores) Destroy() {
+func (c *CoreView) Destroy() {
 	// Stop any background refresh
 	if c.refreshTicker != nil {
 		c.StopAutoRefresh()
@@ -127,27 +121,12 @@ func (c *Cores) Destroy() {
 	c.UnregisterHandlers()
 }
 
-// min is a helper function that returns the smaller of two integers.
-//
-// Parameters:
-//   - a: First integer to compare
-//   - b: Second integer to compare
-//
-// Returns:
-//   - The smaller of the two integers
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 // GetTable returns the underlying table primitive for focus management.
 // This allows direct access to the table for advanced operations.
 //
 // Returns:
 //   - The Table component instance
-func (c *Cores) GetTable() *Table {
+func (c *CoreView) GetTable() *Table {
 	return c.table
 }
 
@@ -157,7 +136,7 @@ func (c *Cores) GetTable() *Table {
 //
 // Returns:
 //   - The raw data index of the selected row, or -1 if none selected
-func (c *Cores) GetSelectedRow() int {
+func (c *CoreView) GetSelectedRow() int {
 	if c.selectedRow < 0 {
 		return -1
 	}

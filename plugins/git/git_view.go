@@ -27,13 +27,13 @@ type GitView struct {
 	app             *tview.Application
 	pages           *tview.Pages
 	viewPages       *tview.Pages
-	reposView       *ui.Cores
-	statusView      *ui.Cores
-	commitsView     *ui.Cores
-	branchesView    *ui.Cores
-	remotesView     *ui.Cores
-	stashView       *ui.Cores
-	tagsView        *ui.Cores
+	reposView       *ui.CoreView
+	statusView      *ui.CoreView
+	commitsView     *ui.CoreView
+	branchesView    *ui.CoreView
+	remotesView     *ui.CoreView
+	stashView       *ui.CoreView
+	tagsView        *ui.CoreView
 	gitClient       *GitClient
 	repositories    []GitRepository
 	currentRepoPath string
@@ -65,7 +65,7 @@ func NewGitView(app *tview.Application, pages *tview.Pages) *GitView {
 	gv.tagsView = gv.newTagsView()
 
 	// Set modal pages for all views
-	views := []*ui.Cores{
+	views := []*ui.CoreView{
 		gv.reposView,
 		gv.statusView,
 		gv.commitsView,
@@ -119,7 +119,7 @@ func (gv *GitView) Stop() {
 		gv.refreshTimer.Stop()
 	}
 
-	views := []*ui.Cores{
+	views := []*ui.CoreView{
 		gv.reposView,
 		gv.statusView,
 		gv.commitsView,

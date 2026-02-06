@@ -7,8 +7,8 @@ import (
 	"omo/pkg/ui"
 )
 
-func (rv *RedisView) newCommandStatsView() *ui.Cores {
-	cores := ui.NewCores(rv.app, "Redis Command Stats")
+func (rv *RedisView) newCommandStatsView() *ui.CoreView {
+	cores := ui.NewCoreView(rv.app, "Redis Command Stats")
 	cores.SetTableHeaders([]string{"Command", "Calls", "Total Time (μs)", "Avg Time (μs)"})
 	cores.SetRefreshCallback(rv.refreshCommandStats)
 	cores.AddKeyBinding("K", "Keys", rv.showKeys)

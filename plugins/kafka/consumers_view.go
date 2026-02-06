@@ -26,7 +26,7 @@ type ConsumerInfo struct {
 type ConsumersView struct {
 	app            *tview.Application
 	pages          *tview.Pages
-	cores          *ui.Cores
+	cores          *ui.CoreView
 	kafkaClient    *KafkaClient
 	currentCluster string
 	currentTopic   string // empty string means all topics
@@ -45,7 +45,7 @@ func NewConsumersView(app *tview.Application, pages *tview.Pages, kafkaClient *K
 	}
 
 	// Create Cores UI component
-	cv.cores = ui.NewCores(app, "")
+	cv.cores = ui.NewCoreView(app, "")
 	cv.cores.SetModalPages(pages)
 
 	// Set table headers

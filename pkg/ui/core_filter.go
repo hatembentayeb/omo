@@ -7,27 +7,27 @@ import (
 )
 
 // SetModalPages sets the pages container used for modals.
-func (c *Cores) SetModalPages(pages *tview.Pages) *Cores {
+func (c *CoreView) SetModalPages(pages *tview.Pages) *CoreView {
 	c.pages = pages
 	return c
 }
 
 // ClearFilter removes any active filter.
-func (c *Cores) ClearFilter() *Cores {
+func (c *CoreView) ClearFilter() *CoreView {
 	return c.SetFilterQuery("")
 }
 
 // IsFiltered returns true if a filter is currently active.
-func (c *Cores) IsFiltered() bool {
+func (c *CoreView) IsFiltered() bool {
 	return c.filterQuery != ""
 }
 
 // GetFilterQuery returns the current filter query.
-func (c *Cores) GetFilterQuery() string {
+func (c *CoreView) GetFilterQuery() string {
 	return c.filterQuery
 }
 
-func (c *Cores) showFilterModal() {
+func (c *CoreView) showFilterModal() {
 	if c.pages == nil {
 		c.Log("[red]Filter unavailable")
 		return

@@ -6,8 +6,8 @@ import (
 	"omo/pkg/ui"
 )
 
-func (dv *DockerView) newComposeView() *ui.Cores {
-	cores := ui.NewCores(dv.app, "Docker Compose")
+func (dv *DockerView) newComposeView() *ui.CoreView {
+	cores := ui.NewCoreView(dv.app, "Docker Compose")
 	cores.SetTableHeaders([]string{"Project", "Status", "Services", "Running", "Config"})
 	cores.SetRefreshCallback(dv.refreshComposeData)
 	cores.SetSelectionKey("Project")

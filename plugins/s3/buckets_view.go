@@ -13,7 +13,7 @@ import (
 type BucketsView struct {
 	app            *tview.Application
 	pages          *tview.Pages
-	cores          *ui.Cores
+	cores          *ui.CoreView
 	s3Client       *s3.S3
 	currentRegion  string
 	buckets        []*s3.Bucket
@@ -30,7 +30,7 @@ func NewBucketsView(app *tview.Application, pages *tview.Pages) *BucketsView {
 	}
 
 	// Create Cores UI component
-	bv.cores = ui.NewCores(app, "S3 Buckets")
+	bv.cores = ui.NewCoreView(app, "S3 Buckets")
 	bv.cores.SetModalPages(pages)
 
 	// Set table headers

@@ -6,8 +6,8 @@ import (
 	"omo/pkg/ui"
 )
 
-func (dv *DockerView) newLogsView() *ui.Cores {
-	cores := ui.NewCores(dv.app, "Container Logs")
+func (dv *DockerView) newLogsView() *ui.CoreView {
+	cores := ui.NewCoreView(dv.app, "Container Logs")
 	cores.SetTableHeaders([]string{"Container", "Status", "Image", "Logs Available"})
 	cores.SetRefreshCallback(dv.refreshLogsViewData)
 	cores.SetSelectionKey("Container")

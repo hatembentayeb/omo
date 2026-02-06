@@ -16,21 +16,21 @@ type RedisView struct {
 	app               *tview.Application
 	pages             *tview.Pages
 	viewPages         *tview.Pages
-	cores             *ui.Cores
-	keysView          *ui.Cores
-	infoView          *ui.Cores
-	slowlogView       *ui.Cores
-	statsView         *ui.Cores
-	clientsView       *ui.Cores
-	configView        *ui.Cores
-	memoryView        *ui.Cores
-	replicationView   *ui.Cores
-	persistenceView   *ui.Cores
-	pubsubView        *ui.Cores
-	keyAnalysisView   *ui.Cores
-	databasesView     *ui.Cores
-	commandStatsView  *ui.Cores
-	latencyView       *ui.Cores
+	cores             *ui.CoreView
+	keysView          *ui.CoreView
+	infoView          *ui.CoreView
+	slowlogView       *ui.CoreView
+	statsView         *ui.CoreView
+	clientsView       *ui.CoreView
+	configView        *ui.CoreView
+	memoryView        *ui.CoreView
+	replicationView   *ui.CoreView
+	persistenceView   *ui.CoreView
+	pubsubView        *ui.CoreView
+	keyAnalysisView   *ui.CoreView
+	databasesView     *ui.CoreView
+	commandStatsView  *ui.CoreView
+	latencyView       *ui.CoreView
 	redisClient       *RedisClient
 	currentConnection *RedisConnection
 	currentDatabase   int
@@ -54,7 +54,7 @@ func NewRedisView(app *tview.Application, pages *tview.Pages) *RedisView {
 	}
 
 	// Create Cores UI component
-	rv.keysView = ui.NewCores(app, "Redis Manager")
+	rv.keysView = ui.NewCoreView(app, "Redis Manager")
 	rv.keysView.SetSelectionKey("Key")
 	rv.cores = rv.keysView
 
@@ -137,7 +137,7 @@ func NewRedisView(app *tview.Application, pages *tview.Pages) *RedisView {
 	rv.commandStatsView = rv.newCommandStatsView()
 	rv.latencyView = rv.newLatencyView()
 
-	views := []*ui.Cores{
+	views := []*ui.CoreView{
 		rv.keysView,
 		rv.infoView,
 		rv.slowlogView,
@@ -210,7 +210,7 @@ func (rv *RedisView) Stop() {
 		rv.redisClient.Disconnect()
 	}
 
-	views := []*ui.Cores{
+	views := []*ui.CoreView{
 		rv.keysView,
 		rv.infoView,
 		rv.slowlogView,
@@ -924,7 +924,7 @@ func (rv *RedisView) AutoConnectToDefaultInstance() {
 	}
 
 	if len(instances) == 0 {
-		rv.cores.Log("[yellow]No Redis instances configured in config/redis.yaml")
+		rv.cores.Log("[yellow]No Redis instances configured in ~/.omo/configs/redis/redis.yaml")
 		return
 	}
 
