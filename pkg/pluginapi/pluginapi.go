@@ -13,7 +13,9 @@ import (
 //
 //	~/.omo/
 //	├── plugins/<name>/<name>.so     ← compiled plugin shared libraries
-//	└── configs/<name>/<name>.yaml   ← per-plugin configuration files
+//	├── configs/<name>/<name>.yaml   ← per-plugin configuration files
+//	├── secrets/omo.kdbx             ← KeePass secrets database
+//	└── keys/omo.key                 ← KeePass key file (auto-generated)
 const OmoHome = ".omo"
 
 // PluginMetadata defines metadata for OhMyOps plugins.
