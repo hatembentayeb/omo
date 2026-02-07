@@ -24,9 +24,13 @@ type DebugConfig struct {
 	RequestTimeoutSeconds int  `yaml:"request_timeout_seconds"`
 }
 
-// ArgocdInstance represents a single ArgoCD server instance
+// ArgocdInstance represents a single ArgoCD server instance.
+// When the Secret field is set (e.g. "argocd/production/main-cluster"),
+// it references a KeePass entry whose fields override URL, Username,
+// Password, etc. at load time.
 type ArgocdInstance struct {
 	Name     string `yaml:"name"`
+	Secret   string `yaml:"secret,omitempty"` // KeePass path: pluginName/env/entryName
 	URL      string `yaml:"url"`
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
@@ -34,6 +38,9 @@ type ArgocdInstance struct {
 
 // LoadArgocdConfig loads the ArgoCD configuration.
 // Default path: ~/.omo/configs/argocd/argocd.yaml
+//
+// After unmarshalling, any instance with a non-empty Secret field will
+// have its connection fields resolved from the KeePass secrets provider.
 func LoadArgocdConfig() (*ArgocdConfig, error) {
 	configPath := pluginapi.PluginConfigPath("argocd")
 
@@ -51,7 +58,47 @@ func LoadArgocdConfig() (*ArgocdConfig, error) {
 		return nil, fmt.Errorf("no ArgoCD instances defined in config")
 	}
 
+	// Resolve secrets for instances that reference KeePass entries.
+	if err := resolveArgocdSecrets(&config); err != nil {
+		return nil, fmt.Errorf("error resolving secrets: %v", err)
+	}
+
 	return &config, nil
+}
+
+// resolveArgocdSecrets iterates over instances and populates connection
+// fields from the secrets provider when a secret path is defined.
+func resolveArgocdSecrets(config *ArgocdConfig) error {
+	if !pluginapi.HasSecrets() {
+		return nil
+	}
+
+	for i := range config.Instances {
+		inst := &config.Instances[i]
+		if inst.Secret == "" {
+			continue
+		}
+
+		entry, err := pluginapi.ResolveSecret(inst.Secret)
+		if err != nil {
+			return fmt.Errorf("instance %q: %w", inst.Name, err)
+		}
+
+		// Override only blank fields so YAML values take precedence.
+		if inst.URL == "" && entry.URL != "" {
+			inst.URL = entry.URL
+		}
+		if inst.Username == "" && entry.UserName != "" {
+			inst.Username = entry.UserName
+		}
+		if inst.Password == "" && entry.Password != "" {
+			inst.Password = entry.Password
+		}
+		if inst.Name == "" && entry.Title != "" {
+			inst.Name = entry.Title
+		}
+	}
+	return nil
 }
 
 // FindInstanceByName looks up an instance by name in the configuration
