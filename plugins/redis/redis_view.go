@@ -286,8 +286,9 @@ func (rv *RedisView) showConnectionForm(items [][]string, index int) {
 		// All fields collected, connect to Redis
 		host := items[0][1]
 		port := items[1][1]
-		password := items[2][1]
-		dbStr := items[3][1]
+		username := items[2][1]
+		password := items[3][1]
+		dbStr := items[4][1]
 
 		// Parse database number
 		db, err := strconv.Atoi(dbStr)
@@ -296,7 +297,7 @@ func (rv *RedisView) showConnectionForm(items [][]string, index int) {
 			return
 		}
 
-		rv.connectToRedis(host, port, password, db)
+		rv.connectToRedis(host, port, username, password, db)
 		return
 	}
 
@@ -327,14 +328,14 @@ func (rv *RedisView) showConnectionForm(items [][]string, index int) {
 }
 
 // connectToRedis attempts to connect to a Redis instance
-func (rv *RedisView) connectToRedis(host, port, password string, db int) {
+func (rv *RedisView) connectToRedis(host, port, username, password string, db int) {
 	// Create a new Redis client if needed
 	if rv.redisClient == nil {
 		rv.redisClient = NewRedisClient()
 	}
 
 	// Connect to Redis
-	err := rv.redisClient.Connect(host, port, password, db)
+	err := rv.redisClient.Connect(host, port, username, password, db)
 	if err != nil {
 		rv.cores.Log(fmt.Sprintf("[red]Failed to connect to Redis: %v", err))
 		return
@@ -833,6 +834,7 @@ func (rv *RedisView) showManualConnectionForm() {
 	items := [][]string{
 		{"Host", "localhost"},
 		{"Port", "6379"},
+		{"Username", ""},
 		{"Password", ""},
 		{"Database", "0"},
 	}

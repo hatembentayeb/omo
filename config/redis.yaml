@@ -1,9 +1,15 @@
 ---
 instances:
   - name: "local"
-    description: "Local Redis Server"
-    host: "localhost"
+    description: "Local Redis (dev)"
+    secret: "redis/development/local"   # resolves Host, User, Password from KeePass
     port: 6379
-    password: ""
     database: 0
+
+  # Example using KeePass secrets for other environments:
+  # - name: "production-cache"
+  #   description: "Production Redis Cache"
+  #   secret: "redis/production/main-cache"
+  #   port: 6379
+  #   database: 0
 

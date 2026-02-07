@@ -15,6 +15,7 @@ import (
 type RedisConnection struct {
 	Host     string
 	Port     string
+	Username string
 	Password string
 	Database int
 }
@@ -116,7 +117,7 @@ func NewRedisClient() *RedisClient {
 }
 
 // Connect connects to a Redis server
-func (c *RedisClient) Connect(host, port, password string, db int) error {
+func (c *RedisClient) Connect(host, port, username, password string, db int) error {
 	if host == "" {
 		return errors.New("host cannot be empty")
 	}
@@ -124,6 +125,7 @@ func (c *RedisClient) Connect(host, port, password string, db int) error {
 	c.conn = &RedisConnection{
 		Host:     host,
 		Port:     port,
+		Username: username,
 		Password: password,
 		Database: db,
 	}
@@ -131,6 +133,7 @@ func (c *RedisClient) Connect(host, port, password string, db int) error {
 	// Create a new Redis client with timeout
 	c.client = redis.NewClient(&redis.Options{
 		Addr:         fmt.Sprintf("%s:%s", host, port),
+		Username:     username,
 		Password:     password,
 		DB:           db,
 		ReadTimeout:  3 * time.Second,
@@ -161,6 +164,7 @@ func (c *RedisClient) ConnectToInstance(instance RedisInstance) error {
 	return c.Connect(
 		instance.Host,
 		strconv.Itoa(instance.Port),
+		instance.Username,
 		instance.Password,
 		instance.Database,
 	)
