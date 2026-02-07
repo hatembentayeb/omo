@@ -15,6 +15,13 @@ hosts:
   #   tls_verify: true
   #   cert_path: "~/.docker/certs"
 
+  # Example using KeePass secrets:
+  # - name: "staging-docker"
+  #   description: "Staging Docker Host"
+  #   secret: "docker/staging/docker-host"  # resolves Host, CertPath from KeePass
+  #   tls: true
+  #   tls_verify: true
+
 ui:
   refresh_interval: 5
   max_containers_display: 100
