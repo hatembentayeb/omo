@@ -49,9 +49,6 @@ func (c *CoreView) initUI() {
 	// Log panel (right)
 	c.logPanel = tview.NewTextView()
 	c.logPanel.SetDynamicColors(true)
-	c.logPanel.SetChangedFunc(func() {
-		c.app.Draw()
-	})
 	c.logPanel.SetScrollable(true)
 	c.logPanel.SetBackgroundColor(tcell.ColorDefault)
 	c.logPanel.SetBorder(false)
