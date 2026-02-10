@@ -137,9 +137,6 @@ func (rv *RedisView) showPubSubMessageModal(channel string) {
 	textView.SetTitleAlign(tview.AlignCenter)
 	textView.SetBorderPadding(0, 0, 1, 1)
 	textView.SetBackgroundColor(tcell.ColorDefault)
-	textView.SetChangedFunc(func() {
-		rv.app.Draw()
-	})
 
 	// Initial text
 	textView.SetText("[gray]Waiting for messages... (Press ESC to close)[white]\n\n")
