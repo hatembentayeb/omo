@@ -18,15 +18,16 @@ import (
 )
 
 type Host struct {
-	App          *tview.Application
-	Pages        *tview.Pages
-	MainFrame    *tview.Frame
-	MainUI       *tview.Grid
-	HeaderView   *tview.Grid
-	PluginsList  *tview.List
-	ActivePlugin pluginapi.Plugin
-	PluginsDir   string
-	ConfigsDir   string
+	App             *tview.Application
+	Pages           *tview.Pages
+	MainFrame       *tview.Frame
+	MainUI          *tview.Grid
+	HeaderView      *tview.Grid
+	PluginsList     *tview.List
+	ActivePlugin    pluginapi.Plugin
+	activePluginIdx int
+	PluginsDir      string
+	ConfigsDir      string
 }
 
 func New(app *tview.Application, pages *tview.Pages) *Host {
@@ -40,14 +41,15 @@ func New(app *tview.Application, pages *tview.Pages) *Host {
 	headerView.SetBackgroundColor(tcell.ColorDefault)
 
 	return &Host{
-		App:        app,
-		Pages:      pages,
-		MainFrame:  mainFrame,
-		MainUI:     mainUI,
-		HeaderView: headerView,
-		PluginsList: tview.NewList(),
-		PluginsDir:  pluginapi.PluginsDir(),
-		ConfigsDir:  pluginapi.ConfigsDir(),
+		App:             app,
+		Pages:           pages,
+		MainFrame:       mainFrame,
+		MainUI:          mainUI,
+		HeaderView:      headerView,
+		PluginsList:     tview.NewList(),
+		activePluginIdx: -1,
+		PluginsDir:      pluginapi.PluginsDir(),
+		ConfigsDir:      pluginapi.ConfigsDir(),
 	}
 }
 
@@ -85,17 +87,30 @@ func (h *Host) LoadPlugins() *tview.List {
 		}
 		h.ActivePlugin = ohmyopsPlugin
 
+		// Reset previous active item back to arrow prefix
+		if h.activePluginIdx >= 0 && h.activePluginIdx < list.GetItemCount() {
+			prevMain, prevSec := list.GetItemText(h.activePluginIdx)
+			prevName := stripPluginPrefix(prevMain)
+			list.SetItemText(h.activePluginIdx, "  → "+prevName, prevSec)
+		}
+
+		// Mark current item with green dot
+		curMain, curSec := list.GetItemText(i)
+		curName := stripPluginPrefix(curMain)
+		list.SetItemText(i, "[green]  ● [white]"+curName, curSec)
+		h.activePluginIdx = i
+
 		metadata := ohmyopsPlugin.GetMetadata()
-		registry.RegisterPlugin(s1, metadata)
+		registry.RegisterPlugin(curName, metadata)
 
 		component := ohmyopsPlugin.Start(h.App)
 		h.MainFrame.SetPrimitive(component)
 
-		h.UpdateHeader(s1)
+		h.UpdateHeader(curName)
 	})
 
 	list.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
-		h.UpdateHeader(mainText)
+		h.UpdateHeader(stripPluginPrefix(mainText))
 	})
 
 	h.PluginsList = list
@@ -175,7 +190,6 @@ func discoverPlugins(pluginsDir string) (*tview.List, error) {
 	list.SetMainTextColor(tcell.ColorPurple)
 	list.SetBackgroundColor(tcell.ColorDefault)
 
-	shortcutIdx := 0
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -187,16 +201,28 @@ func discoverPlugins(pluginsDir string) (*tview.List, error) {
 			continue // no .so in this subdirectory
 		}
 
-		shortcut := rune(0)
-		if shortcutIdx < 9 {
-			shortcut = rune('1' + shortcutIdx)
-		}
-		shortcutIdx++
-
-		list.AddItem(name, soPath, shortcut, nil)
+		list.AddItem("  → "+name, soPath, 0, nil)
 	}
 
 	return list, nil
+}
+
+// stripPluginPrefix removes the arrow/dot prefix and tview color tags from a plugin display name.
+func stripPluginPrefix(name string) string {
+	// Strip tview color tags like [green], [white]
+	for strings.Contains(name, "[") && strings.Contains(name, "]") {
+		start := strings.Index(name, "[")
+		end := strings.Index(name, "]")
+		if start < end {
+			name = name[:start] + name[end+1:]
+		} else {
+			break
+		}
+	}
+	// Strip prefix symbols
+	name = strings.TrimLeft(name, " →●")
+	name = strings.TrimSpace(name)
+	return name
 }
 
 // discoverConfigs scans ~/.omo/configs/ for yaml files in plugin subdirectories.
@@ -211,7 +237,6 @@ func discoverConfigs(configsDir string) (*tview.List, error) {
 	list.SetMainTextColor(tcell.ColorPurple)
 	list.SetBackgroundColor(tcell.ColorDefault)
 
-	shortcutIdx := 0
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -234,13 +259,7 @@ func discoverConfigs(configsDir string) (*tview.List, error) {
 				fullPath := filepath.Join(pluginConfigDir, fname)
 				displayName := pluginName + "/" + fname
 
-				shortcut := rune(0)
-				if shortcutIdx < 9 {
-					shortcut = rune('1' + shortcutIdx)
-				}
-				shortcutIdx++
-
-				list.AddItem(displayName, fullPath, shortcut, nil)
+				list.AddItem(displayName, fullPath, 0, nil)
 			}
 		}
 	}
