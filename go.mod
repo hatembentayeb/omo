@@ -8,6 +8,7 @@ require (
 	github.com/docker/docker v28.0.4+incompatible
 	github.com/gdamore/tcell/v2 v2.6.0
 	github.com/go-git/go-git/v5 v5.11.0
+	github.com/lib/pq v1.11.2
 	github.com/pgavlin/femto v0.0.0-20201224065653-0c9d20f9cac4
 	github.com/redis/go-redis/v9 v9.7.3
 	github.com/rivo/tview v0.0.0-20231115183240-7c9e464bac02
