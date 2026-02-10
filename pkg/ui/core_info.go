@@ -32,6 +32,10 @@ func (c *CoreView) Log(message string) *CoreView {
 
 	c.logPanel.SetText(content)
 	c.logPanel.ScrollToEnd()
+
+	// Queue a draw instead of drawing synchronously — prevents rapid
+	// screen redraws from goroutines that would clear terminal text selection.
+	go c.app.QueueUpdateDraw(func() {})
 	return c
 }
 
