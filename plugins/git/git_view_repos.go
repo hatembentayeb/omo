@@ -360,153 +360,33 @@ func (gv *GitView) showDirectorySelector() {
 	}
 
 	homedir, _ := os.UserHomeDir()
-	gv.showDirectoryBrowser(homedir)
-}
 
-func (gv *GitView) showDirectoryBrowser(startPath string) {
-	if gv.pages == nil {
-		gv.reposView.Log("[red]Pages not initialized")
-		return
-	}
-
-	// Get directories from the starting path
-	dirs, err := gv.listDirectories(startPath)
-	if err != nil {
-		gv.reposView.Log(fmt.Sprintf("[red]Error reading directory: %v", err))
-		gv.app.SetFocus(gv.reposView.GetTable())
-		return
-	}
-
-	// If directory is empty (no subdirs), check if it's a git repo
-	if len(dirs) == 0 {
-		if gv.gitClient.IsRepo(startPath) {
-			gv.addSingleRepository(startPath)
-		} else {
-			gv.reposView.Log(fmt.Sprintf("[yellow]No subdirectories in %s", startPath))
-		}
-		gv.app.SetFocus(gv.reposView.GetTable())
-		return
-	}
-
-	// Build items for fuzzy search
-	items := make([]ui.FuzzySearchItem, 0, len(dirs)+1)
-
-	// Add parent directory option if not at root
-	if startPath != "/" {
-		parentDir := filepath.Dir(startPath)
-		items = append(items, ui.FuzzySearchItem{
-			Name:        "..",
-			Description: fmt.Sprintf("Go up to %s", parentDir),
-			Data:        map[string]interface{}{"path": parentDir, "action": "navigate"},
-		})
-	}
-
-	// Add "Select this directory" option
-	items = append(items, ui.FuzzySearchItem{
-		Name:        fmt.Sprintf("[SELECT] %s", filepath.Base(startPath)),
-		Description: fmt.Sprintf("Search for repos in: %s", startPath),
-		Data:        map[string]interface{}{"path": startPath, "action": "select"},
-	})
-
-	// Add subdirectories
-	for _, dir := range dirs {
-		dirName := dir.Name()
-		fullPath := filepath.Join(startPath, dirName)
-
-		// Check if it's a git repo for display purposes
-		isGit := gv.gitClient.IsRepo(fullPath)
-		var desc string
-		if isGit {
-			desc = fmt.Sprintf("[green][git][white] %s", fullPath)
-		} else {
-			desc = fullPath
-		}
-
-		items = append(items, ui.FuzzySearchItem{
-			Name:        dirName,
-			Description: desc,
-			Data:        map[string]interface{}{"path": fullPath, "action": "navigate"},
-		})
-	}
-
-	title := fmt.Sprintf("Browse: %s", startPath)
-	if len(title) > 60 {
-		title = fmt.Sprintf("Browse: ...%s", startPath[len(startPath)-50:])
-	}
-
-	ui.ShowFuzzySearchModal(
+	ui.ShowDirectoryBrowserModal(
 		gv.pages,
 		gv.app,
-		title,
-		items,
-		func(index int, item *ui.FuzzySearchItem, cancelled bool) {
-			if cancelled || item == nil {
-				gv.app.SetFocus(gv.reposView.GetTable())
-				return
-			}
-
-			// Safely extract data with type checking
-			data, ok := item.Data.(map[string]interface{})
-			if !ok {
-				gv.reposView.Log("[red]Error: invalid item data")
-				gv.app.SetFocus(gv.reposView.GetTable())
-				return
-			}
-
-			path, _ := data["path"].(string)
-			action, _ := data["action"].(string)
-
-			if path == "" {
-				gv.reposView.Log("[red]Error: no path in item")
-				gv.app.SetFocus(gv.reposView.GetTable())
-				return
-			}
-
-			switch action {
-			case "select":
-				// User selected to search this directory
-				gv.reposView.Log(fmt.Sprintf("[yellow]Searching in %s...", path))
-				go gv.discoverRepositories(path)
-				gv.app.SetFocus(gv.reposView.GetTable())
-
-			case "navigate":
-				// Check if it's a git repo at selection time
-				isRepo := gv.gitClient.IsRepo(path)
-				if isRepo {
-					// It's a git repo - add it and close
-					gv.addSingleRepository(path)
-					gv.app.SetFocus(gv.reposView.GetTable())
-				} else {
-					// Not a git repo - navigate deeper into the directory
-					gv.showDirectoryBrowser(path)
+		homedir,
+		gv.gitClient.IsRepo,
+		func(result ui.DirBrowserResult) {
+			switch result.Action {
+			case ui.DirBrowserAddRepo:
+				if result.Path != "" {
+					if gv.gitClient.IsRepo(result.Path) {
+						gv.addSingleRepository(result.Path)
+					} else {
+						gv.reposView.Log(fmt.Sprintf("[yellow]%s is not a git repository", filepath.Base(result.Path)))
+					}
 				}
-
-			default:
-				// Unknown action, just return to table
-				gv.app.SetFocus(gv.reposView.GetTable())
+			case ui.DirBrowserScanRepos:
+				if result.Path != "" {
+					gv.reposView.Log(fmt.Sprintf("[yellow]Scanning %s...", result.Path))
+					go gv.discoverRepositories(result.Path)
+				}
+			case ui.DirBrowserCancel:
+				// Nothing to do
 			}
+			gv.app.SetFocus(gv.reposView.GetTable())
 		},
 	)
-}
-
-func (gv *GitView) listDirectories(path string) ([]os.DirEntry, error) {
-	entries, err := os.ReadDir(path)
-	if err != nil {
-		return nil, err
-	}
-
-	dirs := make([]os.DirEntry, 0)
-	for _, entry := range entries {
-		// Skip hidden directories
-		if strings.HasPrefix(entry.Name(), ".") {
-			continue
-		}
-		if entry.IsDir() {
-			dirs = append(dirs, entry)
-		}
-	}
-
-	return dirs, nil
 }
 
 func (gv *GitView) addSingleRepository(repoPath string) {
