@@ -45,8 +45,11 @@ func (r *RedisPlugin) Start(app *tview.Application) tview.Primitive {
 	// Set initial focus to the table explicitly
 	app.SetFocus(r.redisView.cores.GetTable())
 
-	// Auto-connect to the first Redis instance in config
-	r.redisView.AutoConnectToDefaultInstance()
+	// Auto-connect in a goroutine to avoid blocking the UI thread.
+	// Network connect + key scan can take seconds on timeout.
+	go func() {
+		r.redisView.AutoConnectToDefaultInstance()
+	}()
 
 	return pages
 }

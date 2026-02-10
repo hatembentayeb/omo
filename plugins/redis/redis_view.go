@@ -267,8 +267,9 @@ func (rv *RedisView) ShowConnectionSelector() {
 		func(index int, name string, cancelled bool) {
 			// Always return focus to the table, whether cancelled or selected
 			if !cancelled && index >= 0 && index < len(instances) {
-				// Connect to the selected instance
-				rv.connectToRedisInstance(instances[index])
+				// Connect in a goroutine to avoid blocking the UI
+				// during network I/O (connect + key scan).
+				go rv.connectToRedisInstance(instances[index])
 			} else {
 				// Log that selection was cancelled
 				rv.cores.Log("[blue]Connection selection cancelled")
@@ -380,6 +381,13 @@ func (rv *RedisView) refresh() {
 	if currentView != nil {
 		currentView.RefreshData()
 	}
+
+	// Update key count in the info panel after keys view refresh.
+	if rv.currentView == viewKeys && rv.currentConnection != nil {
+		tableData := rv.keysView.GetTableData()
+		rv.cores.SetInfoText(fmt.Sprintf("[green]Redis Manager[white]\nServer: %s:%s\nDB: %d\nStatus: Connected\nKeys loaded: %d",
+			rv.currentConnection.Host, rv.currentConnection.Port, rv.currentDatabase, len(tableData)))
+	}
 }
 
 func (rv *RedisView) resetKeyScan() {
@@ -398,28 +406,42 @@ func (rv *RedisView) loadKeysPage(offset, limit int) ([][]string, error) {
 		return [][]string{}, nil
 	}
 
-	keys, nextCursor, err := rv.redisClient.ScanKeys("*", rv.scanCursor, int64(limit))
-	if err != nil {
-		rv.cores.Log(fmt.Sprintf("[red]Failed to scan keys: %v", err))
+	// Collect keys across multiple SCAN iterations.
+	// Redis SCAN with COUNT is only a hint — a single call can return
+	// zero keys even when the database is not empty.  We must keep
+	// scanning until we either have enough keys or the cursor wraps to 0.
+	allKeys := make([]string, 0, limit)
+	for len(allKeys) < limit && !rv.scanDone {
+		keys, nextCursor, err := rv.redisClient.ScanKeys("*", rv.scanCursor, int64(limit))
+		if err != nil {
+			rv.cores.Log(fmt.Sprintf("[red]Failed to scan keys: %v", err))
 
-		if strings.Contains(err.Error(), "connection") ||
-			strings.Contains(err.Error(), "timeout") {
-			rv.cores.Log("[red]Connection to Redis lost. Please reconnect.")
-			if rv.redisClient != nil {
-				rv.redisClient.Disconnect()
+			if strings.Contains(err.Error(), "connection") ||
+				strings.Contains(err.Error(), "timeout") {
+				rv.cores.Log("[red]Connection to Redis lost. Please reconnect.")
+				if rv.redisClient != nil {
+					rv.redisClient.Disconnect()
+				}
+				rv.cores.SetInfoText("[yellow]Redis Manager[white]\nStatus: Not Connected\nUse [green]Ctrl+T[white] to select instance")
 			}
-			rv.cores.SetInfoText("[yellow]Redis Manager[white]\nStatus: Not Connected\nUse [green]Ctrl+T[white] to select instance")
+			return [][]string{}, err
 		}
-		return [][]string{}, err
+
+		rv.scanCursor = nextCursor
+		if nextCursor == 0 {
+			rv.scanDone = true
+		}
+
+		allKeys = append(allKeys, keys...)
 	}
 
-	rv.scanCursor = nextCursor
-	if nextCursor == 0 {
-		rv.scanDone = true
+	// Trim to limit in case the last batch pushed us over.
+	if len(allKeys) > limit {
+		allKeys = allKeys[:limit]
 	}
 
-	tableData := make([][]string, 0, len(keys))
-	for _, key := range keys {
+	tableData := make([][]string, 0, len(allKeys))
+	for _, key := range allKeys {
 		keyInfo, err := rv.redisClient.GetKeyInfo(key)
 		if err != nil {
 			continue
@@ -872,7 +894,8 @@ func (rv *RedisView) startAutoRefresh() {
 	})
 }
 
-// connectToRedisInstance connects to a preconfigured Redis instance
+// connectToRedisInstance connects to a preconfigured Redis instance.
+// Safe to call from any goroutine — UI updates go through QueueUpdateDraw.
 func (rv *RedisView) connectToRedisInstance(instance RedisInstance) {
 	// Create a new Redis client if needed
 	if rv.redisClient == nil {
@@ -880,14 +903,18 @@ func (rv *RedisView) connectToRedisInstance(instance RedisInstance) {
 	}
 
 	// Set status to connecting
-	rv.cores.SetInfoText(fmt.Sprintf("[yellow]Redis Manager[white]\nServer: %s:%d\nStatus: Connecting...",
-		instance.Host, instance.Port))
+	rv.app.QueueUpdateDraw(func() {
+		rv.cores.SetInfoText(fmt.Sprintf("[yellow]Redis Manager[white]\nServer: %s:%d\nStatus: Connecting...",
+			instance.Host, instance.Port))
+	})
 
-	// Connect to Redis
+	// Connect to Redis (blocking network I/O)
 	err := rv.redisClient.ConnectToInstance(instance)
 	if err != nil {
-		rv.cores.Log(fmt.Sprintf("[red]Connection failed: %v", err))
-		rv.cores.SetInfoText("[yellow]Redis Manager[white]\nStatus: Not Connected\nUse [green]Ctrl+T[white] to select instance")
+		rv.app.QueueUpdateDraw(func() {
+			rv.cores.Log(fmt.Sprintf("[red]Connection failed: %v", err))
+			rv.cores.SetInfoText("[yellow]Redis Manager[white]\nStatus: Not Connected\nUse [green]Ctrl+T[white] to select instance")
+		})
 		return
 	}
 
@@ -895,12 +922,12 @@ func (rv *RedisView) connectToRedisInstance(instance RedisInstance) {
 	rv.currentDatabase = instance.Database
 
 	// Update the UI
-	rv.cores.SetInfoText(fmt.Sprintf("[green]Redis Manager[white]\nServer: %s:%d\nDB: %d\nStatus: Connected",
-		instance.Host, instance.Port, instance.Database))
-	rv.cores.Log(fmt.Sprintf("[green]Connected to %s:%d", instance.Host, instance.Port))
-
-	// Refresh keys immediately
-	rv.refresh()
+	rv.app.QueueUpdateDraw(func() {
+		rv.cores.SetInfoText(fmt.Sprintf("[green]Redis Manager[white]\nServer: %s:%d\nDB: %d\nStatus: Connected",
+			instance.Host, instance.Port, instance.Database))
+		rv.cores.Log(fmt.Sprintf("[green]Connected to %s:%d", instance.Host, instance.Port))
+		rv.refresh()
+	})
 
 	// Ensure auto-refresh is running
 	rv.startAutoRefresh()
@@ -916,21 +943,28 @@ func (rv *RedisView) showSelectedKeyContent() {
 	rv.showKeyContent(key)
 }
 
-// AutoConnectToDefaultInstance automatically connects to the default Redis instance
+// AutoConnectToDefaultInstance automatically connects to the default Redis instance.
+// Safe to call from any goroutine.
 func (rv *RedisView) AutoConnectToDefaultInstance() {
 	// Get available Redis instances from config
 	instances, err := GetAvailableInstances()
 	if err != nil {
-		rv.cores.Log(fmt.Sprintf("[yellow]Failed to load Redis instances: %v", err))
+		rv.app.QueueUpdateDraw(func() {
+			rv.cores.Log(fmt.Sprintf("[yellow]Failed to load Redis instances: %v", err))
+		})
 		return
 	}
 
 	if len(instances) == 0 {
-		rv.cores.Log("[yellow]No Redis instances configured in ~/.omo/configs/redis/redis.yaml")
+		rv.app.QueueUpdateDraw(func() {
+			rv.cores.Log("[yellow]No Redis instances configured in ~/.omo/configs/redis/redis.yaml")
+		})
 		return
 	}
 
 	// Connect to the first instance in the list
-	rv.cores.Log(fmt.Sprintf("[blue]Auto-connecting to Redis instance: %s", instances[0].Name))
+	rv.app.QueueUpdateDraw(func() {
+		rv.cores.Log(fmt.Sprintf("[blue]Auto-connecting to Redis instance: %s", instances[0].Name))
+	})
 	rv.connectToRedisInstance(instances[0])
 }
