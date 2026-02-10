@@ -28,14 +28,20 @@ all: dirs
 dirs:
 	@mkdir -p $(PLUGINS_INSTALL_DIR) $(CONFIGS_INSTALL_DIR)
 
-# Install config files from ./config/ to ~/.omo/configs/<name>/
-install-configs:
-	@echo "Installing configs to $(CONFIGS_INSTALL_DIR)"
-	@for cfg in $(wildcard ./config/*.yaml) $(wildcard ./config/*.yml); do \
-		name=$$(basename $$cfg | sed 's/\.\(yaml\|yml\)$$//'); \
-		mkdir -p $(CONFIGS_INSTALL_DIR)/$$name; \
-		cp $$cfg $(CONFIGS_INSTALL_DIR)/$$name/$$name.yaml; \
-		echo "  $$name → $(CONFIGS_INSTALL_DIR)/$$name/$$name.yaml"; \
+# Seed KeePass secrets and install default configs for all plugins.
+# Plugins that need Docker (redis, kafka) also start their containers.
+dev-setup:
+	@bash dev/setup.sh
+
+# Seed KeePass secrets for plugins that don't need Docker.
+dev-seed:
+	@for plugin in docker git awsCosts s3 k8suser argocd; do \
+		setup="dev/$$plugin/setup.sh"; \
+		if [ -f "$$setup" ]; then \
+			echo "==> Seeding $$plugin"; \
+			bash "$$setup"; \
+			echo ""; \
+		fi; \
 	done
 
 clean:

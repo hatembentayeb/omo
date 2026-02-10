@@ -3,11 +3,39 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"omo/pkg/pluginapi"
 
 	"gopkg.in/yaml.v2"
 )
+
+// argocdConfigHeader is prepended to the auto-generated config YAML.
+const argocdConfigHeader = `# ArgoCD Plugin Configuration
+# Path: ~/.omo/configs/argocd/argocd.yaml
+#
+# KeePass Secret Schema (secret path: argocd/<environment>/<name>):
+#   Title    → instance name
+#   URL      → ArgoCD server URL (e.g. "https://argocd.example.com")
+#   UserName → ArgoCD username
+#   Password → ArgoCD password
+#
+# When "secret" is set, connection fields are resolved from KeePass.
+# YAML values take precedence over KeePass values (override only blanks).
+`
+
+// DefaultArgocdConfig returns the default configuration
+func DefaultArgocdConfig() *ArgocdConfig {
+	return &ArgocdConfig{
+		Instances: []ArgocdInstance{},
+		Debug: DebugConfig{
+			Enabled:               false,
+			LogAPICalls:           false,
+			LogResponses:          false,
+			RequestTimeoutSeconds: 30,
+		},
+	}
+}
 
 // ArgocdConfig represents the configuration structure for ArgoCD instances
 type ArgocdConfig struct {
@@ -44,6 +72,11 @@ type ArgocdInstance struct {
 func LoadArgocdConfig() (*ArgocdConfig, error) {
 	configPath := pluginapi.PluginConfigPath("argocd")
 
+	// Auto-create default config if missing
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		_ = writeDefaultConfig(configPath, argocdConfigHeader, DefaultArgocdConfig())
+	}
+
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("no ArgoCD config found at %s: %v", configPath, err)
@@ -58,12 +91,33 @@ func LoadArgocdConfig() (*ArgocdConfig, error) {
 		return nil, fmt.Errorf("no ArgoCD instances defined in config")
 	}
 
+	// Init KeePass placeholder if no entries exist yet
+	initArgocdKeePass()
+
 	// Resolve secrets for instances that reference KeePass entries.
 	if err := resolveArgocdSecrets(&config); err != nil {
 		return nil, fmt.Errorf("error resolving secrets: %v", err)
 	}
 
 	return &config, nil
+}
+
+// initArgocdKeePass seeds placeholder KeePass entries for ArgoCD if none exist.
+func initArgocdKeePass() {
+	if !pluginapi.HasSecrets() {
+		return
+	}
+	entries, err := pluginapi.Secrets().List("argocd")
+	if err != nil || len(entries) > 0 {
+		return
+	}
+	_ = pluginapi.Secrets().Put("argocd/default/example", &pluginapi.SecretEntry{
+		Title:    "example",
+		UserName: "admin",
+		Password: "",
+		URL:      "https://localhost:8080",
+		Notes:    "ArgoCD placeholder. Set URL (server), UserName, Password.",
+	})
 }
 
 // resolveArgocdSecrets iterates over instances and populates connection
@@ -109,4 +163,16 @@ func FindInstanceByName(config *ArgocdConfig, name string) *ArgocdInstance {
 		}
 	}
 	return nil
+}
+
+// writeDefaultConfig marshals the default config struct to YAML and writes it to disk.
+func writeDefaultConfig(configPath, header string, cfg interface{}) error {
+	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
+		return err
+	}
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(configPath, []byte(header+"\n"+string(data)), 0644)
 }

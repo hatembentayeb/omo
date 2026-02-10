@@ -3,11 +3,26 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"omo/pkg/pluginapi"
 
 	"gopkg.in/yaml.v3"
 )
+
+// redisConfigHeader is prepended to the auto-generated config YAML.
+const redisConfigHeader = `# Redis Plugin Configuration
+# Path: ~/.omo/configs/redis/redis.yaml
+#
+# KeePass Secret Schema (secret path: redis/<environment>/<name>):
+#   Title    → instance name
+#   URL      → host (e.g. "localhost", "redis.example.com")
+#   UserName → Redis ACL username (Redis 6+)
+#   Password → Redis password
+#
+# When "secret" is set, connection fields are resolved from KeePass.
+# YAML values take precedence over KeePass values (override only blanks).
+`
 
 // RedisConfig represents the configuration for the Redis plugin
 type RedisConfig struct {
@@ -61,11 +76,9 @@ func LoadConfig(configPath string) (*RedisConfig, error) {
 		configPath = pluginapi.PluginConfigPath("redis")
 	}
 
-	// Check if the file exists
-	_, err := os.Stat(configPath)
-	if os.IsNotExist(err) {
-		// File doesn't exist, return default config
-		return DefaultConfig(), nil
+	// Auto-create default config if missing
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		_ = writeDefaultConfig(configPath, redisConfigHeader, DefaultConfig())
 	}
 
 	// Read the configuration file
@@ -81,12 +94,33 @@ func LoadConfig(configPath string) (*RedisConfig, error) {
 		return nil, fmt.Errorf("error parsing config file: %v", err)
 	}
 
+	// Init KeePass placeholder if no entries exist yet
+	initRedisKeePass()
+
 	// Resolve secrets for instances that reference KeePass entries.
 	if err := resolveRedisSecrets(config); err != nil {
 		return nil, fmt.Errorf("error resolving secrets: %v", err)
 	}
 
 	return config, nil
+}
+
+// initRedisKeePass seeds placeholder KeePass entries for Redis if none exist.
+func initRedisKeePass() {
+	if !pluginapi.HasSecrets() {
+		return
+	}
+	entries, err := pluginapi.Secrets().List("redis")
+	if err != nil || len(entries) > 0 {
+		return
+	}
+	_ = pluginapi.Secrets().Put("redis/default/example", &pluginapi.SecretEntry{
+		Title:    "example",
+		UserName: "",
+		Password: "",
+		URL:      "localhost",
+		Notes:    "Redis placeholder. Set URL (host), UserName (ACL user), Password.",
+	})
 }
 
 // resolveRedisSecrets iterates over instances and populates connection
@@ -140,4 +174,16 @@ func GetUIConfig() (UIConfig, error) {
 		return UIConfig{}, err
 	}
 	return config.UI, nil
+}
+
+// writeDefaultConfig marshals the default config struct to YAML and writes it to disk.
+func writeDefaultConfig(configPath, header string, cfg interface{}) error {
+	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
+		return err
+	}
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(configPath, []byte(header+"\n"+string(data)), 0644)
 }
