@@ -3,11 +3,26 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"omo/pkg/pluginapi"
 
 	"gopkg.in/yaml.v3"
 )
+
+// dockerConfigHeader is prepended to the auto-generated config YAML.
+const dockerConfigHeader = `# Docker Plugin Configuration
+# Path: ~/.omo/configs/docker/docker.yaml
+#
+# KeePass Secret Schema (secret path: docker/<environment>/<name>):
+#   Title    → host name
+#   URL      → docker host URL (e.g. "unix:///var/run/docker.sock", "tcp://host:2376")
+#   Custom Attributes:
+#     cert_path → path to TLS certificates directory
+#
+# When "secret" is set, connection fields are resolved from KeePass.
+# YAML values take precedence over KeePass values (override only blanks).
+`
 
 // DockerConfig represents the configuration for the Docker plugin
 type DockerConfig struct {
@@ -74,11 +89,9 @@ func LoadDockerConfig(configPath string) (*DockerConfig, error) {
 		configPath = pluginapi.PluginConfigPath("docker")
 	}
 
-	// Check if the file exists
-	_, err := os.Stat(configPath)
-	if os.IsNotExist(err) {
-		// File doesn't exist, return default config
-		return DefaultDockerConfig(), nil
+	// Auto-create default config if missing
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		_ = writeDefaultConfig(configPath, dockerConfigHeader, DefaultDockerConfig())
 	}
 
 	// Read the configuration file
@@ -94,12 +107,34 @@ func LoadDockerConfig(configPath string) (*DockerConfig, error) {
 		return nil, fmt.Errorf("error parsing config file: %v", err)
 	}
 
+	// Init KeePass placeholder if no entries exist yet
+	initDockerKeePass()
+
 	// Resolve secrets for hosts that reference KeePass entries.
 	if err := resolveDockerSecrets(config); err != nil {
 		return nil, fmt.Errorf("error resolving secrets: %v", err)
 	}
 
 	return config, nil
+}
+
+// initDockerKeePass seeds placeholder KeePass entries for Docker if none exist.
+func initDockerKeePass() {
+	if !pluginapi.HasSecrets() {
+		return
+	}
+	entries, err := pluginapi.Secrets().List("docker")
+	if err != nil || len(entries) > 0 {
+		return
+	}
+	_ = pluginapi.Secrets().Put("docker/default/example", &pluginapi.SecretEntry{
+		Title: "example",
+		URL:   "unix:///var/run/docker.sock",
+		Notes: "Docker placeholder. Set URL (docker host), cert_path (TLS certs dir).",
+		CustomAttributes: map[string]string{
+			"cert_path": "",
+		},
+	})
 }
 
 // resolveDockerSecrets iterates over hosts and populates connection
@@ -153,4 +188,16 @@ func GetDockerUIConfig() (UIConfig, error) {
 		return UIConfig{}, err
 	}
 	return config.UI, nil
+}
+
+// writeDefaultConfig marshals the default config struct to YAML and writes it to disk.
+func writeDefaultConfig(configPath, header string, cfg interface{}) error {
+	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
+		return err
+	}
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(configPath, []byte(header+"\n"+string(data)), 0644)
 }

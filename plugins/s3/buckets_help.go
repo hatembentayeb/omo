@@ -16,6 +16,8 @@ func (bv *BucketsView) showHelp() {
 [green]Actions[white]
   [aqua]R[white] - Refresh bucket list manually
   [aqua]S[white] - Sort buckets by column
+  [aqua]O[white] - Browse objects in selected bucket
+  [aqua]M[white] - Calculate metrics for selected bucket
   [aqua]Ctrl+T[white] - Select AWS profile
   [aqua]?[white] - Show this help screen
   [aqua]ESC[white] - Cancel/Clear selection

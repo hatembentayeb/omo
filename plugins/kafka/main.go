@@ -5,13 +5,15 @@ import (
 
 	"omo/pkg/pluginapi"
 
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
+// KafkaPlugin represents the Kafka management plugin
 type KafkaPlugin struct {
 	Name        string
 	Description string
-	brokerView  *BrokerView
+	kafkaView   *KafkaView
 }
 
 // Start initializes the plugin and returns the main UI component
@@ -19,19 +21,27 @@ func (p *KafkaPlugin) Start(app *tview.Application) tview.Primitive {
 	// Create pages component for modal dialogs
 	pages := tview.NewPages()
 
-	// Initialize the broker view
-	p.brokerView = NewBrokerView(app, pages)
+	// Initialize the Kafka view
+	p.kafkaView = NewKafkaView(app, pages)
 
-	// Set initial breadcrumb view
-	p.brokerView.cores.ClearViews()
-	p.brokerView.cores.PushView("Kafka")
-	p.brokerView.cores.PushView("brokers")
+	// Get the main UI component
+	mainUI := p.kafkaView.GetMainUI()
 
-	// Add the broker view to the pages component as the main page
-	pages.AddPage("kafka", p.brokerView.GetMainUI(), true, true)
+	// Add keyboard handling for Ctrl+T to open cluster selector
+	pages.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyCtrlT {
+			if p.kafkaView != nil {
+				p.kafkaView.ShowClusterSelector()
+			}
+			return nil
+		}
+		return event
+	})
 
-	// Set initial focus on the broker view table
-	app.SetFocus(p.brokerView.cores.GetTable())
+	pages.AddPage("kafka", mainUI, true, true)
+
+	// Set initial focus
+	app.SetFocus(p.kafkaView.cores.GetTable())
 
 	return pages
 }
@@ -40,7 +50,7 @@ func (p *KafkaPlugin) Start(app *tview.Application) tview.Primitive {
 func (p *KafkaPlugin) GetMetadata() pluginapi.PluginMetadata {
 	return pluginapi.PluginMetadata{
 		Name:        "kafka",
-		Version:     "1.5.0",
+		Version:     "2.0.0",
 		Description: "Manage Kafka brokers, topics, and consumers",
 		Author:      "HATMAN",
 		License:     "MIT",
@@ -55,7 +65,7 @@ func (p *KafkaPlugin) GetMetadata() pluginapi.PluginMetadata {
 func GetMetadata() pluginapi.PluginMetadata {
 	return pluginapi.PluginMetadata{
 		Name:        "kafka",
-		Version:     "1.5.0",
+		Version:     "2.0.0",
 		Description: "Manage Kafka brokers, topics, and consumers",
 		Author:      "HATMAN",
 		License:     "MIT",
@@ -68,7 +78,9 @@ func GetMetadata() pluginapi.PluginMetadata {
 
 // Stop cleans up resources used by the plugin
 func (p *KafkaPlugin) Stop() {
-	// Clean up resources
+	if p.kafkaView != nil {
+		p.kafkaView.Stop()
+	}
 }
 
 // OhmyopsPlugin is exported as a variable to be loaded by the main application
