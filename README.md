@@ -12,6 +12,10 @@
   <a href="#plugins">Plugins</a>
 </p>
 
+<p align="center">
+  <img src="website/images/docker-images.png" alt="OhMyOps Docker plugin screenshot" width="700">
+</p>
+
 ---
 
 **OhMyOps (omo)** is your complete operations dashboard, right in your terminal. Manage your infrastructure without leaving the command line.
