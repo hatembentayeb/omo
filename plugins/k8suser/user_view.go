@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 
-	"omo/ui"
+	"omo/pkg/ui"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -14,13 +14,13 @@ import (
 type UserView struct {
 	app         *tview.Application
 	pages       *tview.Pages
-	cores       *ui.Cores
+	cores       *ui.CoreView
 	certManager *CertManager
 	k8sClient   *K8sClient
 }
 
 // NewUserView creates a new user view
-func NewUserView(app *tview.Application, pages *tview.Pages, cores *ui.Cores, certManager *CertManager, k8sClient *K8sClient) *UserView {
+func NewUserView(app *tview.Application, pages *tview.Pages, cores *ui.CoreView, certManager *CertManager, k8sClient *K8sClient) *UserView {
 	return &UserView{
 		app:         app,
 		pages:       pages,

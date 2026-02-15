@@ -8,20 +8,38 @@ import (
 
 	"github.com/rivo/tview"
 
-	"omo/ui"
+	"omo/pkg/ui"
 )
 
 // RedisView manages the UI for interacting with Redis
 type RedisView struct {
 	app               *tview.Application
 	pages             *tview.Pages
-	cores             *ui.Cores
+	viewPages         *tview.Pages
+	cores             *ui.CoreView
+	keysView          *ui.CoreView
+	infoView          *ui.CoreView
+	slowlogView       *ui.CoreView
+	statsView         *ui.CoreView
+	clientsView       *ui.CoreView
+	configView        *ui.CoreView
+	memoryView        *ui.CoreView
+	replicationView   *ui.CoreView
+	persistenceView   *ui.CoreView
+	pubsubView        *ui.CoreView
+	keyAnalysisView   *ui.CoreView
+	databasesView     *ui.CoreView
+	commandStatsView  *ui.CoreView
+	latencyView       *ui.CoreView
 	redisClient       *RedisClient
 	currentConnection *RedisConnection
-	keys              []string
 	currentDatabase   int
+	currentView       string
 	refreshTimer      *time.Timer
 	refreshInterval   time.Duration
+	scanCursor        uint64
+	scanDone          bool
+	scanCount         int64
 }
 
 // NewRedisView creates a new Redis view
@@ -29,53 +47,147 @@ func NewRedisView(app *tview.Application, pages *tview.Pages) *RedisView {
 	rv := &RedisView{
 		app:             app,
 		pages:           pages,
+		viewPages:       tview.NewPages(),
 		currentDatabase: 0,
-		keys:            []string{},
 		refreshInterval: 10 * time.Second, // Default refresh interval
+		scanCount:       500,
 	}
 
 	// Create Cores UI component
-	rv.cores = ui.NewCores(app, "Redis Manager")
+	rv.keysView = ui.NewCoreView(app, "Redis Manager")
+	rv.keysView.SetSelectionKey("Key")
+	rv.cores = rv.keysView
 
 	// Set table headers
-	rv.cores.SetTableHeaders([]string{"Key", "Type", "TTL", "Size"})
+	rv.keysView.SetTableHeaders([]string{"Key", "Type", "TTL", "Size"})
 
 	// Set up refresh callback
-	rv.cores.SetRefreshCallback(func() ([][]string, error) {
+	rv.keysView.SetRefreshCallback(func() ([][]string, error) {
 		// This will be called when RefreshData() is triggered from the core
 		return rv.refreshKeys()
 	})
+	rv.keysView.SetLazyLoader(int(rv.scanCount), rv.loadKeysPage)
 
 	// Add key bindings
-	rv.cores.AddKeyBinding("R", "Refresh", rv.refresh)
+	rv.keysView.AddKeyBinding("R", "Refresh", rv.refresh)
 	// Note: Ctrl+T is handled at the plugin level for consistency
-	rv.cores.AddKeyBinding("?", "Help", rv.showHelp)
-	rv.cores.AddKeyBinding("D", "Del Key", rv.showDeleteKeyConfirmation)
-	rv.cores.AddKeyBinding("F", "Flush DB", rv.showFlushDBConfirmation)
-	rv.cores.AddKeyBinding("N", "New Key", rv.showNewKeyForm)
+	rv.keysView.AddKeyBinding("?", "Help", rv.showHelp)
+	rv.keysView.AddKeyBinding("D", "Del Key", rv.showDeleteKeyConfirmation)
+	rv.keysView.AddKeyBinding("F", "Flush DB", rv.showFlushDBConfirmation)
+	rv.keysView.AddKeyBinding("N", "New Key", rv.showNewKeyForm)
+	rv.keysView.AddKeyBinding("E", "View Key", rv.showSelectedKeyContent)
+	rv.keysView.AddKeyBinding("I", "Server Info", rv.showServerInfo)
+	rv.keysView.AddKeyBinding("L", "Slowlog", rv.showSlowlog)
+	rv.keysView.AddKeyBinding("T", "Stats", rv.showStats)
+	rv.keysView.AddKeyBinding("C", "Clients", rv.showClients)
+	rv.keysView.AddKeyBinding("G", "Config", rv.showConfig)
+	rv.keysView.AddKeyBinding("M", "Memory", rv.showMemory)
+	rv.keysView.AddKeyBinding("P", "Persistence", rv.showPersistence)
+	rv.keysView.AddKeyBinding("Y", "Replication", rv.showReplication)
+	rv.keysView.AddKeyBinding("B", "PubSub", rv.showPubSub)
+	rv.keysView.AddKeyBinding("A", "Key Analysis", rv.showKeyAnalysis)
+	rv.keysView.AddKeyBinding("W", "Databases", rv.showDatabases)
+	rv.keysView.AddKeyBinding("X", "Cmd Stats", rv.showCommandStats)
+	rv.keysView.AddKeyBinding("Z", "Latency", rv.showLatency)
 
 	// Database selection with S key
-	rv.cores.AddKeyBinding("S", "DB Select", rv.showDBSelector)
-	rv.cores.AddKeyBinding("Enter", "View Key", rv.showSelectedKeyContent)
+	rv.keysView.AddKeyBinding("S", "DB Select", rv.showDBSelector)
 
 	// Set action callback
-	rv.cores.SetActionCallback(rv.handleAction)
+	rv.keysView.SetActionCallback(rv.handleAction)
 
 	// Add row selection callback - just log the selection, don't show content automatically
-	rv.cores.SetRowSelectedCallback(func(row int) {
-		if row >= 0 && row < len(rv.keys) {
-			rv.cores.Log(fmt.Sprintf("[blue]Selected key: %s", rv.keys[row]))
+	rv.keysView.SetRowSelectedCallback(func(row int) {
+		tableData := rv.keysView.GetTableData()
+		if row >= 0 && row < len(tableData) && len(tableData[row]) > 0 {
+			rv.keysView.Log(fmt.Sprintf("[blue]Selected key: %s", tableData[row][0]))
 		}
 	})
 
+	rv.keysView.GetTable().SetSelectedFunc(func(row, column int) {
+		if row <= 0 {
+			return
+		}
+		rv.showSelectedKeyContent()
+	})
+
+	// Set modal pages BEFORE registering handlers so filter modal works
+	rv.keysView.SetModalPages(rv.pages)
+
 	// Register the key handlers
-	rv.cores.RegisterHandlers()
+	rv.keysView.RegisterHandlers()
 
 	// Initialize Redis client
 	rv.redisClient = NewRedisClient()
 
 	// Set initial status
-	rv.cores.SetInfoText("[yellow]Redis Manager[white]\nStatus: Not Connected\nUse [green]Ctrl+T[white] to select instance")
+	rv.keysView.SetInfoText("[yellow]Redis Manager[white]\nStatus: Not Connected\nUse [green]Ctrl+T[white] to select instance")
+
+	rv.infoView = rv.newInfoView()
+	rv.slowlogView = rv.newSlowlogView()
+	rv.statsView = rv.newStatsView()
+	rv.clientsView = rv.newClientsView()
+	rv.configView = rv.newConfigView()
+	rv.memoryView = rv.newMemoryView()
+	rv.replicationView = rv.newReplicationView()
+	rv.persistenceView = rv.newPersistenceView()
+	rv.pubsubView = rv.newPubSubView()
+	rv.keyAnalysisView = rv.newKeyAnalysisView()
+	rv.databasesView = rv.newDatabasesView()
+	rv.commandStatsView = rv.newCommandStatsView()
+	rv.latencyView = rv.newLatencyView()
+
+	views := []*ui.CoreView{
+		rv.keysView,
+		rv.infoView,
+		rv.slowlogView,
+		rv.statsView,
+		rv.clientsView,
+		rv.configView,
+		rv.memoryView,
+		rv.replicationView,
+		rv.persistenceView,
+		rv.pubsubView,
+		rv.keyAnalysisView,
+		rv.databasesView,
+		rv.commandStatsView,
+		rv.latencyView,
+	}
+	for _, view := range views {
+		if view != nil {
+			view.SetModalPages(rv.pages)
+		}
+	}
+
+	rv.viewPages.AddPage("redis-keys", rv.keysView.GetLayout(), true, true)
+	rv.viewPages.AddPage("redis-info", rv.infoView.GetLayout(), true, false)
+	rv.viewPages.AddPage("redis-slowlog", rv.slowlogView.GetLayout(), true, false)
+	rv.viewPages.AddPage("redis-stats", rv.statsView.GetLayout(), true, false)
+	rv.viewPages.AddPage("redis-clients", rv.clientsView.GetLayout(), true, false)
+	rv.viewPages.AddPage("redis-config", rv.configView.GetLayout(), true, false)
+	rv.viewPages.AddPage("redis-memory", rv.memoryView.GetLayout(), true, false)
+	rv.viewPages.AddPage("redis-replication", rv.replicationView.GetLayout(), true, false)
+	rv.viewPages.AddPage("redis-persistence", rv.persistenceView.GetLayout(), true, false)
+	rv.viewPages.AddPage("redis-pubsub", rv.pubsubView.GetLayout(), true, false)
+	rv.viewPages.AddPage("redis-keyanalysis", rv.keyAnalysisView.GetLayout(), true, false)
+	rv.viewPages.AddPage("redis-databases", rv.databasesView.GetLayout(), true, false)
+	rv.viewPages.AddPage("redis-commandstats", rv.commandStatsView.GetLayout(), true, false)
+	rv.viewPages.AddPage("redis-latency", rv.latencyView.GetLayout(), true, false)
+	rv.currentView = viewKeys
+	rv.setViewStack(rv.keysView, viewKeys)
+	rv.setViewStack(rv.infoView, viewInfo)
+	rv.setViewStack(rv.slowlogView, viewSlowlog)
+	rv.setViewStack(rv.statsView, viewStats)
+	rv.setViewStack(rv.clientsView, viewClients)
+	rv.setViewStack(rv.configView, viewConfig)
+	rv.setViewStack(rv.memoryView, viewMemory)
+	rv.setViewStack(rv.replicationView, viewRepl)
+	rv.setViewStack(rv.persistenceView, viewPersist)
+	rv.setViewStack(rv.pubsubView, viewPubSub)
+	rv.setViewStack(rv.keyAnalysisView, viewKeyAnalysis)
+	rv.setViewStack(rv.databasesView, viewDatabases)
+	rv.setViewStack(rv.commandStatsView, viewCmdStats)
+	rv.setViewStack(rv.latencyView, viewLatency)
 
 	// Start auto-refresh timer
 	rv.startAutoRefresh()
@@ -85,7 +197,36 @@ func NewRedisView(app *tview.Application, pages *tview.Pages) *RedisView {
 
 // GetMainUI returns the main UI component
 func (rv *RedisView) GetMainUI() tview.Primitive {
-	return rv.cores.GetLayout()
+	return rv.viewPages
+}
+
+// Stop cleans up resources when the view is no longer used.
+func (rv *RedisView) Stop() {
+	if rv.refreshTimer != nil {
+		rv.refreshTimer.Stop()
+	}
+
+	if rv.redisClient != nil && rv.redisClient.IsConnected() {
+		rv.redisClient.Disconnect()
+	}
+
+	views := []*ui.CoreView{
+		rv.keysView,
+		rv.infoView,
+		rv.slowlogView,
+		rv.statsView,
+		rv.clientsView,
+		rv.configView,
+		rv.memoryView,
+		rv.replicationView,
+		rv.persistenceView,
+	}
+	for _, view := range views {
+		if view != nil {
+			view.StopAutoRefresh()
+			view.UnregisterHandlers()
+		}
+	}
 }
 
 // ShowConnectionSelector displays the connection selector form
@@ -126,8 +267,9 @@ func (rv *RedisView) ShowConnectionSelector() {
 		func(index int, name string, cancelled bool) {
 			// Always return focus to the table, whether cancelled or selected
 			if !cancelled && index >= 0 && index < len(instances) {
-				// Connect to the selected instance
-				rv.connectToRedisInstance(instances[index])
+				// Connect in a goroutine to avoid blocking the UI
+				// during network I/O (connect + key scan).
+				go rv.connectToRedisInstance(instances[index])
 			} else {
 				// Log that selection was cancelled
 				rv.cores.Log("[blue]Connection selection cancelled")
@@ -145,8 +287,9 @@ func (rv *RedisView) showConnectionForm(items [][]string, index int) {
 		// All fields collected, connect to Redis
 		host := items[0][1]
 		port := items[1][1]
-		password := items[2][1]
-		dbStr := items[3][1]
+		username := items[2][1]
+		password := items[3][1]
+		dbStr := items[4][1]
 
 		// Parse database number
 		db, err := strconv.Atoi(dbStr)
@@ -155,7 +298,7 @@ func (rv *RedisView) showConnectionForm(items [][]string, index int) {
 			return
 		}
 
-		rv.connectToRedis(host, port, password, db)
+		rv.connectToRedis(host, port, username, password, db)
 		return
 	}
 
@@ -186,14 +329,14 @@ func (rv *RedisView) showConnectionForm(items [][]string, index int) {
 }
 
 // connectToRedis attempts to connect to a Redis instance
-func (rv *RedisView) connectToRedis(host, port, password string, db int) {
+func (rv *RedisView) connectToRedis(host, port, username, password string, db int) {
 	// Create a new Redis client if needed
 	if rv.redisClient == nil {
 		rv.redisClient = NewRedisClient()
 	}
 
 	// Connect to Redis
-	err := rv.redisClient.Connect(host, port, password, db)
+	err := rv.redisClient.Connect(host, port, username, password, db)
 	if err != nil {
 		rv.cores.Log(fmt.Sprintf("[red]Failed to connect to Redis: %v", err))
 		return
@@ -215,36 +358,90 @@ func (rv *RedisView) connectToRedis(host, port, password string, db int) {
 func (rv *RedisView) refreshKeys() ([][]string, error) {
 	if rv.redisClient == nil || !rv.redisClient.IsConnected() {
 		// No client or not connected, show empty data
-		rv.keys = []string{}
 		rv.cores.SetTableData([][]string{})
 		rv.cores.SetInfoText("[yellow]Redis Manager[white]\nStatus: Not Connected\nUse [green]Ctrl+T[white] to select instance")
 		return [][]string{}, nil
 	}
 
-	// Get keys from Redis client
-	keys, err := rv.redisClient.GetKeys("*")
+	rv.resetKeyScan()
+	tableData, err := rv.loadKeysPage(0, int(rv.scanCount))
 	if err != nil {
-		rv.cores.Log(fmt.Sprintf("[red]Failed to get keys: %v", err))
-
-		// Check if we need to reset the connection
-		if strings.Contains(err.Error(), "connection") ||
-			strings.Contains(err.Error(), "timeout") {
-			rv.cores.Log("[red]Connection to Redis lost. Please reconnect.")
-			// Mark as disconnected
-			if rv.redisClient != nil {
-				rv.redisClient.Disconnect()
-			}
-			rv.cores.SetInfoText("[yellow]Redis Manager[white]\nStatus: Not Connected\nUse [green]Ctrl+T[white] to select instance")
-		}
 		return [][]string{}, err
 	}
+	if rv.currentConnection != nil {
+		rv.cores.SetInfoText(fmt.Sprintf("[green]Redis Manager[white]\nServer: %s:%s\nDB: %d\nStatus: Connected\nKeys loaded: %d",
+			rv.currentConnection.Host, rv.currentConnection.Port, rv.currentDatabase, len(tableData)))
+	}
+	return tableData, nil
+}
 
-	// Prepare table data
-	tableData := make([][]string, 0, len(keys))
-	rv.keys = make([]string, 0, len(keys))
+// refresh manually refreshes the keys
+func (rv *RedisView) refresh() {
+	currentView := rv.currentCores()
+	if currentView != nil {
+		currentView.RefreshData()
+	}
 
-	for _, key := range keys {
-		// Get key info
+	// Update key count in the info panel after keys view refresh.
+	if rv.currentView == viewKeys && rv.currentConnection != nil {
+		tableData := rv.keysView.GetTableData()
+		rv.cores.SetInfoText(fmt.Sprintf("[green]Redis Manager[white]\nServer: %s:%s\nDB: %d\nStatus: Connected\nKeys loaded: %d",
+			rv.currentConnection.Host, rv.currentConnection.Port, rv.currentDatabase, len(tableData)))
+	}
+}
+
+func (rv *RedisView) resetKeyScan() {
+	rv.scanCursor = 0
+	rv.scanDone = false
+}
+
+func (rv *RedisView) loadKeysPage(offset, limit int) ([][]string, error) {
+	if rv.redisClient == nil || !rv.redisClient.IsConnected() {
+		return [][]string{}, nil
+	}
+	if offset == 0 {
+		rv.resetKeyScan()
+	}
+	if rv.scanDone {
+		return [][]string{}, nil
+	}
+
+	// Collect keys across multiple SCAN iterations.
+	// Redis SCAN with COUNT is only a hint — a single call can return
+	// zero keys even when the database is not empty.  We must keep
+	// scanning until we either have enough keys or the cursor wraps to 0.
+	allKeys := make([]string, 0, limit)
+	for len(allKeys) < limit && !rv.scanDone {
+		keys, nextCursor, err := rv.redisClient.ScanKeys("*", rv.scanCursor, int64(limit))
+		if err != nil {
+			rv.cores.Log(fmt.Sprintf("[red]Failed to scan keys: %v", err))
+
+			if strings.Contains(err.Error(), "connection") ||
+				strings.Contains(err.Error(), "timeout") {
+				rv.cores.Log("[red]Connection to Redis lost. Please reconnect.")
+				if rv.redisClient != nil {
+					rv.redisClient.Disconnect()
+				}
+				rv.cores.SetInfoText("[yellow]Redis Manager[white]\nStatus: Not Connected\nUse [green]Ctrl+T[white] to select instance")
+			}
+			return [][]string{}, err
+		}
+
+		rv.scanCursor = nextCursor
+		if nextCursor == 0 {
+			rv.scanDone = true
+		}
+
+		allKeys = append(allKeys, keys...)
+	}
+
+	// Trim to limit in case the last batch pushed us over.
+	if len(allKeys) > limit {
+		allKeys = allKeys[:limit]
+	}
+
+	tableData := make([][]string, 0, len(allKeys))
+	for _, key := range allKeys {
 		keyInfo, err := rv.redisClient.GetKeyInfo(key)
 		if err != nil {
 			continue
@@ -255,27 +452,21 @@ func (rv *RedisView) refreshKeys() ([][]string, error) {
 		size := keyInfo["size"]
 
 		tableData = append(tableData, []string{key, keyType, ttl, size})
-		rv.keys = append(rv.keys, key)
 	}
 
-	// Update the table
-	rv.cores.SetTableData(tableData)
-
-	// Update last refresh time
-	rv.redisClient.SetLastRefreshTime(time.Now())
-
-	// Update info text
-	if rv.currentConnection != nil {
-		rv.cores.SetInfoText(fmt.Sprintf("[green]Redis Manager[white]\nServer: %s:%s\nDB: %d\nStatus: Connected",
-			rv.currentConnection.Host, rv.currentConnection.Port, rv.currentDatabase))
+	if offset == 0 {
+		rv.redisClient.SetLastRefreshTime(time.Now())
 	}
 
 	return tableData, nil
 }
 
-// refresh manually refreshes the keys
-func (rv *RedisView) refresh() {
-	rv.cores.RefreshData()
+func (rv *RedisView) selectedKey() (string, bool) {
+	row := rv.cores.GetSelectedRowData()
+	if len(row) == 0 {
+		return "", false
+	}
+	return row[0], true
 }
 
 // showKeyContent displays the content of a Redis key
@@ -316,7 +507,27 @@ D       - Delete selected key
 F       - Flush current database
 N       - Create new key
 S       - Select database (0-15)
-Enter   - View key content
+E       - View key content
+I       - Server info view
+L       - Slowlog view
+T       - Stats view
+K       - Keys view
+C       - Clients view
+G       - Config view
+M       - Memory view
+P       - Persistence view
+Y       - Replication view
+B       - PubSub view
+A       - Key Analysis view
+W       - Databases view
+X       - Command Stats view
+Z       - Latency view
+D       - Memory Doctor (memory view)
+
+[green]PubSub View:[white]
+Enter   - Subscribe to channel (view live messages)
+U       - Publish message to channel
+Esc     - Close message viewer / Unsubscribe
 
 [green]Navigation:[white]
 Arrow keys - Navigate keys list
@@ -330,7 +541,10 @@ Esc        - Close modal dialogs
 		"Redis Help",
 		helpText,
 		func() {
-			rv.app.SetFocus(rv.cores.GetTable())
+			current := rv.currentCores()
+			if current != nil {
+				rv.app.SetFocus(current.GetTable())
+			}
 		},
 	)
 }
@@ -345,6 +559,48 @@ func (rv *RedisView) handleAction(action string, payload map[string]interface{})
 		// Handle specific key presses
 		if key, ok := payload["key"].(string); ok {
 			switch key {
+			case "I":
+				rv.showServerInfo()
+				return nil
+			case "L":
+				rv.showSlowlog()
+				return nil
+			case "T":
+				rv.showStats()
+				return nil
+			case "C":
+				rv.showClients()
+				return nil
+			case "G":
+				rv.showConfig()
+				return nil
+			case "M":
+				rv.showMemory()
+				return nil
+			case "P":
+				rv.showPersistence()
+				return nil
+			case "Y":
+				rv.showReplication()
+				return nil
+			case "B":
+				rv.showPubSub()
+				return nil
+			case "A":
+				rv.showKeyAnalysis()
+				return nil
+			case "W":
+				rv.showDatabases()
+				return nil
+			case "X":
+				rv.showCommandStats()
+				return nil
+			case "Z":
+				rv.showLatency()
+				return nil
+			case "K":
+				rv.switchView(viewKeys)
+				return nil
 			case "?":
 				rv.showHelp()
 				return nil
@@ -352,24 +608,53 @@ func (rv *RedisView) handleAction(action string, payload map[string]interface{})
 				rv.refresh()
 				return nil
 			case "D":
-				rv.showDeleteKeyConfirmation()
-				return nil
+				if rv.currentView == viewKeys {
+					rv.showDeleteKeyConfirmation()
+					return nil
+				}
+				if rv.currentView == viewMemory {
+					rv.showMemoryDoctor()
+					return nil
+				}
 			case "F":
-				rv.showFlushDBConfirmation()
-				return nil
+				if rv.currentView == viewKeys {
+					rv.showFlushDBConfirmation()
+					return nil
+				}
 			case "N":
-				rv.showNewKeyForm()
-				return nil
+				if rv.currentView == viewKeys {
+					rv.showNewKeyForm()
+					return nil
+				}
 			case "S":
-				rv.showDBSelector()
-				return nil
+				if rv.currentView == viewKeys {
+					rv.showDBSelector()
+					return nil
+				}
+			case "E":
+				if rv.currentView == viewKeys {
+					rv.showSelectedKeyContent()
+					return nil
+				}
 			case "Enter":
-				rv.showSelectedKeyContent()
-				return nil
+				if rv.currentView == viewKeys {
+					rv.showSelectedKeyContent()
+					return nil
+				}
 			}
 		}
+	case "navigate_back":
+		if view, ok := payload["current_view"].(string); ok {
+			if view == viewRoot {
+				// Stay on keys when reaching root breadcrumb.
+				rv.switchView(viewKeys)
+				return nil
+			}
+			rv.switchView(view)
+			return nil
+		}
 	}
-	return nil
+	return fmt.Errorf("unhandled")
 }
 
 // selectDatabase switches to the specified Redis database
@@ -412,13 +697,11 @@ func (rv *RedisView) selectDatabase(db int) {
 
 // showDeleteKeyConfirmation shows confirmation dialog for key deletion
 func (rv *RedisView) showDeleteKeyConfirmation() {
-	selectedRow := rv.cores.GetSelectedRow()
-	if selectedRow < 0 || selectedRow >= len(rv.keys) {
+	key, ok := rv.selectedKey()
+	if !ok {
 		rv.cores.Log("[yellow]No key selected")
 		return
 	}
-
-	key := rv.keys[selectedRow]
 
 	ui.ShowStandardConfirmationModal(
 		rv.pages,
@@ -573,6 +856,7 @@ func (rv *RedisView) showManualConnectionForm() {
 	items := [][]string{
 		{"Host", "localhost"},
 		{"Port", "6379"},
+		{"Username", ""},
 		{"Password", ""},
 		{"Database", "0"},
 	}
@@ -610,7 +894,8 @@ func (rv *RedisView) startAutoRefresh() {
 	})
 }
 
-// connectToRedisInstance connects to a preconfigured Redis instance
+// connectToRedisInstance connects to a preconfigured Redis instance.
+// Safe to call from any goroutine — UI updates go through QueueUpdateDraw.
 func (rv *RedisView) connectToRedisInstance(instance RedisInstance) {
 	// Create a new Redis client if needed
 	if rv.redisClient == nil {
@@ -618,14 +903,18 @@ func (rv *RedisView) connectToRedisInstance(instance RedisInstance) {
 	}
 
 	// Set status to connecting
-	rv.cores.SetInfoText(fmt.Sprintf("[yellow]Redis Manager[white]\nServer: %s:%d\nStatus: Connecting...",
-		instance.Host, instance.Port))
+	rv.app.QueueUpdateDraw(func() {
+		rv.cores.SetInfoText(fmt.Sprintf("[yellow]Redis Manager[white]\nServer: %s:%d\nStatus: Connecting...",
+			instance.Host, instance.Port))
+	})
 
-	// Connect to Redis
+	// Connect to Redis (blocking network I/O)
 	err := rv.redisClient.ConnectToInstance(instance)
 	if err != nil {
-		rv.cores.Log(fmt.Sprintf("[red]Connection failed: %v", err))
-		rv.cores.SetInfoText("[yellow]Redis Manager[white]\nStatus: Not Connected\nUse [green]Ctrl+T[white] to select instance")
+		rv.app.QueueUpdateDraw(func() {
+			rv.cores.Log(fmt.Sprintf("[red]Connection failed: %v", err))
+			rv.cores.SetInfoText("[yellow]Redis Manager[white]\nStatus: Not Connected\nUse [green]Ctrl+T[white] to select instance")
+		})
 		return
 	}
 
@@ -633,12 +922,12 @@ func (rv *RedisView) connectToRedisInstance(instance RedisInstance) {
 	rv.currentDatabase = instance.Database
 
 	// Update the UI
-	rv.cores.SetInfoText(fmt.Sprintf("[green]Redis Manager[white]\nServer: %s:%d\nDB: %d\nStatus: Connected",
-		instance.Host, instance.Port, instance.Database))
-	rv.cores.Log(fmt.Sprintf("[green]Connected to %s:%d", instance.Host, instance.Port))
-
-	// Refresh keys immediately
-	rv.refresh()
+	rv.app.QueueUpdateDraw(func() {
+		rv.cores.SetInfoText(fmt.Sprintf("[green]Redis Manager[white]\nServer: %s:%d\nDB: %d\nStatus: Connected",
+			instance.Host, instance.Port, instance.Database))
+		rv.cores.Log(fmt.Sprintf("[green]Connected to %s:%d", instance.Host, instance.Port))
+		rv.refresh()
+	})
 
 	// Ensure auto-refresh is running
 	rv.startAutoRefresh()
@@ -646,31 +935,36 @@ func (rv *RedisView) connectToRedisInstance(instance RedisInstance) {
 
 // showSelectedKeyContent shows the content of the currently selected key
 func (rv *RedisView) showSelectedKeyContent() {
-	selectedRow := rv.cores.GetSelectedRow()
-	if selectedRow < 0 || selectedRow >= len(rv.keys) {
+	key, ok := rv.selectedKey()
+	if !ok {
 		rv.cores.Log("[yellow]No key selected")
 		return
 	}
-
-	key := rv.keys[selectedRow]
 	rv.showKeyContent(key)
 }
 
-// AutoConnectToDefaultInstance automatically connects to the default Redis instance
+// AutoConnectToDefaultInstance automatically connects to the default Redis instance.
+// Safe to call from any goroutine.
 func (rv *RedisView) AutoConnectToDefaultInstance() {
 	// Get available Redis instances from config
 	instances, err := GetAvailableInstances()
 	if err != nil {
-		rv.cores.Log(fmt.Sprintf("[yellow]Failed to load Redis instances: %v", err))
+		rv.app.QueueUpdateDraw(func() {
+			rv.cores.Log(fmt.Sprintf("[yellow]Failed to load Redis instances: %v", err))
+		})
 		return
 	}
 
 	if len(instances) == 0 {
-		rv.cores.Log("[yellow]No Redis instances configured in config/redis.yaml")
+		rv.app.QueueUpdateDraw(func() {
+			rv.cores.Log("[yellow]No Redis instances configured in ~/.omo/configs/redis/redis.yaml")
+		})
 		return
 	}
 
 	// Connect to the first instance in the list
-	rv.cores.Log(fmt.Sprintf("[blue]Auto-connecting to Redis instance: %s", instances[0].Name))
+	rv.app.QueueUpdateDraw(func() {
+		rv.cores.Log(fmt.Sprintf("[blue]Auto-connecting to Redis instance: %s", instances[0].Name))
+	})
 	rv.connectToRedisInstance(instances[0])
 }

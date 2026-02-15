@@ -7,20 +7,20 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 
-	"omo/ui"
+	"omo/pkg/ui"
 )
 
 // AccountView handles the account management view
 type AccountView struct {
 	app       *tview.Application
 	pages     *tview.Pages
-	cores     *ui.Cores
+	cores     *ui.CoreView
 	apiClient *ArgoAPIClient
 	accounts  []Account
 }
 
 // NewAccountView creates a new account view
-func NewAccountView(app *tview.Application, pages *tview.Pages, cores *ui.Cores, apiClient *ArgoAPIClient) *AccountView {
+func NewAccountView(app *tview.Application, pages *tview.Pages, cores *ui.CoreView, apiClient *ArgoAPIClient) *AccountView {
 	return &AccountView{
 		app:       app,
 		pages:     pages,

@@ -2,9 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -87,45 +84,3 @@ func (bv *BucketsView) getBucketRegion(bucketName string) (string, error) {
 	return *result.LocationConstraint, nil
 }
 
-// loadAWSProfilesFromCredentials loads AWS profiles from credentials file
-func loadAWSProfilesFromCredentials() ([]string, error) {
-	// Determine home directory
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("unable to determine home directory: %v", err)
-	}
-
-	// Determine credentials file path
-	credentialsPath := filepath.Join(homeDir, ".aws", "credentials")
-
-	// Check if credentials file exists
-	if _, err := os.Stat(credentialsPath); os.IsNotExist(err) {
-		return []string{}, nil // Return empty slice instead of default
-	}
-
-	// Read credentials file
-	data, err := os.ReadFile(credentialsPath)
-	if err != nil {
-		return nil, fmt.Errorf("unable to read AWS credentials file: %v", err)
-	}
-
-	// Parse profiles
-	content := string(data)
-	lines := strings.Split(content, "\n")
-	var profiles []string
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
-			// Extract profile name
-			profile := line[1 : len(line)-1]
-			// Skip if it contains a space (like [profile name])
-			if !strings.Contains(profile, " ") {
-				profiles = append(profiles, profile)
-			}
-		}
-	}
-
-	// Return whatever profiles were found, could be empty
-	return profiles, nil
-}

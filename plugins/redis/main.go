@@ -3,22 +3,11 @@ package main
 import (
 	"time"
 
+	"omo/pkg/pluginapi"
+
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
-
-// PluginMetadata defines metadata for OhmyopsPlugin
-type PluginMetadata struct {
-	Name        string    // Name of the plugin
-	Version     string    // Version of the plugin
-	Description string    // Short description of the plugin
-	Author      string    // Author of the plugin
-	License     string    // License of the plugin
-	Tags        []string  // Tags for categorizing the plugin
-	Arch        []string  // Supported architectures
-	LastUpdated time.Time // Last update time
-	URL         string    // URL to the plugin repository or documentation
-}
 
 // RedisPlugin represents the Redis management plugin
 type RedisPlugin struct {
@@ -56,8 +45,11 @@ func (r *RedisPlugin) Start(app *tview.Application) tview.Primitive {
 	// Set initial focus to the table explicitly
 	app.SetFocus(r.redisView.cores.GetTable())
 
-	// Auto-connect to the first Redis instance in config
-	r.redisView.AutoConnectToDefaultInstance()
+	// Auto-connect in a goroutine to avoid blocking the UI thread.
+	// Network connect + key scan can take seconds on timeout.
+	go func() {
+		r.redisView.AutoConnectToDefaultInstance()
+	}()
 
 	return pages
 }
@@ -65,21 +57,13 @@ func (r *RedisPlugin) Start(app *tview.Application) tview.Primitive {
 // Stop cleans up resources used by the Redis plugin
 func (r *RedisPlugin) Stop() {
 	if r.redisView != nil {
-		// If redisView has a redis client, disconnect
-		if r.redisView.redisClient != nil {
-			r.redisView.redisClient.Disconnect()
-		}
-
-		// Stop the auto-refresh timer
-		if r.redisView.refreshTimer != nil {
-			r.redisView.refreshTimer.Stop()
-		}
+		r.redisView.Stop()
 	}
 }
 
 // GetMetadata returns plugin metadata
-func (r *RedisPlugin) GetMetadata() PluginMetadata {
-	return PluginMetadata{
+func (r *RedisPlugin) GetMetadata() pluginapi.PluginMetadata {
+	return pluginapi.PluginMetadata{
 		Name:        "redis",
 		Version:     "1.0.0",
 		Description: "Redis management plugin",
@@ -100,18 +84,17 @@ func init() {
 	OhmyopsPlugin.Description = "Manage Redis instances and monitor performance"
 }
 
-// GetMetadata is exported as a function to be called directly by the main application
-// when the direct type assertion of OhmyopsPlugin fails
-func GetMetadata() interface{} {
-	return map[string]interface{}{
-		"Name":        "redis",
-		"Version":     "1.0.0",
-		"Description": "Redis management plugin",
-		"Author":      "Redis Plugin Team",
-		"License":     "MIT",
-		"Tags":        []string{"database", "cache", "nosql"},
-		"Arch":        []string{"amd64", "arm64"},
-		"LastUpdated": time.Now(),
-		"URL":         "https://github.com/hatembentayeb/omo/plugins/redis",
+// GetMetadata is exported for legacy loaders.
+func GetMetadata() pluginapi.PluginMetadata {
+	return pluginapi.PluginMetadata{
+		Name:        "redis",
+		Version:     "1.0.0",
+		Description: "Redis management plugin",
+		Author:      "Redis Plugin Team",
+		License:     "MIT",
+		Tags:        []string{"database", "cache", "nosql"},
+		Arch:        []string{"amd64", "arm64"},
+		LastUpdated: time.Now(),
+		URL:         "https://github.com/hatembentayeb/omo/plugins/redis",
 	}
 }

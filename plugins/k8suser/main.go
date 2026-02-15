@@ -7,7 +7,8 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 
-	"omo/ui"
+	"omo/pkg/pluginapi"
+	"omo/pkg/ui"
 )
 
 // OhmyopsPlugin is expected by the main application
@@ -17,7 +18,7 @@ var OhmyopsPlugin K8sUserPlugin
 type K8sUserPlugin struct {
 	app            *tview.Application
 	pages          *tview.Pages
-	cores          *ui.Cores
+	cores          *ui.CoreView
 	currentView    string
 	userView       *UserView
 	roleView       *RoleView
@@ -82,67 +83,90 @@ func (p *K8sUserPlugin) Start(app *tview.Application) tview.Primitive {
 	return p.pages
 }
 
-// GetMetadata returns plugin metadata
-func (p *K8sUserPlugin) GetMetadata() interface{} {
-	return map[string]interface{}{
-		"Name":        "k8suser",
-		"Version":     "1.0.0",
-		"Description": "Kubernetes user and certificate management",
-		"Author":      "OhMyOps",
-		"License":     "MIT",
-		"Tags":        []string{"kubernetes", "security", "certificates", "users"},
-		"LastUpdated": time.Now().Format("Jan 2006"),
+// Stop cleans up resources when the plugin is unloaded.
+func (p *K8sUserPlugin) Stop() {
+	if p.cores != nil {
+		p.cores.StopAutoRefresh()
+		p.cores.UnregisterHandlers()
+	}
+
+	if p.pages != nil {
+		pageIDs := []string{
+			"main",
+			"add-rule-modal",
+			"create-role-modal",
+			"assign-role-modal",
+			"confirmation-modal",
+			"error-modal",
+			"info-modal",
+			"list-selector-modal",
+			"progress-modal",
+			"sort-modal",
+			"compact-modal",
+		}
+		for _, pageID := range pageIDs {
+			if p.pages.HasPage(pageID) {
+				p.pages.RemovePage(pageID)
+			}
+		}
+	}
+
+	p.userView = nil
+	p.roleView = nil
+	p.certManager = nil
+	p.k8sClient = nil
+	p.cores = nil
+	p.pages = nil
+	p.app = nil
+}
+
+// GetMetadata returns plugin metadata.
+func (p *K8sUserPlugin) GetMetadata() pluginapi.PluginMetadata {
+	return pluginapi.PluginMetadata{
+		Name:        "k8suser",
+		Version:     "1.0.0",
+		Description: "Kubernetes user and certificate management",
+		Author:      "OhMyOps",
+		License:     "MIT",
+		Tags:        []string{"kubernetes", "security", "certificates", "users"},
+		Arch:        []string{"amd64", "arm64"},
+		LastUpdated: time.Now(),
+		URL:         "",
 	}
 }
 
 // initializeMainView creates the main view
 func (p *K8sUserPlugin) initializeMainView() {
-	// Create pattern for initializing the main view
-	pattern := ui.ViewPattern{
-		App:          p.app,
-		Pages:        p.pages,
-		Title:        "Kubernetes User Manager",
-		HeaderText:   "Manage Kubernetes users with certificate-based authentication",
-		TableHeaders: []string{"Username", "Certificate Expiry", "Namespaces", "Roles"},
-		RefreshFunc:  p.fetchUsers,
-		KeyHandlers: map[string]string{
-			"R":  "Refresh",
-			"C":  "Create User",
-			"D":  "Delete User",
-			"A":  "Assign Role",
-			"V":  "View Details",
-			"T":  "Test Access",
-			"E":  "Export Config",
-			"K":  "Connection Command",
-			"M":  "Role Management",
-			"^T": "Switch Context",
-			"?":  "Help",
-			"^B": "Back",
-		},
-		SelectedFunc: p.onUserSelected,
-	}
+	p.cores = ui.NewCoreView(p.app, "Kubernetes User Manager")
+	p.cores.SetModalPages(p.pages)
+	p.cores.SetTableHeaders([]string{"Username", "Certificate Expiry", "Namespaces", "Roles"})
+	p.cores.SetRefreshCallback(p.fetchUsers)
+	p.cores.SetRowSelectedCallback(p.onUserSelected)
+	p.cores.SetInfoText("Manage Kubernetes users with certificate-based authentication")
 
-	// Initialize the UI
-	p.cores = ui.InitializeView(pattern)
+	// Key bindings
+	p.cores.AddKeyBinding("C", "Create User", nil)
+	p.cores.AddKeyBinding("D", "Delete User", nil)
+	p.cores.AddKeyBinding("A", "Assign Role", nil)
+	p.cores.AddKeyBinding("V", "View Details", nil)
+	p.cores.AddKeyBinding("T", "Test Access", nil)
+	p.cores.AddKeyBinding("E", "Export Config", nil)
+	p.cores.AddKeyBinding("K", "Connection Command", nil)
+	p.cores.AddKeyBinding("M", "Role Management", nil)
+	p.cores.AddKeyBinding("^T", "Switch Context", nil)
+	p.cores.AddKeyBinding("^B", "Back", nil)
 
-	// Set the table selection handler with the right signature
+	// Enter key to show user details
 	p.cores.GetTable().Select(0, 0).SetSelectedFunc(func(row, column int) {
 		p.onUserSelected(row)
 	})
 
-	// Set up action handler
 	p.setupActionHandler()
+	p.cores.RegisterHandlers()
 
-	// Add the core UI to the pages
 	p.pages.AddPage("main", p.cores.GetLayout(), true, true)
-
-	// Push initial view to navigation stack
 	p.cores.PushView("K8s Users")
-
-	// Set the current view to users
 	p.currentView = "users"
-
-	// Log initial state
 	p.cores.Log("Plugin initialized")
 }
 
