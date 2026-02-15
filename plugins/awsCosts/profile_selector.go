@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"omo/ui"
+	"omo/pkg/ui"
 
 	"github.com/rivo/tview"
 )

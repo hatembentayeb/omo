@@ -5,21 +5,42 @@ import (
 	"os"
 	"path/filepath"
 
+	"omo/pkg/pluginapi"
+
 	"gopkg.in/yaml.v3"
 )
+
+// redisConfigHeader is prepended to the auto-generated config YAML.
+const redisConfigHeader = `# Redis Plugin Configuration
+# Path: ~/.omo/configs/redis/redis.yaml
+#
+# KeePass Secret Schema (secret path: redis/<environment>/<name>):
+#   Title    → instance name
+#   URL      → host (e.g. "localhost", "redis.example.com")
+#   UserName → Redis ACL username (Redis 6+)
+#   Password → Redis password
+#
+# When "secret" is set, connection fields are resolved from KeePass.
+# YAML values take precedence over KeePass values (override only blanks).
+`
 
 // RedisConfig represents the configuration for the Redis plugin
 type RedisConfig struct {
 	Instances []RedisInstance `yaml:"instances"`
-	UI        UIConfig        `yaml:"ui"`
+	UI        UIConfig       `yaml:"ui"`
 }
 
-// RedisInstance represents a configured Redis server instance
+// RedisInstance represents a configured Redis server instance.
+// When the Secret field is set (e.g. "redis/production/main-cache"),
+// it references a KeePass entry whose fields override Host, Username,
+// Password, etc. at load time.
 type RedisInstance struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description"`
+	Secret      string `yaml:"secret,omitempty"` // KeePass path: pluginName/env/entryName
 	Host        string `yaml:"host"`
 	Port        int    `yaml:"port"`
+	Username    string `yaml:"username"`           // Redis ACL username (Redis 6+)
 	Password    string `yaml:"password"`
 	Database    int    `yaml:"database"`
 }
@@ -45,18 +66,19 @@ func DefaultConfig() *RedisConfig {
 	}
 }
 
-// LoadConfig loads the Redis configuration from the specified file
+// LoadConfig loads the Redis configuration from the specified file.
+// Default path: ~/.omo/configs/redis/redis.yaml
+//
+// After unmarshalling, any instance with a non-empty Secret field will
+// have its connection fields resolved from the KeePass secrets provider.
 func LoadConfig(configPath string) (*RedisConfig, error) {
-	// If no path is specified, use the default config path
 	if configPath == "" {
-		configPath = filepath.Join("config", "redis.yaml")
+		configPath = pluginapi.PluginConfigPath("redis")
 	}
 
-	// Check if the file exists
-	_, err := os.Stat(configPath)
-	if os.IsNotExist(err) {
-		// File doesn't exist, return default config
-		return DefaultConfig(), nil
+	// Auto-create default config if missing
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		_ = writeDefaultConfig(configPath, redisConfigHeader, DefaultConfig())
 	}
 
 	// Read the configuration file
@@ -72,7 +94,68 @@ func LoadConfig(configPath string) (*RedisConfig, error) {
 		return nil, fmt.Errorf("error parsing config file: %v", err)
 	}
 
+	// Init KeePass placeholder if no entries exist yet
+	initRedisKeePass()
+
+	// Resolve secrets for instances that reference KeePass entries.
+	if err := resolveRedisSecrets(config); err != nil {
+		return nil, fmt.Errorf("error resolving secrets: %v", err)
+	}
+
 	return config, nil
+}
+
+// initRedisKeePass seeds placeholder KeePass entries for Redis if none exist.
+func initRedisKeePass() {
+	if !pluginapi.HasSecrets() {
+		return
+	}
+	entries, err := pluginapi.Secrets().List("redis")
+	if err != nil || len(entries) > 0 {
+		return
+	}
+	_ = pluginapi.Secrets().Put("redis/default/example", &pluginapi.SecretEntry{
+		Title:    "example",
+		UserName: "",
+		Password: "",
+		URL:      "localhost",
+		Notes:    "Redis placeholder. Set URL (host), UserName (ACL user), Password.",
+	})
+}
+
+// resolveRedisSecrets iterates over instances and populates connection
+// fields from the secrets provider when a secret path is defined.
+func resolveRedisSecrets(config *RedisConfig) error {
+	if !pluginapi.HasSecrets() {
+		return nil // no provider — skip silently
+	}
+
+	for i := range config.Instances {
+		inst := &config.Instances[i]
+		if inst.Secret == "" {
+			continue
+		}
+
+		entry, err := pluginapi.ResolveSecret(inst.Secret)
+		if err != nil {
+			return fmt.Errorf("instance %q: %w", inst.Name, err)
+		}
+
+		// Override only blank fields so YAML values take precedence.
+		if inst.Host == "" && entry.URL != "" {
+			inst.Host = entry.URL
+		}
+		if inst.Username == "" && entry.UserName != "" {
+			inst.Username = entry.UserName
+		}
+		if inst.Password == "" && entry.Password != "" {
+			inst.Password = entry.Password
+		}
+		if inst.Name == "" && entry.Title != "" {
+			inst.Name = entry.Title
+		}
+	}
+	return nil
 }
 
 // GetAvailableInstances returns the list of configured Redis instances
@@ -91,4 +174,16 @@ func GetUIConfig() (UIConfig, error) {
 		return UIConfig{}, err
 	}
 	return config.UI, nil
+}
+
+// writeDefaultConfig marshals the default config struct to YAML and writes it to disk.
+func writeDefaultConfig(configPath, header string, cfg interface{}) error {
+	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
+		return err
+	}
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(configPath, []byte(header+"\n"+string(data)), 0644)
 }

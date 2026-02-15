@@ -7,20 +7,20 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 
-	"omo/ui"
+	"omo/pkg/ui"
 )
 
 // ProjectView handles the project management view
 type ProjectView struct {
 	app       *tview.Application
 	pages     *tview.Pages
-	cores     *ui.Cores
+	cores     *ui.CoreView
 	apiClient *ArgoAPIClient
 	projects  []Project
 }
 
 // NewProjectView creates a new project view
-func NewProjectView(app *tview.Application, pages *tview.Pages, cores *ui.Cores, apiClient *ArgoAPIClient) *ProjectView {
+func NewProjectView(app *tview.Application, pages *tview.Pages, cores *ui.CoreView, apiClient *ArgoAPIClient) *ProjectView {
 	return &ProjectView{
 		app:       app,
 		pages:     pages,

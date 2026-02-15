@@ -2,13 +2,17 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
@@ -362,6 +366,8 @@ func (d *DockerClient) ListVolumes() ([]DockerVolume, error) {
 			Name:       vol.Name,
 			Driver:     vol.Driver,
 			Mountpoint: vol.Mountpoint,
+			Scope:      vol.Scope,
+			CreatedAt:  vol.CreatedAt,
 			Created:    time.Time{}, // Creation time not provided by API
 			Labels:     labels,
 			Size:       "", // Size not provided by API
@@ -502,6 +508,22 @@ func (d *DockerClient) GetContainerLogs(containerID string) (string, error) {
 	}
 
 	return string(logs), nil
+}
+
+// ExecInteractiveShell opens an interactive shell in a container.
+// This function spawns `docker exec -it` and connects it to the terminal.
+// The caller should suspend any TUI before calling this and resume after.
+func (d *DockerClient) ExecInteractiveShell(containerID, shell string) error {
+	if shell == "" {
+		shell = "sh"
+	}
+
+	cmd := exec.Command("docker", "exec", "-it", containerID, shell)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	return cmd.Run()
 }
 
 // ExecInContainer executes a command in a running container
@@ -702,4 +724,792 @@ func getDigestFromID(id string) string {
 		return parts[1]
 	}
 	return id
+}
+
+// ConnectToHost connects to a specific Docker host
+func (d *DockerClient) ConnectToHost(host DockerHost) error {
+	var cli *client.Client
+	var err error
+
+	if host.Host != "" {
+		cli, err = client.NewClientWithOpts(
+			client.WithHost(host.Host),
+			client.WithAPIVersionNegotiation(),
+		)
+	} else {
+		cli, err = client.NewClientWithOpts(
+			client.FromEnv,
+			client.WithAPIVersionNegotiation(),
+		)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to create Docker client: %w", err)
+	}
+
+	// Verify connection
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err = cli.Ping(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to connect to Docker: %w", err)
+	}
+
+	d.client = cli
+	return nil
+}
+
+// RestartContainer restarts a Docker container
+func (d *DockerClient) RestartContainer(containerID string) error {
+	ctx, cancel := context.WithTimeout(d.ctx, 30*time.Second)
+	defer cancel()
+
+	timeout := 10
+	return d.client.ContainerRestart(ctx, containerID, container.StopOptions{Timeout: &timeout})
+}
+
+// PauseContainer pauses a Docker container
+func (d *DockerClient) PauseContainer(containerID string) error {
+	ctx, cancel := context.WithTimeout(d.ctx, d.timeout)
+	defer cancel()
+
+	return d.client.ContainerPause(ctx, containerID)
+}
+
+// UnpauseContainer unpauses a Docker container
+func (d *DockerClient) UnpauseContainer(containerID string) error {
+	ctx, cancel := context.WithTimeout(d.ctx, d.timeout)
+	defer cancel()
+
+	return d.client.ContainerUnpause(ctx, containerID)
+}
+
+// KillContainer kills a Docker container
+func (d *DockerClient) KillContainer(containerID string) error {
+	ctx, cancel := context.WithTimeout(d.ctx, d.timeout)
+	defer cancel()
+
+	return d.client.ContainerKill(ctx, containerID, "SIGKILL")
+}
+
+// ContainerInspectInfo holds detailed container information
+type ContainerInspectInfo struct {
+	ID           string
+	Name         string
+	Image        string
+	Created      string
+	State        string
+	Status       string
+	Platform     string
+	RestartCount int
+	Ports        []string
+	Mounts       []string
+	Networks     []string
+	Env          []string
+}
+
+// InspectContainer returns detailed information about a container
+func (d *DockerClient) InspectContainer(containerID string) (*ContainerInspectInfo, error) {
+	ctx, cancel := context.WithTimeout(d.ctx, d.timeout)
+	defer cancel()
+
+	inspect, err := d.client.ContainerInspect(ctx, containerID)
+	if err != nil {
+		return nil, err
+	}
+
+	info := &ContainerInspectInfo{
+		ID:           inspect.ID,
+		Name:         strings.TrimPrefix(inspect.Name, "/"),
+		Image:        inspect.Config.Image,
+		Created:      inspect.Created,
+		State:        inspect.State.Status,
+		Status:       fmt.Sprintf("%s (ExitCode: %d)", inspect.State.Status, inspect.State.ExitCode),
+		Platform:     inspect.Platform,
+		RestartCount: inspect.RestartCount,
+		Env:          inspect.Config.Env,
+	}
+
+	// Extract ports
+	for port, bindings := range inspect.NetworkSettings.Ports {
+		for _, binding := range bindings {
+			info.Ports = append(info.Ports, fmt.Sprintf("%s:%s->%s", binding.HostIP, binding.HostPort, port))
+		}
+	}
+
+	// Extract mounts
+	for _, mount := range inspect.Mounts {
+		info.Mounts = append(info.Mounts, fmt.Sprintf("%s -> %s (%s)", mount.Source, mount.Destination, mount.Type))
+	}
+
+	// Extract networks
+	for name, network := range inspect.NetworkSettings.Networks {
+		info.Networks = append(info.Networks, fmt.Sprintf("%s: %s", name, network.IPAddress))
+	}
+
+	return info, nil
+}
+
+// ImageInspectInfo holds detailed image information
+type ImageInspectInfo struct {
+	ID            string
+	RepoTags      []string
+	RepoDigests   []string
+	Created       string
+	Size          string
+	Architecture  string
+	OS            string
+	DockerVersion string
+	ExposedPorts  []string
+	Env           []string
+}
+
+// InspectImage returns detailed information about an image
+func (d *DockerClient) InspectImage(imageID string) (*ImageInspectInfo, error) {
+	ctx, cancel := context.WithTimeout(d.ctx, d.timeout)
+	defer cancel()
+
+	inspect, _, err := d.client.ImageInspectWithRaw(ctx, imageID)
+	if err != nil {
+		return nil, err
+	}
+
+	info := &ImageInspectInfo{
+		ID:            inspect.ID,
+		RepoTags:      inspect.RepoTags,
+		RepoDigests:   inspect.RepoDigests,
+		Created:       inspect.Created,
+		Size:          formatSize(float64(inspect.Size)),
+		Architecture:  inspect.Architecture,
+		OS:            inspect.Os,
+		DockerVersion: inspect.DockerVersion,
+	}
+
+	if inspect.Config != nil {
+		for port := range inspect.Config.ExposedPorts {
+			info.ExposedPorts = append(info.ExposedPorts, string(port))
+		}
+		info.Env = inspect.Config.Env
+	}
+
+	return info, nil
+}
+
+// RemoveImage removes a Docker image
+func (d *DockerClient) RemoveImage(imageID string) error {
+	ctx, cancel := context.WithTimeout(d.ctx, d.timeout)
+	defer cancel()
+
+	_, err := d.client.ImageRemove(ctx, imageID, image.RemoveOptions{Force: false, PruneChildren: true})
+	return err
+}
+
+// PullImage pulls a Docker image
+func (d *DockerClient) PullImage(imageName string) error {
+	ctx, cancel := context.WithTimeout(d.ctx, 5*time.Minute)
+	defer cancel()
+
+	reader, err := d.client.ImagePull(ctx, imageName, image.PullOptions{})
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	// Read the output to completion
+	_, err = io.Copy(io.Discard, reader)
+	return err
+}
+
+// GetImageHistory returns the history of an image
+func (d *DockerClient) GetImageHistory(imageID string) (string, error) {
+	ctx, cancel := context.WithTimeout(d.ctx, d.timeout)
+	defer cancel()
+
+	history, err := d.client.ImageHistory(ctx, imageID)
+	if err != nil {
+		return "", err
+	}
+
+	var result strings.Builder
+	for _, h := range history {
+		created := formatTimeAgo(time.Unix(h.Created, 0))
+		size := formatSize(float64(h.Size))
+		createdBy := h.CreatedBy
+		if len(createdBy) > 60 {
+			createdBy = createdBy[:60] + "..."
+		}
+		result.WriteString(fmt.Sprintf("[green]%s[white] (%s)\n  %s\n\n", created, size, createdBy))
+	}
+
+	return result.String(), nil
+}
+
+// CreateContainer creates a new container from an image
+func (d *DockerClient) CreateContainer(imageName, containerName string) (string, error) {
+	ctx, cancel := context.WithTimeout(d.ctx, d.timeout)
+	defer cancel()
+
+	config := &container.Config{
+		Image: imageName,
+	}
+
+	resp, err := d.client.ContainerCreate(ctx, config, nil, nil, nil, containerName)
+	if err != nil {
+		return "", err
+	}
+
+	return resp.ID, nil
+}
+
+// NetworkInspectInfo holds detailed network information
+type NetworkInspectInfo struct {
+	ID         string
+	Name       string
+	Driver     string
+	Scope      string
+	Internal   bool
+	Attachable bool
+	EnableIPv6 bool
+	Subnet     string
+	Gateway    string
+	Containers []string
+	Labels     map[string]string
+}
+
+// InspectNetwork returns detailed information about a network
+func (d *DockerClient) InspectNetwork(networkID string) (*NetworkInspectInfo, error) {
+	ctx, cancel := context.WithTimeout(d.ctx, d.timeout)
+	defer cancel()
+
+	inspect, err := d.client.NetworkInspect(ctx, networkID, network.InspectOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	info := &NetworkInspectInfo{
+		ID:         inspect.ID,
+		Name:       inspect.Name,
+		Driver:     inspect.Driver,
+		Scope:      inspect.Scope,
+		Internal:   inspect.Internal,
+		Attachable: inspect.Attachable,
+		EnableIPv6: inspect.EnableIPv6,
+		Labels:     inspect.Labels,
+	}
+
+	if len(inspect.IPAM.Config) > 0 {
+		info.Subnet = inspect.IPAM.Config[0].Subnet
+		info.Gateway = inspect.IPAM.Config[0].Gateway
+	}
+
+	for _, container := range inspect.Containers {
+		info.Containers = append(info.Containers, fmt.Sprintf("%s (%s)", container.Name, container.IPv4Address))
+	}
+
+	return info, nil
+}
+
+// RemoveNetwork removes a Docker network
+func (d *DockerClient) RemoveNetwork(networkID string) error {
+	ctx, cancel := context.WithTimeout(d.ctx, d.timeout)
+	defer cancel()
+
+	return d.client.NetworkRemove(ctx, networkID)
+}
+
+// CreateNetwork creates a new Docker network
+func (d *DockerClient) CreateNetwork(name, driver string) error {
+	ctx, cancel := context.WithTimeout(d.ctx, d.timeout)
+	defer cancel()
+
+	_, err := d.client.NetworkCreate(ctx, name, network.CreateOptions{
+		Driver: driver,
+	})
+	return err
+}
+
+// VolumeInspectInfo holds detailed volume information
+type VolumeInspectInfo struct {
+	Name       string
+	Driver     string
+	Mountpoint string
+	Scope      string
+	CreatedAt  string
+	Labels     map[string]string
+	Options    map[string]string
+	UsageData  *VolumeUsageData
+}
+
+// VolumeUsageData holds volume usage information
+type VolumeUsageData struct {
+	Size     string
+	RefCount int64
+}
+
+// InspectVolume returns detailed information about a volume
+func (d *DockerClient) InspectVolume(name string) (*VolumeInspectInfo, error) {
+	ctx, cancel := context.WithTimeout(d.ctx, d.timeout)
+	defer cancel()
+
+	inspect, err := d.client.VolumeInspect(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+
+	info := &VolumeInspectInfo{
+		Name:       inspect.Name,
+		Driver:     inspect.Driver,
+		Mountpoint: inspect.Mountpoint,
+		Scope:      inspect.Scope,
+		CreatedAt:  inspect.CreatedAt,
+		Labels:     inspect.Labels,
+		Options:    inspect.Options,
+	}
+
+	if inspect.UsageData != nil {
+		info.UsageData = &VolumeUsageData{
+			Size:     formatSize(float64(inspect.UsageData.Size)),
+			RefCount: inspect.UsageData.RefCount,
+		}
+	}
+
+	return info, nil
+}
+
+// RemoveVolume removes a Docker volume
+func (d *DockerClient) RemoveVolume(name string) error {
+	ctx, cancel := context.WithTimeout(d.ctx, d.timeout)
+	defer cancel()
+
+	return d.client.VolumeRemove(ctx, name, false)
+}
+
+// CreateVolume creates a new Docker volume
+func (d *DockerClient) CreateVolume(name string) error {
+	ctx, cancel := context.WithTimeout(d.ctx, d.timeout)
+	defer cancel()
+
+	_, err := d.client.VolumeCreate(ctx, volume.CreateOptions{
+		Name: name,
+	})
+	return err
+}
+
+// PruneVolumes removes all unused volumes
+func (d *DockerClient) PruneVolumes() (string, error) {
+	ctx, cancel := context.WithTimeout(d.ctx, d.timeout)
+	defer cancel()
+
+	report, err := d.client.VolumesPrune(ctx, filters.Args{})
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("Removed %d volumes, reclaimed %s",
+		len(report.VolumesDeleted), formatSize(float64(report.SpaceReclaimed))), nil
+}
+
+// ContainerStats holds container resource statistics
+type ContainerStats struct {
+	Name          string
+	CPUPercent    string
+	MemoryUsage   string
+	MemoryPercent string
+	NetIO         string
+	BlockIO       string
+	PIDs          string
+}
+
+// GetContainerStats returns resource usage statistics for all running containers
+func (d *DockerClient) GetContainerStats() ([]ContainerStats, error) {
+	ctx, cancel := context.WithTimeout(d.ctx, d.timeout)
+	defer cancel()
+
+	containers, err := d.client.ContainerList(ctx, container.ListOptions{
+		Filters: filters.NewArgs(filters.Arg("status", "running")),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var stats []ContainerStats
+	for _, c := range containers {
+		statsResp, err := d.client.ContainerStats(ctx, c.ID, false)
+		if err != nil {
+			continue
+		}
+
+		var statsJSON container.StatsResponse
+		if err := json.NewDecoder(statsResp.Body).Decode(&statsJSON); err != nil {
+			statsResp.Body.Close()
+			continue
+		}
+		statsResp.Body.Close()
+
+		// Calculate CPU percentage
+		cpuPercent := calculateCPUPercent(&statsJSON)
+
+		// Calculate memory
+		memUsage := formatSize(float64(statsJSON.MemoryStats.Usage))
+		memLimit := float64(statsJSON.MemoryStats.Limit)
+		memPercent := float64(0)
+		if memLimit > 0 {
+			memPercent = float64(statsJSON.MemoryStats.Usage) / memLimit * 100
+		}
+
+		// Network I/O
+		var netRx, netTx uint64
+		for _, v := range statsJSON.Networks {
+			netRx += v.RxBytes
+			netTx += v.TxBytes
+		}
+
+		// Block I/O
+		var blkRead, blkWrite uint64
+		for _, v := range statsJSON.BlkioStats.IoServiceBytesRecursive {
+			if v.Op == "Read" {
+				blkRead += v.Value
+			} else if v.Op == "Write" {
+				blkWrite += v.Value
+			}
+		}
+
+		name := ""
+		if len(c.Names) > 0 {
+			name = strings.TrimPrefix(c.Names[0], "/")
+		}
+
+		stats = append(stats, ContainerStats{
+			Name:          name,
+			CPUPercent:    fmt.Sprintf("%.2f%%", cpuPercent),
+			MemoryUsage:   memUsage,
+			MemoryPercent: fmt.Sprintf("%.2f%%", memPercent),
+			NetIO:         fmt.Sprintf("%s / %s", formatSize(float64(netRx)), formatSize(float64(netTx))),
+			BlockIO:       fmt.Sprintf("%s / %s", formatSize(float64(blkRead)), formatSize(float64(blkWrite))),
+			PIDs:          fmt.Sprintf("%d", statsJSON.PidsStats.Current),
+		})
+	}
+
+	return stats, nil
+}
+
+func calculateCPUPercent(stats *container.StatsResponse) float64 {
+	cpuDelta := float64(stats.CPUStats.CPUUsage.TotalUsage - stats.PreCPUStats.CPUUsage.TotalUsage)
+	systemDelta := float64(stats.CPUStats.SystemUsage - stats.PreCPUStats.SystemUsage)
+
+	if systemDelta > 0 && cpuDelta > 0 {
+		return (cpuDelta / systemDelta) * float64(len(stats.CPUStats.CPUUsage.PercpuUsage)) * 100.0
+	}
+	return 0.0
+}
+
+// SystemInfo holds Docker system information
+type SystemInfo struct {
+	ServerVersion     string
+	APIVersion        string
+	OperatingSystem   string
+	Architecture      string
+	KernelVersion     string
+	MemTotal          string
+	NCPU              int
+	Containers        int
+	ContainersRunning int
+	ContainersPaused  int
+	ContainersStopped int
+	Images            int
+	Driver            string
+	LoggingDriver     string
+	CgroupDriver      string
+	CgroupVersion     string
+	DockerRootDir     string
+	SwarmStatus       string
+}
+
+// GetSystemInfo returns Docker system information
+func (d *DockerClient) GetSystemInfo() (*SystemInfo, error) {
+	ctx, cancel := context.WithTimeout(d.ctx, d.timeout)
+	defer cancel()
+
+	info, err := d.client.Info(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	swarmStatus := "Inactive"
+	if info.Swarm.LocalNodeState == "active" {
+		swarmStatus = "Active"
+	}
+
+	return &SystemInfo{
+		ServerVersion:     info.ServerVersion,
+		APIVersion:        d.client.ClientVersion(),
+		OperatingSystem:   info.OperatingSystem,
+		Architecture:      info.Architecture,
+		KernelVersion:     info.KernelVersion,
+		MemTotal:          formatSize(float64(info.MemTotal)),
+		NCPU:              info.NCPU,
+		Containers:        info.Containers,
+		ContainersRunning: info.ContainersRunning,
+		ContainersPaused:  info.ContainersPaused,
+		ContainersStopped: info.ContainersStopped,
+		Images:            info.Images,
+		Driver:            info.Driver,
+		LoggingDriver:     info.LoggingDriver,
+		CgroupDriver:      info.CgroupDriver,
+		CgroupVersion:     info.CgroupVersion,
+		DockerRootDir:     info.DockerRootDir,
+		SwarmStatus:       swarmStatus,
+	}, nil
+}
+
+// DiskUsage holds Docker disk usage information
+type DiskUsage struct {
+	ImagesCount           int
+	ImagesSize            string
+	ImagesReclaimable     string
+	ContainersCount       int
+	ContainersSize        string
+	ContainersReclaimable string
+	VolumesCount          int
+	VolumesSize           string
+	VolumesReclaimable    string
+	BuildCacheCount       int
+	BuildCacheSize        string
+	BuildCacheReclaimable string
+	TotalReclaimable      string
+}
+
+// GetDiskUsage returns Docker disk usage information
+func (d *DockerClient) GetDiskUsage() (*DiskUsage, error) {
+	ctx, cancel := context.WithTimeout(d.ctx, d.timeout)
+	defer cancel()
+
+	du, err := d.client.DiskUsage(ctx, types.DiskUsageOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	var imagesSize, imagesReclaimable int64
+	for _, img := range du.Images {
+		imagesSize += img.Size
+		if img.Containers == 0 {
+			imagesReclaimable += img.Size
+		}
+	}
+
+	var containersSize, containersReclaimable int64
+	for _, c := range du.Containers {
+		containersSize += c.SizeRw
+		if c.State != "running" {
+			containersReclaimable += c.SizeRw
+		}
+	}
+
+	var volumesSize, volumesReclaimable int64
+	for _, v := range du.Volumes {
+		if v.UsageData.Size > 0 {
+			volumesSize += v.UsageData.Size
+			if v.UsageData.RefCount == 0 {
+				volumesReclaimable += v.UsageData.Size
+			}
+		}
+	}
+
+	var buildCacheSize, buildCacheReclaimable int64
+	for _, bc := range du.BuildCache {
+		buildCacheSize += bc.Size
+		if !bc.InUse {
+			buildCacheReclaimable += bc.Size
+		}
+	}
+
+	return &DiskUsage{
+		ImagesCount:           len(du.Images),
+		ImagesSize:            formatSize(float64(imagesSize)),
+		ImagesReclaimable:     formatSize(float64(imagesReclaimable)),
+		ContainersCount:       len(du.Containers),
+		ContainersSize:        formatSize(float64(containersSize)),
+		ContainersReclaimable: formatSize(float64(containersReclaimable)),
+		VolumesCount:          len(du.Volumes),
+		VolumesSize:           formatSize(float64(volumesSize)),
+		VolumesReclaimable:    formatSize(float64(volumesReclaimable)),
+		BuildCacheCount:       len(du.BuildCache),
+		BuildCacheSize:        formatSize(float64(buildCacheSize)),
+		BuildCacheReclaimable: formatSize(float64(buildCacheReclaimable)),
+		TotalReclaimable:      formatSize(float64(imagesReclaimable + containersReclaimable + volumesReclaimable + buildCacheReclaimable)),
+	}, nil
+}
+
+// GetRecentEvents returns recent Docker events
+func (d *DockerClient) GetRecentEvents() (string, error) {
+	ctx, cancel := context.WithTimeout(d.ctx, d.timeout)
+	defer cancel()
+
+	since := time.Now().Add(-1 * time.Hour).Format(time.RFC3339)
+	eventsChan, errChan := d.client.Events(ctx, events.ListOptions{
+		Since: since,
+	})
+
+	var result strings.Builder
+	eventCount := 0
+	maxEvents := 50
+
+loop:
+	for {
+		select {
+		case event := <-eventsChan:
+			eventTime := time.Unix(event.Time, 0).Format("15:04:05")
+			result.WriteString(fmt.Sprintf("[green]%s[white] [%s] %s: %s\n",
+				eventTime, event.Type, event.Action, event.Actor.ID[:12]))
+			eventCount++
+			if eventCount >= maxEvents {
+				break loop
+			}
+		case err := <-errChan:
+			if err != nil && err != context.DeadlineExceeded {
+				return result.String(), err
+			}
+			break loop
+		case <-ctx.Done():
+			break loop
+		}
+	}
+
+	return result.String(), nil
+}
+
+// GetContainerLogsStream returns container logs with follow capability
+func (d *DockerClient) GetContainerLogsStream(containerID string, tailLines int) (string, error) {
+	ctx, cancel := context.WithTimeout(d.ctx, d.timeout)
+	defer cancel()
+
+	options := container.LogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Timestamps: true,
+		Tail:       fmt.Sprintf("%d", tailLines),
+	}
+
+	logsReader, err := d.client.ContainerLogs(ctx, containerID, options)
+	if err != nil {
+		return "", err
+	}
+	defer logsReader.Close()
+
+	logs, err := io.ReadAll(logsReader)
+	if err != nil {
+		return "", err
+	}
+
+	return string(logs), nil
+}
+
+// ComposeProject holds Docker Compose project information
+type ComposeProject struct {
+	Name         string
+	Status       string
+	ServiceCount int
+	RunningCount int
+	ConfigFile   string
+}
+
+// ListComposeProjects returns a list of Docker Compose projects
+func (d *DockerClient) ListComposeProjects() ([]ComposeProject, error) {
+	ctx, cancel := context.WithTimeout(d.ctx, d.timeout)
+	defer cancel()
+
+	// Get containers with compose labels
+	containers, err := d.client.ContainerList(ctx, container.ListOptions{All: true})
+	if err != nil {
+		return nil, err
+	}
+
+	// Group by project
+	projects := make(map[string]*ComposeProject)
+	for _, c := range containers {
+		projectName, ok := c.Labels["com.docker.compose.project"]
+		if !ok {
+			continue
+		}
+
+		if _, exists := projects[projectName]; !exists {
+			configFile := c.Labels["com.docker.compose.project.config_files"]
+			if len(configFile) > 40 {
+				configFile = "..." + configFile[len(configFile)-37:]
+			}
+
+			projects[projectName] = &ComposeProject{
+				Name:       projectName,
+				ConfigFile: configFile,
+			}
+		}
+
+		projects[projectName].ServiceCount++
+		if c.State == "running" {
+			projects[projectName].RunningCount++
+		}
+	}
+
+	// Convert to slice and set status
+	var result []ComposeProject
+	for _, p := range projects {
+		if p.RunningCount == p.ServiceCount {
+			p.Status = "running"
+		} else if p.RunningCount == 0 {
+			p.Status = "stopped"
+		} else {
+			p.Status = "partial"
+		}
+		result = append(result, *p)
+	}
+
+	return result, nil
+}
+
+// ComposeUp starts a Docker Compose project
+func (d *DockerClient) ComposeUp(projectName string) error {
+	cmd := exec.Command("docker", "compose", "-p", projectName, "up", "-d")
+	return cmd.Run()
+}
+
+// ComposeDown stops and removes a Docker Compose project
+func (d *DockerClient) ComposeDown(projectName string) error {
+	cmd := exec.Command("docker", "compose", "-p", projectName, "down")
+	return cmd.Run()
+}
+
+// ComposeStop stops a Docker Compose project
+func (d *DockerClient) ComposeStop(projectName string) error {
+	cmd := exec.Command("docker", "compose", "-p", projectName, "stop")
+	return cmd.Run()
+}
+
+// ComposeRestart restarts a Docker Compose project
+func (d *DockerClient) ComposeRestart(projectName string) error {
+	cmd := exec.Command("docker", "compose", "-p", projectName, "restart")
+	return cmd.Run()
+}
+
+// ComposeLogs returns logs for a Docker Compose project
+func (d *DockerClient) ComposeLogs(projectName string) (string, error) {
+	cmd := exec.Command("docker", "compose", "-p", projectName, "logs", "--tail", "500")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return string(output), nil
+}
+
+// IsConnected checks if the Docker client is connected
+func (d *DockerClient) IsConnected() bool {
+	if d.client == nil {
+		return false
+	}
+
+	ctx, cancel := context.WithTimeout(d.ctx, 2*time.Second)
+	defer cancel()
+
+	_, err := d.client.Ping(ctx)
+	return err == nil
 }

@@ -5,7 +5,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"omo/ui"
+	"omo/pkg/ui"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -15,12 +15,12 @@ import (
 type RoleView struct {
 	app       *tview.Application
 	pages     *tview.Pages
-	cores     *ui.Cores
+	cores     *ui.CoreView
 	k8sClient *K8sClient
 }
 
 // NewRoleView creates a new role management view
-func NewRoleView(app *tview.Application, pages *tview.Pages, cores *ui.Cores, k8sClient *K8sClient) *RoleView {
+func NewRoleView(app *tview.Application, pages *tview.Pages, cores *ui.CoreView, k8sClient *K8sClient) *RoleView {
 	return &RoleView{
 		app:       app,
 		pages:     pages,

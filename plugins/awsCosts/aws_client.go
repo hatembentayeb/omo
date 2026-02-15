@@ -8,7 +8,18 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/budgets"
 	"github.com/aws/aws-sdk-go/service/costexplorer"
+	"github.com/aws/aws-sdk-go/service/sts"
 )
+
+// getAWSAccountID retrieves the AWS account ID using STS
+func getAWSAccountID(sess *session.Session) (string, error) {
+	svc := sts.New(sess)
+	result, err := svc.GetCallerIdentity(&sts.GetCallerIdentityInput{})
+	if err != nil {
+		return "", fmt.Errorf("failed to get caller identity: %v", err)
+	}
+	return aws.StringValue(result.Account), nil
+}
 
 // AWSCostClient handles all AWS Cost Explorer API interactions
 type AWSCostClient struct {

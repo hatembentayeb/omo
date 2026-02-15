@@ -6,7 +6,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 
-	"omo/ui"
+	"omo/pkg/ui"
 )
 
 // showBucketMetricsConfirmation shows a confirmation modal before calculating metrics

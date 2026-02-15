@@ -42,4 +42,9 @@ compiled_plugins/
 # Build artifacts
 build/ 
 
+# Binary
 omo
+
+# Local dev environment
+dev/
+website/

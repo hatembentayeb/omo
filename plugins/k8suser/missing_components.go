@@ -1,7 +1,7 @@
 package main
 
 import (
-	"omo/ui"
+	"omo/pkg/ui"
 
 	"github.com/rivo/tview"
 )
