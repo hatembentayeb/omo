@@ -25,14 +25,16 @@
 
 ## Plugins
 
-- **Redis**: Keys, clients, memory, slowlog, pubsub.
+- **ArgoCD**: Applications, projects, sync status.
+- **AWS Costs**: Cost explorer, budgets, forecasts.
 - **Docker**: Containers, images, networks, volumes.
 - **Git**: Repositories, branches, commits, diffs.
-- **ArgoCD**: Applications, projects, sync status.
-- **Kafka**: Brokers, topics, partitions, consumer groups.
-- **S3**: Buckets, objects, previews.
-- **AWS Costs**: Cost explorer, budgets, forecasts.
 - **K8s User**: Manage Kubeconfig users.
+- **Kafka**: Brokers, topics, partitions, consumer groups.
+- **Postgres**: Databases, schemas, tables, connections, replication.
+- **Redis**: Keys, clients, memory, slowlog, pubsub.
+- **S3**: Buckets, objects, previews.
+- **Sysprocess**: Processes, CPU, memory, disk, ports, metrics.
 
 ## Installation
 
