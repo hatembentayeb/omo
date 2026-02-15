@@ -37,17 +37,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc-mingw-w64 gcc-aarch64-linux-gnu
 
+      - name: Tidy modules
+        run: go mod tidy
+
       - name: Build main app for multiple platforms
         run: |
           mkdir -p dist
           # Linux
-          GOOS=linux GOARCH=amd64 go build -o dist/omo-${{ env.VERSION }}-linux-amd64 .
-          GOOS=linux GOARCH=arm64 go build -o dist/omo-${{ env.VERSION }}-linux-arm64 .
+          GOOS=linux GOARCH=amd64 go build -o dist/omo-${{ env.VERSION }}-linux-amd64 ./cmd/omo
+          GOOS=linux GOARCH=arm64 go build -o dist/omo-${{ env.VERSION }}-linux-arm64 ./cmd/omo
           # macOS (Intel + Apple Silicon)
-          GOOS=darwin GOARCH=amd64 go build -o dist/omo-${{ env.VERSION }}-darwin-amd64 .
-          GOOS=darwin GOARCH=arm64 go build -o dist/omo-${{ env.VERSION }}-darwin-arm64 .
+          GOOS=darwin GOARCH=amd64 go build -o dist/omo-${{ env.VERSION }}-darwin-amd64 ./cmd/omo
+          GOOS=darwin GOARCH=arm64 go build -o dist/omo-${{ env.VERSION }}-darwin-arm64 ./cmd/omo
           # Windows
-          GOOS=windows GOARCH=amd64 go build -o dist/omo-${{ env.VERSION }}-windows-amd64.exe .
+          GOOS=windows GOARCH=amd64 go build -o dist/omo-${{ env.VERSION }}-windows-amd64.exe ./cmd/omo
           # Compress binaries
           cd dist
           for file in *; do
