@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <img src="website/images/docker-images.png" alt="OhMyOps Docker plugin screenshot" width="700">
+  <img src="assets/screenshot.png" alt="OhMyOps Docker plugin screenshot" width="700">
 </p>
 
 ---
