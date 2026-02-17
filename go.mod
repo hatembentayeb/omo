@@ -10,6 +10,7 @@ require (
 	github.com/go-git/go-git/v5 v5.11.0
 	github.com/lib/pq v1.11.2
 	github.com/pgavlin/femto v0.0.0-20201224065653-0c9d20f9cac4
+	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/redis/go-redis/v9 v9.7.3
 	github.com/rivo/tview v0.0.0-20231115183240-7c9e464bac02
 	github.com/shirou/gopsutil/v3 v3.24.5
