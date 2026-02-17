@@ -98,3 +98,12 @@ plugins:
     url: "https://github.com/ohmyops/omo-awscosts"
     tags: ["aws", "finops", "cloud"]
     arch: ["amd64", "arm64"]
+
+  - name: rabbitmq
+    version: "1.0.0"
+    description: "Manage RabbitMQ queues, exchanges, bindings, and connections"
+    author: "ohmyops"
+    license: "MIT"
+    url: "https://github.com/ohmyops/omo-rabbitmq"
+    tags: ["messaging", "broker", "amqp"]
+    arch: ["amd64", "arm64"]
