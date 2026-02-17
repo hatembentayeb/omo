@@ -169,12 +169,12 @@ func (cm *CertManager) generatePrivateKey(keyPath string) error {
 
 // generateCSR generates a Certificate Signing Request using OpenSSL
 func (cm *CertManager) generateCSR(keyPath, csrPath, username string) error {
-	// Create the OpenSSL command with the correct format for Kubernetes user authentication
-	// The CN (Common Name) is the username for Kubernetes RBAC
-	// The O (Organization) field is used for group membership in Kubernetes
+	// The CN (Common Name) is the username for Kubernetes RBAC.
+	// Group membership is managed via RoleBindings, not baked into the cert.
+	// Using system:masters here is forbidden by the kube-apiserver-client signer.
 	cmd := exec.Command("openssl", "req", "-new", "-key", keyPath,
 		"-out", csrPath,
-		"-subj", fmt.Sprintf("/CN=%s/O=system:masters", username))
+		"-subj", fmt.Sprintf("/CN=%s", username))
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
