@@ -49,7 +49,7 @@ func ShowCompactStyledInputModal(
 	// Add buttons with minimal vertical spacing
 	form.AddButton("OK", func() {
 		value := inputField.GetText()
-		closeModal(value, value == "")
+		closeModal(value, false)
 	})
 
 	form.AddButton("Cancel", func() {
@@ -60,7 +60,7 @@ func ShowCompactStyledInputModal(
 	inputField.SetDoneFunc(func(key tcell.Key) {
 		if key == tcell.KeyEnter {
 			value := inputField.GetText()
-			closeModal(value, value == "")
+			closeModal(value, false)
 		} else if key == tcell.KeyEscape {
 			closeModal("", true)
 		}
