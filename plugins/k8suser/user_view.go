@@ -2,8 +2,11 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 
+	"omo/pkg/pluginapi"
 	"omo/pkg/ui"
 
 	"github.com/gdamore/tcell/v2"
@@ -74,6 +77,9 @@ func (uv *UserView) showCreateUserModal() {
 					})
 					return
 				}
+
+				// Save user credentials to KeePass
+				uv.saveUserToKeePass(user)
 
 				// Show success message
 				uv.app.QueueUpdateDraw(func() {
@@ -155,6 +161,9 @@ func (uv *UserView) showDeleteUserModal() {
 					})
 					return
 				}
+
+				// Remove from KeePass
+				uv.deleteUserFromKeePass(user.Username)
 
 				// Show success message
 				uv.app.QueueUpdateDraw(func() {
@@ -789,4 +798,240 @@ For more convenient usage, consider exporting the kubeconfig using the 'E' key.`
 			uv.app.SetFocus(uv.cores.GetTable())
 		},
 	)
+}
+
+// saveUserToKeePass reads the actual cert, key, and CSR file contents
+// and stores them inside KeePass so users can download them later.
+// Secret path: k8suser/<context>/<username>
+func (uv *UserView) saveUserToKeePass(user *K8sUser) {
+	if !pluginapi.HasSecrets() {
+		uv.app.QueueUpdateDraw(func() {
+			uv.cores.Log("[yellow]KeePass not available — user credentials not saved to secrets store")
+		})
+		return
+	}
+
+	context := ""
+	if uv.k8sClient != nil {
+		context = uv.k8sClient.CurrentContext
+	}
+	if context == "" {
+		context = "default"
+	}
+
+	secretPath := fmt.Sprintf("k8suser/%s/%s", context, user.Username)
+
+	serverURL := ""
+	cmd := exec.Command("kubectl", "config", "view", "--minify", "-o", "jsonpath={.clusters[].cluster.server}")
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		serverURL = string(output)
+	}
+
+	attrs := map[string]string{
+		"context": context,
+	}
+
+	// Read actual file contents and store them in KeePass
+	if user.Certificate != nil {
+		if data, err := os.ReadFile(user.Certificate.Cert); err == nil {
+			attrs["client_certificate"] = string(data)
+		}
+		if data, err := os.ReadFile(user.Certificate.PrivateKey); err == nil {
+			attrs["client_key"] = string(data)
+		}
+		if data, err := os.ReadFile(user.Certificate.CSR); err == nil {
+			attrs["client_csr"] = string(data)
+		}
+	}
+
+	// Also generate and store a ready-to-use kubeconfig
+	if user.Certificate != nil && serverURL != "" {
+		kubeconfig := fmt.Sprintf(`apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    server: %s
+    insecure-skip-tls-verify: true
+  name: kubernetes
+contexts:
+- context:
+    cluster: kubernetes
+    user: %s
+  name: %s@kubernetes
+current-context: %s@kubernetes
+users:
+- name: %s
+  user:
+    client-certificate-data: %s
+    client-key-data: %s
+`, serverURL, user.Username, user.Username, user.Username, user.Username,
+			encodeFileBase64(user.Certificate.Cert),
+			encodeFileBase64(user.Certificate.PrivateKey))
+		attrs["kubeconfig"] = kubeconfig
+	}
+
+	entry := &pluginapi.SecretEntry{
+		Title:    user.Username,
+		UserName: user.Username,
+		Password: "",
+		URL:      serverURL,
+		Notes: fmt.Sprintf("K8s user created by omo k8suser plugin.\nContext: %s\nCert expiry: %s\nRoles: %s\nNamespaces: %s",
+			context, user.CertExpiry, user.Roles, user.Namespace),
+		CustomAttributes: attrs,
+	}
+
+	if err := pluginapi.Secrets().Put(secretPath, entry); err != nil {
+		uv.app.QueueUpdateDraw(func() {
+			uv.cores.Log(fmt.Sprintf("[red]Failed to save user to KeePass: %v", err))
+		})
+		return
+	}
+
+	uv.app.QueueUpdateDraw(func() {
+		uv.cores.Log(fmt.Sprintf("[green]User %s saved to KeePass at: %s (cert + key + kubeconfig stored)", user.Username, secretPath))
+	})
+}
+
+// encodeFileBase64 reads a file and returns its base64-encoded content.
+func encodeFileBase64(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return encodeBase64(string(data))
+}
+
+// downloadUserFromKeePass retrieves a user's cert files from KeePass
+// and writes them to a local directory the user can use.
+func (uv *UserView) downloadUserFromKeePass() {
+	selectedRow := uv.cores.GetTable().GetSelectedRow() - 1
+	if uv.k8sClient == nil || selectedRow < 0 || selectedRow >= len(uv.k8sClient.Users) {
+		uv.cores.Log("[red]No user selected")
+		return
+	}
+
+	user := uv.k8sClient.Users[selectedRow]
+
+	if !pluginapi.HasSecrets() {
+		uv.cores.Log("[red]KeePass not available")
+		return
+	}
+
+	context := ""
+	if uv.k8sClient != nil {
+		context = uv.k8sClient.CurrentContext
+	}
+	if context == "" {
+		context = "default"
+	}
+
+	secretPath := fmt.Sprintf("k8suser/%s/%s", context, user.Username)
+	entry, err := pluginapi.Secrets().Get(secretPath)
+	if err != nil {
+		uv.cores.Log(fmt.Sprintf("[red]User %s not found in KeePass: %v", user.Username, err))
+		return
+	}
+
+	// Write files to ~/.k8s-users/<username>/
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		uv.cores.Log(fmt.Sprintf("[red]Cannot determine home directory: %v", err))
+		return
+	}
+
+	outDir := filepath.Join(homeDir, ".k8s-users", user.Username)
+	if err := os.MkdirAll(outDir, 0700); err != nil {
+		uv.cores.Log(fmt.Sprintf("[red]Cannot create directory %s: %v", outDir, err))
+		return
+	}
+
+	written := 0
+	files := map[string]string{
+		"cert.pem":   entry.CustomAttributes["client_certificate"],
+		"key.pem":    entry.CustomAttributes["client_key"],
+		"csr.pem":    entry.CustomAttributes["client_csr"],
+		"kubeconfig": entry.CustomAttributes["kubeconfig"],
+	}
+
+	for name, content := range files {
+		if content == "" {
+			continue
+		}
+		path := filepath.Join(outDir, name)
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			uv.cores.Log(fmt.Sprintf("[red]Failed to write %s: %v", path, err))
+			continue
+		}
+		written++
+	}
+
+	uv.cores.Log(fmt.Sprintf("[green]Downloaded %d files for user %s to %s", written, user.Username, outDir))
+
+	content := fmt.Sprintf(`[yellow]Files downloaded for %s[white]
+
+Directory: [green]%s[white]
+
+Files:
+  [green]cert.pem[white]    — Client certificate
+  [green]key.pem[white]     — Private key
+  [green]csr.pem[white]     — Certificate signing request
+  [green]kubeconfig[white]  — Ready-to-use kubeconfig
+
+Usage:
+  [blue]kubectl --kubeconfig=%s/kubeconfig get pods[white]
+
+Or:
+  [blue]export KUBECONFIG=%s/kubeconfig[white]`,
+		user.Username, outDir, outDir, outDir)
+
+	ui.ShowInfoModal(
+		uv.pages, uv.app, "Files Downloaded",
+		content,
+		func() { uv.app.SetFocus(uv.cores.GetTable()) },
+	)
+}
+
+// deleteUserFromKeePass removes a user's KeePass entry and any downloaded
+// local files (~/.k8s-users/<username>/) when the user is deleted.
+func (uv *UserView) deleteUserFromKeePass(username string) {
+	// Clean up local downloaded files
+	if homeDir, err := os.UserHomeDir(); err == nil {
+		localDir := filepath.Join(homeDir, ".k8s-users", username)
+		if _, statErr := os.Stat(localDir); statErr == nil {
+			if err := os.RemoveAll(localDir); err != nil {
+				uv.app.QueueUpdateDraw(func() {
+					uv.cores.Log(fmt.Sprintf("[yellow]Could not remove local files %s: %v", localDir, err))
+				})
+			} else {
+				uv.app.QueueUpdateDraw(func() {
+					uv.cores.Log(fmt.Sprintf("[green]Removed local files: %s", localDir))
+				})
+			}
+		}
+	}
+
+	if !pluginapi.HasSecrets() {
+		return
+	}
+
+	context := ""
+	if uv.k8sClient != nil {
+		context = uv.k8sClient.CurrentContext
+	}
+	if context == "" {
+		context = "default"
+	}
+
+	secretPath := fmt.Sprintf("k8suser/%s/%s", context, username)
+	if err := pluginapi.Secrets().Delete(secretPath); err != nil {
+		uv.app.QueueUpdateDraw(func() {
+			uv.cores.Log(fmt.Sprintf("[yellow]Could not remove KeePass entry %s: %v", secretPath, err))
+		})
+		return
+	}
+
+	uv.app.QueueUpdateDraw(func() {
+		uv.cores.Log(fmt.Sprintf("[green]Removed KeePass entry: %s", secretPath))
+	})
 }

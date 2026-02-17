@@ -152,6 +152,7 @@ func (p *K8sUserPlugin) initializeMainView() {
 	p.cores.AddKeyBinding("T", "Test Access", nil)
 	p.cores.AddKeyBinding("E", "Export Config", nil)
 	p.cores.AddKeyBinding("K", "Connection Command", nil)
+	p.cores.AddKeyBinding("W", "Download from KeePass", nil)
 	p.cores.AddKeyBinding("M", "Role Management", nil)
 	p.cores.AddKeyBinding("^T", "Switch Context", nil)
 	p.cores.AddKeyBinding("^B", "Back", nil)
@@ -195,6 +196,8 @@ func (p *K8sUserPlugin) setupActionHandler() {
 						p.userView.exportUserConfig()
 					case "K":
 						p.userView.showConnectionCommand()
+					case "W":
+						p.userView.downloadUserFromKeePass()
 					case "M":
 						p.switchToRolesView()
 					case "?":
