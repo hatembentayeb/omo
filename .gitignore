@@ -48,6 +48,4 @@ omo
 # Local dev environment
 dev/
 
-# Website
-website/node_modules/
-website/public/
+website
