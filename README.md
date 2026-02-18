@@ -26,9 +26,7 @@
 ## Demo
 
 <p align="center">
-  <video src="https://github.com/hatembentayeb/omo/raw/main/assets/demo.mp4" width="800" controls autoplay loop muted>
-    Your browser does not support the video tag.
-  </video>
+  <video src="assets/demo.mp4" width="800" controls autoplay loop muted></video>
 </p>
 
 ---
