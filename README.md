@@ -26,7 +26,9 @@
 ## Demo
 
 <p align="center">
-  <img src="assets/demo.gif" alt="omo demo" width="800">
+  <video src="https://github.com/hatembentayeb/omo/raw/main/assets/demo.mp4" width="800" controls autoplay loop muted>
+    Your browser does not support the video tag.
+  </video>
 </p>
 
 ---
@@ -286,49 +288,6 @@ The CI pipeline produces binaries for every major platform:
 - [ ] Prometheus / Grafana plugin
 - [ ] SSH tunnel support for remote instances
 - [ ] Theme and color customization
----
-
-## Recording a demo
-
-omo is a full TUI application, so the best way to record a demo is interactively with [asciinema](https://asciinema.org):
-
-```bash
-# Install (Arch)
-sudo pacman -S asciinema
-
-# Record -- you drive omo live, asciinema captures everything
-asciinema rec assets/demo.cast \
-  --title "omo - Terminal Operations Dashboard" \
-  --cols 160 \
-  --rows 45 \
-  --command "omo"
-
-# Upload to asciinema.org (gives you a shareable URL + SVG embed)
-asciinema upload assets/demo.cast
-```
-
-**Suggested demo flow** (aim for ~60 seconds):
-
-1. omo launches, cover screen with ASCII logo is shown
-2. Select **docker** -- browse containers
-3. Select **redis** -- navigate keys, use `/` to filter, then clear
-4. Select **kafka** -- browse topics
-5. Select **rabbitmq** -- browse queues
-6. Select **sysprocess** -- show process list
-7. Quit with `q`
-
-After uploading, replace `RECORDING_ID` in the Demo section of this README with the ID from the asciinema URL (e.g. `https://asciinema.org/a/abc123` -> `abc123`).
-
-If you prefer a GIF instead of the asciinema player, convert with [agg](https://github.com/asciinema/agg):
-
-```bash
-# Install agg
-cargo install --git https://github.com/asciinema/agg
-
-# Convert to GIF
-agg --cols 160 --rows 45 --font-family "JetBrains Mono" assets/demo.cast assets/demo.gif
-```
-
 ---
 
 ## Contributing
