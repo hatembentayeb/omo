@@ -26,8 +26,8 @@
 ## Demo
 
 <p align="center">
-  <a href="https://github.com/hatembentayeb/omo/raw/main/assets/demo.mp4">
-    <img src="assets/screenshot.png" alt="omo demo - click to play" width="800">
+  <a href="https://youtu.be/uTpyVshDUEo">
+    <img src="https://img.youtube.com/vi/uTpyVshDUEo/maxresdefault.jpg" alt="omo demo" width="800">
   </a>
 </p>
 
