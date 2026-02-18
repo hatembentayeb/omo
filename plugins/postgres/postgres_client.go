@@ -119,12 +119,12 @@ type PgLogEntry struct {
 
 // PgConfigEntry represents a PostgreSQL configuration parameter
 type PgConfigEntry struct {
-	Name       string
-	Setting    string
-	Unit       string
-	Category   string
-	Source     string
-	BootVal    string
+	Name        string
+	Setting     string
+	Unit        string
+	Category    string
+	Source      string
+	BootVal     string
 	PendRestart bool
 }
 
@@ -138,14 +138,14 @@ type PgTablespace struct {
 
 // PgIndex represents a PostgreSQL index
 type PgIndex struct {
-	Schema    string
-	Table     string
-	Name      string
-	Size      string
-	Scans     int64
-	TupRead   int64
-	TupFetch  int64
-	IndexDef  string
+	Schema   string
+	Table    string
+	Name     string
+	Size     string
+	Scans    int64
+	TupRead  int64
+	TupFetch int64
+	IndexDef string
 }
 
 // PgLock represents a PostgreSQL lock

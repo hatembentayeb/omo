@@ -31,7 +31,7 @@ const rabbitmqConfigHeader = `# RabbitMQ Plugin Configuration
 // RabbitMQConfig represents the configuration for the RabbitMQ plugin
 type RabbitMQConfig struct {
 	Instances []RabbitMQInstance `yaml:"instances"`
-	UI        RabbitMQUIConfig  `yaml:"ui"`
+	UI        RabbitMQUIConfig   `yaml:"ui"`
 }
 
 // RabbitMQInstance represents a configured RabbitMQ server.
@@ -50,11 +50,11 @@ type RabbitMQInstance struct {
 
 // RabbitMQUIConfig represents UI configuration options
 type RabbitMQUIConfig struct {
-	RefreshInterval    int  `yaml:"refresh_interval"`
-	MaxQueuesDisplay   int  `yaml:"max_queues_display"`
-	EnableConnections  bool `yaml:"enable_connections"`
-	EnableChannels     bool `yaml:"enable_channels"`
-	DefaultView        string `yaml:"default_view"`
+	RefreshInterval   int    `yaml:"refresh_interval"`
+	MaxQueuesDisplay  int    `yaml:"max_queues_display"`
+	EnableConnections bool   `yaml:"enable_connections"`
+	EnableChannels    bool   `yaml:"enable_channels"`
+	DefaultView       string `yaml:"default_view"`
 }
 
 // DefaultRabbitMQConfig returns the default configuration

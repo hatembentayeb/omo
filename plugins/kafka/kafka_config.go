@@ -31,7 +31,7 @@ const kafkaConfigHeader = `# Kafka Plugin Configuration
 // KafkaConfig represents the configuration for the Kafka plugin
 type KafkaConfig struct {
 	Instances []KafkaInstance `yaml:"instances"`
-	UI        KafkaUIConfig  `yaml:"ui"`
+	UI        KafkaUIConfig   `yaml:"ui"`
 }
 
 // KafkaInstance represents a configured Kafka cluster.
@@ -39,11 +39,11 @@ type KafkaConfig struct {
 // it references a KeePass entry whose fields override BootstrapServers,
 // Username, Password, etc. at load time.
 type KafkaInstance struct {
-	Name             string         `yaml:"name"`
-	Description      string         `yaml:"description"`
-	Secret           string         `yaml:"secret,omitempty"` // KeePass path: pluginName/env/entryName
-	BootstrapServers string         `yaml:"bootstrap_servers"`
-	Security         KafkaSecurity  `yaml:"security"`
+	Name             string        `yaml:"name"`
+	Description      string        `yaml:"description"`
+	Secret           string        `yaml:"secret,omitempty"` // KeePass path: pluginName/env/entryName
+	BootstrapServers string        `yaml:"bootstrap_servers"`
+	Security         KafkaSecurity `yaml:"security"`
 }
 
 // KafkaSecurity represents security configuration for a Kafka cluster
@@ -60,13 +60,13 @@ type KafkaSecurity struct {
 
 // KafkaUIConfig represents UI configuration options
 type KafkaUIConfig struct {
-	RefreshInterval       int    `yaml:"refresh_interval"`
-	MaxTopicsDisplay      int    `yaml:"max_topics_display"`
-	MaxPartitionsDisplay  int    `yaml:"max_partitions_display"`
-	DefaultView           string `yaml:"default_view"`
-	EnableMetrics         bool   `yaml:"enable_metrics"`
-	EnableConsumerGroups  bool   `yaml:"enable_consumer_groups"`
-	EnableMessageViewer   bool   `yaml:"enable_message_viewer"`
+	RefreshInterval      int    `yaml:"refresh_interval"`
+	MaxTopicsDisplay     int    `yaml:"max_topics_display"`
+	MaxPartitionsDisplay int    `yaml:"max_partitions_display"`
+	DefaultView          string `yaml:"default_view"`
+	EnableMetrics        bool   `yaml:"enable_metrics"`
+	EnableConsumerGroups bool   `yaml:"enable_consumer_groups"`
+	EnableMessageViewer  bool   `yaml:"enable_message_viewer"`
 }
 
 // DefaultKafkaConfig returns the default configuration
@@ -77,7 +77,7 @@ func DefaultKafkaConfig() *KafkaConfig {
 			RefreshInterval:      10,
 			MaxTopicsDisplay:     100,
 			MaxPartitionsDisplay: 50,
-			DefaultView:         "brokers",
+			DefaultView:          "brokers",
 			EnableMetrics:        true,
 			EnableConsumerGroups: true,
 			EnableMessageViewer:  true,

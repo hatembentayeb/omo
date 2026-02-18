@@ -33,18 +33,18 @@ type dirEntry struct {
 }
 
 type dirBrowser struct {
-	pages           *tview.Pages
-	app             *tview.Application
-	isGitRepo       func(path string) bool
-	callback        func(result DirBrowserResult)
-	currentPath     string
+	pages            *tview.Pages
+	app              *tview.Application
+	isGitRepo        func(path string) bool
+	callback         func(result DirBrowserResult)
+	currentPath      string
 	currentIsGitRepo bool
-	allEntries      []dirEntry
-	filteredIndices []int
-	pathView        *tview.TextView
-	hintView        *tview.TextView
-	filterInput     *tview.InputField
-	list            *tview.List
+	allEntries       []dirEntry
+	filteredIndices  []int
+	pathView         *tview.TextView
+	hintView         *tview.TextView
+	filterInput      *tview.InputField
+	list             *tview.List
 }
 
 func (db *dirBrowser) updatePathDisplay() {

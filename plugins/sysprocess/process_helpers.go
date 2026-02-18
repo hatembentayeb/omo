@@ -127,7 +127,9 @@ var sourceRules = []sourceRule{
 	{match: func(n string) bool { return n == "sshd" }, source: "ssh"},
 	{match: func(n string) bool { return strings.HasPrefix(n, "tmux") }, source: "tmux"},
 	{match: func(n string) bool { return n == "screen" }, source: "screen"},
-	{match: func(n string) bool { return n == "code" || strings.Contains(n, "cursor") || strings.Contains(n, "electron") }, source: "IDE"},
+	{match: func(n string) bool {
+		return n == "code" || strings.Contains(n, "cursor") || strings.Contains(n, "electron")
+	}, source: "IDE"},
 	{match: func(n string) bool { return n == "bash" || n == "zsh" || n == "fish" || n == "sh" || n == "dash" }, source: "shell", fallback: true},
 	{match: func(n string) bool { return n == "systemd" || n == "init" }, source: "systemd", fallback: true},
 }

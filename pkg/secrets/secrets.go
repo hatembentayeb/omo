@@ -67,11 +67,11 @@ type Provider interface {
 
 // KeePassProvider is a Provider backed by a .kdbx file.
 type KeePassProvider struct {
-	mu       sync.Mutex
-	db       *gkp.Database
-	dbPath   string
-	keyPath  string
-	dirty    bool
+	mu      sync.Mutex
+	db      *gkp.Database
+	dbPath  string
+	keyPath string
+	dirty   bool
 }
 
 // well-known KeePass value keys

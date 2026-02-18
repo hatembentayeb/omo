@@ -27,7 +27,7 @@ const redisConfigHeader = `# Redis Plugin Configuration
 // RedisConfig represents the configuration for the Redis plugin
 type RedisConfig struct {
 	Instances []RedisInstance `yaml:"instances"`
-	UI        UIConfig       `yaml:"ui"`
+	UI        UIConfig        `yaml:"ui"`
 }
 
 // RedisInstance represents a configured Redis server instance.
@@ -40,7 +40,7 @@ type RedisInstance struct {
 	Secret      string `yaml:"secret,omitempty"` // KeePass path: pluginName/env/entryName
 	Host        string `yaml:"host"`
 	Port        int    `yaml:"port"`
-	Username    string `yaml:"username"`           // Redis ACL username (Redis 6+)
+	Username    string `yaml:"username"` // Redis ACL username (Redis 6+)
 	Password    string `yaml:"password"`
 	Database    int    `yaml:"database"`
 }

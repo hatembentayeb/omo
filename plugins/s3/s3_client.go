@@ -83,4 +83,3 @@ func (bv *BucketsView) getBucketRegion(bucketName string) (string, error) {
 
 	return *result.LocationConstraint, nil
 }
-
