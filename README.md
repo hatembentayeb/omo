@@ -26,7 +26,9 @@
 ## Demo
 
 <p align="center">
-  <video src="assets/demo.mp4" width="800" controls autoplay loop muted></video>
+  <a href="https://github.com/hatembentayeb/omo/raw/main/assets/demo.mp4">
+    <img src="assets/screenshot.png" alt="omo demo - click to play" width="800">
+  </a>
 </p>
 
 ---
