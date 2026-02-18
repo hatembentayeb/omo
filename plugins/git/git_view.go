@@ -152,51 +152,10 @@ func (gv *GitView) handleAction(action string, payload map[string]interface{}) e
 		return nil
 	case "keypress":
 		if key, ok := payload["key"].(string); ok {
-			// Navigation keys (available in all views)
-			switch key {
-			case "G":
-				gv.showRepos()
-				return nil
-			case "S":
-				gv.showStatus()
-				return nil
-			case "L":
-				gv.showCommits()
-				return nil
-			case "B":
-				gv.showBranches()
-				return nil
-			case "M":
-				gv.showRemotes()
-				return nil
-			case "T":
-				gv.showTags()
-				return nil
-			case "H":
-				gv.showStash()
-				return nil
-			case "?":
-				gv.showHelp()
+			if handled := gv.handleGlobalKeys(key); handled {
 				return nil
 			}
-
-			// View-specific action keys
-			switch gv.currentViewName {
-			case viewRepos:
-				return gv.handleReposKeypress(key)
-			case viewStatus:
-				return gv.handleStatusKeypress(key)
-			case viewCommits:
-				return gv.handleCommitsKeypress(key)
-			case viewBranches:
-				return gv.handleBranchesKeypress(key)
-			case viewRemotes:
-				return gv.handleRemotesKeypress(key)
-			case viewStash:
-				return gv.handleStashKeypress(key)
-			case viewTags:
-				return gv.handleTagsKeypress(key)
-			}
+			return gv.handleViewKeys(key)
 		}
 	case "navigate_back":
 		if view, ok := payload["current_view"].(string); ok {
@@ -207,6 +166,50 @@ func (gv *GitView) handleAction(action string, payload map[string]interface{}) e
 			gv.switchToView(view)
 			return nil
 		}
+	}
+	return fmt.Errorf("unhandled")
+}
+
+func (gv *GitView) handleGlobalKeys(key string) bool {
+	switch key {
+	case "G":
+		gv.showRepos()
+	case "S":
+		gv.showStatus()
+	case "L":
+		gv.showCommits()
+	case "B":
+		gv.showBranches()
+	case "M":
+		gv.showRemotes()
+	case "T":
+		gv.showTags()
+	case "H":
+		gv.showStash()
+	case "?":
+		gv.showHelp()
+	default:
+		return false
+	}
+	return true
+}
+
+func (gv *GitView) handleViewKeys(key string) error {
+	switch gv.currentViewName {
+	case viewRepos:
+		return gv.handleReposKeypress(key)
+	case viewStatus:
+		return gv.handleStatusKeypress(key)
+	case viewCommits:
+		return gv.handleCommitsKeypress(key)
+	case viewBranches:
+		return gv.handleBranchesKeypress(key)
+	case viewRemotes:
+		return gv.handleRemotesKeypress(key)
+	case viewStash:
+		return gv.handleStashKeypress(key)
+	case viewTags:
+		return gv.handleTagsKeypress(key)
 	}
 	return fmt.Errorf("unhandled")
 }

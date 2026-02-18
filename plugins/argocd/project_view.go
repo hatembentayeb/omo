@@ -30,11 +30,96 @@ func NewProjectView(app *tview.Application, pages *tview.Pages, cores *ui.CoreVi
 	}
 }
 
+func resolveProjectDisplayName(project *Project, index int) string {
+	if project.Name != "" {
+		return project.Name
+	}
+	if project.Metadata != nil {
+		if name, ok := project.Metadata["name"].(string); ok && name != "" {
+			return name
+		}
+	}
+	return fmt.Sprintf("Unnamed Project %d", index)
+}
+
+func resolveDestinationLabel(dest Destination) string {
+	if dest.Name != "" {
+		return dest.Name
+	}
+	if dest.Server != "" {
+		return dest.Server
+	}
+	if dest.Namespace != "" {
+		return dest.Namespace
+	}
+	return "unnamed"
+}
+
+func resolveSpecDestinationLabel(destMap map[string]interface{}) string {
+	for _, key := range []string{"name", "server", "namespace"} {
+		if v, ok := destMap[key].(string); ok && v != "" {
+			return v
+		}
+	}
+	return "unnamed"
+}
+
+func resolveDestinations(project Project) string {
+	if len(project.Destinations) > 0 {
+		destNames := make([]string, len(project.Destinations))
+		for i, dest := range project.Destinations {
+			destNames[i] = resolveDestinationLabel(dest)
+		}
+		return strings.Join(destNames, ", ")
+	}
+
+	if project.Spec == nil {
+		return "None"
+	}
+	destinations, ok := project.Spec["destinations"].([]interface{})
+	if !ok || len(destinations) == 0 {
+		return "None"
+	}
+	destNames := []string{}
+	for _, destItem := range destinations {
+		if destMap, ok := destItem.(map[string]interface{}); ok {
+			destNames = append(destNames, resolveSpecDestinationLabel(destMap))
+		}
+	}
+	if len(destNames) == 0 {
+		return "None"
+	}
+	return strings.Join(destNames, ", ")
+}
+
+func resolveSourceRepos(project Project) string {
+	if len(project.SourceRepos) > 0 {
+		return fmt.Sprintf("%d repos", len(project.SourceRepos))
+	}
+	if project.Spec != nil {
+		if sourceRepos, ok := project.Spec["sourceRepos"].([]interface{}); ok {
+			return fmt.Sprintf("%d repos", len(sourceRepos))
+		}
+	}
+	return "None"
+}
+
+func resolveRoleCount(project Project) string {
+	if len(project.Roles) > 0 {
+		return fmt.Sprintf("%d", len(project.Roles))
+	}
+	if project.Spec != nil {
+		if roles, ok := project.Spec["roles"].([]interface{}); ok {
+			return fmt.Sprintf("%d", len(roles))
+		}
+	}
+	return "0"
+}
+
 // fetchProjects gets the list of projects from ArgoCD
 func (v *ProjectView) fetchProjects() ([][]string, error) {
 	Debug("fetchProjects called in ProjectView")
 
-	// Check if connected
 	if !v.apiClient.IsConnected {
 		Debug("API client not connected")
 		return [][]string{
@@ -44,7 +129,6 @@ func (v *ProjectView) fetchProjects() ([][]string, error) {
 
 	Debug("API client is connected, calling GetProjects()")
 
-	// Fetch projects
 	projects, err := v.apiClient.GetProjects()
 	if err != nil {
 		Debug("Error fetching projects: %v", err)
@@ -55,10 +139,8 @@ func (v *ProjectView) fetchProjects() ([][]string, error) {
 
 	Debug("Fetched %d projects in ProjectView", len(projects))
 
-	// Store for later use
 	v.projects = projects
 
-	// Check if we have any projects first
 	if len(projects) == 0 {
 		Debug("No projects found")
 		return [][]string{
@@ -66,97 +148,19 @@ func (v *ProjectView) fetchProjects() ([][]string, error) {
 		}, nil
 	}
 
-	// Debug print each project's complete structure
 	for i, proj := range projects {
 		Debug("Project %d structure: %+v", i, proj)
 	}
 
-	// Format data for display
 	result := [][]string{}
 	for i, project := range projects {
 		Debug("Processing project %d: %s", i, project.Name)
 
-		// Make sure project name is not empty
-		if project.Name == "" {
-			if project.Metadata != nil {
-				if name, ok := project.Metadata["name"].(string); ok && name != "" {
-					project.Name = name
-				} else {
-					project.Name = fmt.Sprintf("Unnamed Project %d", i)
-				}
-			} else {
-				project.Name = fmt.Sprintf("Unnamed Project %d", i)
-			}
-		}
+		project.Name = resolveProjectDisplayName(&project, i)
+		dests := resolveDestinations(project)
+		repos := resolveSourceRepos(project)
+		roleCount := resolveRoleCount(project)
 
-		// Format destinations - check if Destinations is nil to avoid panic
-		dests := "None"
-		if project.Destinations != nil && len(project.Destinations) > 0 {
-			destNames := []string{}
-			for j, dest := range project.Destinations {
-				Debug("  Processing destination %d for project %s", j, project.Name)
-				name := dest.Name
-				if name == "" {
-					if dest.Server != "" {
-						name = dest.Server
-					} else if dest.Namespace != "" {
-						name = dest.Namespace
-					} else {
-						name = "unnamed"
-					}
-				}
-				destNames = append(destNames, name)
-			}
-			dests = strings.Join(destNames, ", ")
-		} else if project.Spec != nil {
-			// Try to get destinations from spec
-			if destinations, ok := project.Spec["destinations"].([]interface{}); ok && len(destinations) > 0 {
-				destNames := []string{}
-				for j, destItem := range destinations {
-					Debug("  Processing spec destination %d for project %s", j, project.Name)
-					if destMap, ok := destItem.(map[string]interface{}); ok {
-						var destName string
-						if name, ok := destMap["name"].(string); ok && name != "" {
-							destName = name
-						} else if server, ok := destMap["server"].(string); ok && server != "" {
-							destName = server
-						} else if namespace, ok := destMap["namespace"].(string); ok && namespace != "" {
-							destName = namespace
-						} else {
-							destName = "unnamed"
-						}
-						destNames = append(destNames, destName)
-					}
-				}
-				if len(destNames) > 0 {
-					dests = strings.Join(destNames, ", ")
-				}
-			}
-		}
-
-		// Format repos - check if SourceRepos is nil to avoid panic
-		repos := "None"
-		if project.SourceRepos != nil && len(project.SourceRepos) > 0 {
-			repos = fmt.Sprintf("%d repos", len(project.SourceRepos))
-		} else if project.Spec != nil {
-			// Try to get source repos from spec
-			if sourceRepos, ok := project.Spec["sourceRepos"].([]interface{}); ok {
-				repos = fmt.Sprintf("%d repos", len(sourceRepos))
-			}
-		}
-
-		// Count roles - check if Roles is nil to avoid panic
-		roleCount := "0"
-		if project.Roles != nil && len(project.Roles) > 0 {
-			roleCount = fmt.Sprintf("%d", len(project.Roles))
-		} else if project.Spec != nil {
-			// Try to get roles from spec
-			if roles, ok := project.Spec["roles"].([]interface{}); ok {
-				roleCount = fmt.Sprintf("%d", len(roles))
-			}
-		}
-
-		// Add row to result
 		Debug("  Adding project %s to results with %s destinations, %s, %s roles",
 			project.Name, dests, repos, roleCount)
 

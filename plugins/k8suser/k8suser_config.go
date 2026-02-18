@@ -138,11 +138,34 @@ func initK8sUserKeePass() {
 	})
 }
 
+func resolveK8sClusterSecret(cluster *K8sCluster, entry *pluginapi.SecretEntry) {
+	if cluster.Server == "" && entry.URL != "" {
+		cluster.Server = entry.URL
+	}
+	if cluster.Token == "" && entry.Password != "" {
+		cluster.Token = entry.Password
+	}
+	if cluster.Name == "" && entry.Title != "" {
+		cluster.Name = entry.Title
+	}
+	for attr, field := range map[string]*string{
+		"kubeconfig": &cluster.Kubeconfig,
+		"ca_cert":    &cluster.CACert,
+		"context":    &cluster.Context,
+	} {
+		if *field == "" {
+			if v, ok := entry.CustomAttributes[attr]; ok {
+				*field = v
+			}
+		}
+	}
+}
+
 // resolveK8sUserSecrets iterates over clusters and populates connection
 // fields from the secrets provider when a secret path is defined.
 func resolveK8sUserSecrets(config *K8sUserConfig) error {
 	if !pluginapi.HasSecrets() {
-		return nil // no provider — skip silently
+		return nil
 	}
 
 	for i := range config.Clusters {
@@ -156,32 +179,7 @@ func resolveK8sUserSecrets(config *K8sUserConfig) error {
 			return fmt.Errorf("cluster %q: %w", cluster.Name, err)
 		}
 
-		// Override only blank fields so YAML values take precedence.
-		if cluster.Server == "" && entry.URL != "" {
-			cluster.Server = entry.URL
-		}
-		if cluster.Token == "" && entry.Password != "" {
-			cluster.Token = entry.Password
-		}
-		if cluster.Name == "" && entry.Title != "" {
-			cluster.Name = entry.Title
-		}
-		// Custom attributes
-		if cluster.Kubeconfig == "" {
-			if v, ok := entry.CustomAttributes["kubeconfig"]; ok {
-				cluster.Kubeconfig = v
-			}
-		}
-		if cluster.CACert == "" {
-			if v, ok := entry.CustomAttributes["ca_cert"]; ok {
-				cluster.CACert = v
-			}
-		}
-		if cluster.Context == "" {
-			if v, ok := entry.CustomAttributes["context"]; ok {
-				cluster.Context = v
-			}
-		}
+		resolveK8sClusterSecret(cluster, entry)
 	}
 	return nil
 }

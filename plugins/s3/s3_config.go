@@ -142,11 +142,36 @@ func initS3KeePass() {
 	})
 }
 
+func resolveS3ProfileSecret(prof *S3Profile, entry *pluginapi.SecretEntry) {
+	if prof.AccessKey == "" && entry.UserName != "" {
+		prof.AccessKey = entry.UserName
+	}
+	if prof.SecretKey == "" && entry.Password != "" {
+		prof.SecretKey = entry.Password
+	}
+	if prof.Name == "" && entry.Title != "" {
+		prof.Name = entry.Title
+	}
+	if prof.Endpoint == "" && entry.URL != "" {
+		prof.Endpoint = entry.URL
+	}
+	for attr, field := range map[string]*string{
+		"region":   &prof.Region,
+		"role_arn": &prof.RoleARN,
+	} {
+		if *field == "" {
+			if v, ok := entry.CustomAttributes[attr]; ok {
+				*field = v
+			}
+		}
+	}
+}
+
 // resolveS3Secrets iterates over profiles and populates credential
 // fields from the secrets provider when a secret path is defined.
 func resolveS3Secrets(config *S3Config) error {
 	if !pluginapi.HasSecrets() {
-		return nil // no provider — skip silently
+		return nil
 	}
 
 	for i := range config.Profiles {
@@ -160,30 +185,7 @@ func resolveS3Secrets(config *S3Config) error {
 			return fmt.Errorf("profile %q: %w", prof.Name, err)
 		}
 
-		// Override only blank fields so YAML values take precedence.
-		if prof.AccessKey == "" && entry.UserName != "" {
-			prof.AccessKey = entry.UserName
-		}
-		if prof.SecretKey == "" && entry.Password != "" {
-			prof.SecretKey = entry.Password
-		}
-		if prof.Name == "" && entry.Title != "" {
-			prof.Name = entry.Title
-		}
-		if prof.Endpoint == "" && entry.URL != "" {
-			prof.Endpoint = entry.URL
-		}
-		// Custom attributes
-		if prof.Region == "" {
-			if v, ok := entry.CustomAttributes["region"]; ok {
-				prof.Region = v
-			}
-		}
-		if prof.RoleARN == "" {
-			if v, ok := entry.CustomAttributes["role_arn"]; ok {
-				prof.RoleARN = v
-			}
-		}
+		resolveS3ProfileSecret(prof, entry)
 	}
 	return nil
 }

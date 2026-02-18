@@ -69,11 +69,127 @@ func (v *ApplicationView) onApplicationSelected(row int) {
 	}
 }
 
+func getNestedString(m map[string]interface{}, keys ...string) string {
+	current := m
+	for i, key := range keys {
+		if current == nil {
+			return ""
+		}
+		if i == len(keys)-1 {
+			if s, ok := current[key].(string); ok {
+				return s
+			}
+			return ""
+		}
+		next, ok := current[key].(map[string]interface{})
+		if !ok {
+			return ""
+		}
+		current = next
+	}
+	return ""
+}
+
+func resolveAppName(app *Application, index int) string {
+	if app.Name != "" {
+		return app.Name
+	}
+	if app.Metadata != nil {
+		if name, ok := app.Metadata["name"].(string); ok && name != "" {
+			return name
+		}
+	}
+	return fmt.Sprintf("Unnamed App %d", index)
+}
+
+func isEmptyProject(s string) bool {
+	return s == "" || s == "-"
+}
+
+func resolveProjectName(app *Application) string {
+	if !isEmptyProject(app.Project) {
+		return app.Project
+	}
+
+	if p := getNestedString(app.Spec, "project"); p != "" {
+		return p
+	}
+
+	if p := getNestedString(app.Metadata, "project"); p != "" {
+		return p
+	}
+	if p := getNestedString(app.Metadata, "labels", "argocd.argoproj.io/project"); p != "" {
+		return p
+	}
+
+	if p := getNestedString(app.Status, "project"); p != "" {
+		return p
+	}
+	if p := getNestedString(app.Status, "spec", "project"); p != "" {
+		return p
+	}
+
+	if p := projectFromSelfLink(app); p != "" {
+		return p
+	}
+
+	return "default"
+}
+
+func projectFromSelfLink(app *Application) string {
+	selfLink := getNestedString(app.Metadata, "selfLink")
+	if selfLink == "" {
+		return ""
+	}
+	parts := strings.Split(selfLink, "/")
+	if len(parts) < 3 {
+		return ""
+	}
+	for i, part := range parts {
+		if part == "applications" && i+1 < len(parts) {
+			candidate := parts[i+1]
+			if candidate != "" && candidate != app.Name {
+				return candidate
+			}
+		}
+	}
+	return ""
+}
+
+func isEmptyStatus(s string) bool {
+	return s == "" || s == "Unknown" || s == "-"
+}
+
+func resolveHealthStatus(app *Application) string {
+	if !isEmptyStatus(app.Health.Status) {
+		return app.Health.Status
+	}
+	if s := getNestedString(app.Status, "health", "status"); s != "" {
+		return s
+	}
+	if s := getNestedString(app.Status, "healthStatus"); s != "" {
+		return s
+	}
+	return app.Health.Status
+}
+
+func resolveSyncStatus(app *Application) string {
+	if !isEmptyStatus(app.Sync.Status) {
+		return app.Sync.Status
+	}
+	if s := getNestedString(app.Status, "sync", "status"); s != "" {
+		return s
+	}
+	if s := getNestedString(app.Status, "syncStatus"); s != "" {
+		return s
+	}
+	return app.Sync.Status
+}
+
 // fetchApplications gets the list of applications from ArgoCD
 func (v *ApplicationView) fetchApplications() ([][]string, error) {
 	Debug("fetchApplications called in ApplicationView")
 
-	// Check if connected
 	if !v.apiClient.IsConnected {
 		Debug("API client not connected")
 		return [][]string{
@@ -83,7 +199,6 @@ func (v *ApplicationView) fetchApplications() ([][]string, error) {
 
 	Debug("API client is connected, calling GetApplications()")
 
-	// Fetch applications
 	applications, err := v.apiClient.GetApplications()
 	if err != nil {
 		Debug("Error fetching applications: %v", err)
@@ -94,16 +209,11 @@ func (v *ApplicationView) fetchApplications() ([][]string, error) {
 
 	Debug("Fetched %d applications in ApplicationView", len(applications))
 
-	// Debug print each application's complete structure
 	for i, app := range applications {
 		Debug("Application %d structure: %+v", i, app)
 	}
 
-	// Store for later use
 	v.applications = applications
-
-	// Format data for display
-	result := [][]string{}
 
 	if len(applications) == 0 {
 		Debug("No applications found")
@@ -112,129 +222,14 @@ func (v *ApplicationView) fetchApplications() ([][]string, error) {
 		}, nil
 	}
 
+	result := [][]string{}
 	for i, app := range applications {
 		Debug("Processing application %d: %s", i, app.Name)
 
-		// Make sure application name is not empty
-		if app.Name == "" {
-			if app.Metadata != nil {
-				if name, ok := app.Metadata["name"].(string); ok && name != "" {
-					app.Name = name
-				} else {
-					app.Name = fmt.Sprintf("Unnamed App %d", i)
-				}
-			} else {
-				app.Name = fmt.Sprintf("Unnamed App %d", i)
-			}
-		}
-
-		// Extract project name with enhanced fallbacks
-		projectName := app.Project
-		if projectName == "" || projectName == "-" {
-			// Try from spec
-			if app.Spec != nil {
-				if project, ok := app.Spec["project"].(string); ok && project != "" {
-					projectName = project
-				}
-			}
-
-			// Try from metadata
-			if projectName == "" || projectName == "-" {
-				if app.Metadata != nil {
-					// Direct project field
-					if project, ok := app.Metadata["project"].(string); ok && project != "" {
-						projectName = project
-					} else if labels, ok := app.Metadata["labels"].(map[string]interface{}); ok {
-						// Labels
-						if project, ok := labels["argocd.argoproj.io/project"].(string); ok && project != "" {
-							projectName = project
-						}
-					}
-				}
-			}
-
-			// Try from status
-			if (projectName == "" || projectName == "-") && app.Status != nil {
-				// Direct from status
-				if project, ok := app.Status["project"].(string); ok && project != "" {
-					projectName = project
-				} else if spec, ok := app.Status["spec"].(map[string]interface{}); ok {
-					// From status.spec
-					if project, ok := spec["project"].(string); ok && project != "" {
-						projectName = project
-					}
-				}
-			}
-
-			// If still empty after all attempts, try to get from the URL
-			if projectName == "" || projectName == "-" {
-				// Some ArgoCD instances use URL paths that include the project name
-				// Example: /applications/[project]/[app-name]
-				// We can try to extract it if available
-				if app.Metadata != nil {
-					if selfLink, ok := app.Metadata["selfLink"].(string); ok && selfLink != "" {
-						parts := strings.Split(selfLink, "/")
-						if len(parts) >= 3 {
-							// URL format might be /applications/[project]/[name]
-							for i, part := range parts {
-								if part == "applications" && i+1 < len(parts) {
-									potentialProject := parts[i+1]
-									if potentialProject != "" && potentialProject != app.Name {
-										projectName = potentialProject
-										break
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-
-			// If still empty, use "default" as a reasonable fallback
-			if projectName == "" || projectName == "-" {
-				projectName = "default"
-			}
-		}
-
-		// Extract health status
-		healthStatus := app.Health.Status
-		if healthStatus == "" || healthStatus == "Unknown" || healthStatus == "-" {
-			// Try to extract health from status field if not already set
-			if app.Status != nil {
-				if health, ok := app.Status["health"].(map[string]interface{}); ok {
-					if status, ok := health["status"].(string); ok && status != "" {
-						healthStatus = status
-					}
-				}
-			}
-
-			// If still not found, check direct properties
-			if (healthStatus == "" || healthStatus == "Unknown" || healthStatus == "-") && app.Status != nil {
-				if status, ok := app.Status["healthStatus"].(string); ok && status != "" {
-					healthStatus = status
-				}
-			}
-		}
-
-		// Extract sync status
-		syncStatus := app.Sync.Status
-		if syncStatus == "" || syncStatus == "Unknown" || syncStatus == "-" {
-			// Try to extract sync status from status field if not already set
-			if app.Status != nil {
-				if sync, ok := app.Status["sync"].(map[string]interface{}); ok {
-					if status, ok := sync["status"].(string); ok && status != "" {
-						syncStatus = status
-					}
-				}
-			}
-
-			// If still not found, check direct properties
-			if (syncStatus == "" || syncStatus == "Unknown" || syncStatus == "-") && app.Status != nil {
-				if status, ok := app.Status["syncStatus"].(string); ok && status != "" {
-					syncStatus = status
-				}
-			}
-		}
+		app.Name = resolveAppName(&app, i)
+		projectName := resolveProjectName(&app)
+		healthStatus := resolveHealthStatus(&app)
+		syncStatus := resolveSyncStatus(&app)
 
 		Debug("  Adding app row: Name=%s, Project=%s, Health=%s, Sync=%s",
 			app.Name, projectName, healthStatus, syncStatus)

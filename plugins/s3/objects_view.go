@@ -55,6 +55,35 @@ func (bv *BucketsView) newObjectsView() *ui.CoreView {
 	return view
 }
 
+func formatS3Object(obj *s3.Object, prefix string) []string {
+	key := *obj.Key
+	if key == prefix {
+		return nil
+	}
+
+	name := key
+	if prefix != "" {
+		name = strings.TrimPrefix(key, prefix)
+	}
+
+	size := ""
+	if obj.Size != nil {
+		size = formatSize(*obj.Size)
+	}
+
+	lastModified := ""
+	if obj.LastModified != nil {
+		lastModified = obj.LastModified.Format(time.RFC3339)
+	}
+
+	storageClass := "STANDARD"
+	if obj.StorageClass != nil {
+		storageClass = *obj.StorageClass
+	}
+
+	return []string{name, size, lastModified, storageClass}
+}
+
 // refreshObjects fetches and returns object data for the current bucket/prefix
 func (bv *BucketsView) refreshObjects() ([][]string, error) {
 	if bv.s3Client == nil {
@@ -65,19 +94,16 @@ func (bv *BucketsView) refreshObjects() ([][]string, error) {
 		return [][]string{{"No bucket selected", "Press B to go back", "", ""}}, nil
 	}
 
-	// Get the correct region for the bucket
 	bucketRegion, err := bv.getBucketRegion(bv.currentBucket)
 	if err != nil {
 		bucketRegion = bv.currentRegion
 	}
 
-	// Create S3 client for the bucket's region
 	client := bv.createS3ClientForRegion(bv.currentProfile, bucketRegion)
 	if client == nil {
 		return [][]string{{"Error creating S3 client", "", "", ""}}, nil
 	}
 
-	// Use delimiter to get folder-like behavior
 	input := &s3.ListObjectsV2Input{
 		Bucket:    aws.String(bv.currentBucket),
 		Delimiter: aws.String("/"),
@@ -95,17 +121,14 @@ func (bv *BucketsView) refreshObjects() ([][]string, error) {
 
 	var tableData [][]string
 
-	// Add ".." entry if we're in a subdirectory
 	if bv.currentPrefix != "" {
 		tableData = append(tableData, []string{"../", "", "", ""})
 	}
 
-	// Add "directories" (common prefixes)
 	for _, prefix := range result.CommonPrefixes {
 		if prefix.Prefix == nil {
 			continue
 		}
-		// Display just the folder name, not the full prefix
 		name := *prefix.Prefix
 		if bv.currentPrefix != "" {
 			name = strings.TrimPrefix(name, bv.currentPrefix)
@@ -113,49 +136,20 @@ func (bv *BucketsView) refreshObjects() ([][]string, error) {
 		tableData = append(tableData, []string{name, "-", "-", "Directory"})
 	}
 
-	// Add files
 	for _, obj := range result.Contents {
 		if obj.Key == nil {
 			continue
 		}
-
-		// Skip the prefix itself (shows as empty entry)
-		key := *obj.Key
-		if key == bv.currentPrefix {
-			continue
+		row := formatS3Object(obj, bv.currentPrefix)
+		if row != nil {
+			tableData = append(tableData, row)
 		}
-
-		// Display just the filename, not the full key
-		name := key
-		if bv.currentPrefix != "" {
-			name = strings.TrimPrefix(key, bv.currentPrefix)
-		}
-
-		size := ""
-		if obj.Size != nil {
-			size = formatSize(*obj.Size)
-		}
-
-		lastModified := ""
-		if obj.LastModified != nil {
-			lastModified = obj.LastModified.Format(time.RFC3339)
-		}
-
-		storageClass := ""
-		if obj.StorageClass != nil {
-			storageClass = *obj.StorageClass
-		} else {
-			storageClass = "STANDARD"
-		}
-
-		tableData = append(tableData, []string{name, size, lastModified, storageClass})
 	}
 
 	if len(tableData) == 0 {
 		tableData = [][]string{{"Empty bucket", "", "", ""}}
 	}
 
-	// Update info panel
 	prefix := bv.currentPrefix
 	if prefix == "" {
 		prefix = "/"

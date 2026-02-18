@@ -147,11 +147,37 @@ func initKafkaKeePass() {
 	})
 }
 
+func resolveKafkaInstanceSecret(inst *KafkaInstance, entry *pluginapi.SecretEntry) {
+	if inst.BootstrapServers == "" && entry.URL != "" {
+		inst.BootstrapServers = entry.URL
+	}
+	if inst.Security.Username == "" && entry.UserName != "" {
+		inst.Security.Username = entry.UserName
+	}
+	if inst.Security.Password == "" && entry.Password != "" {
+		inst.Security.Password = entry.Password
+	}
+	if inst.Name == "" && entry.Title != "" {
+		inst.Name = entry.Title
+	}
+	for attr, field := range map[string]*string{
+		"ssl_ca_cert": &inst.Security.SSLCACert,
+		"ssl_cert":    &inst.Security.SSLCert,
+		"ssl_key":     &inst.Security.SSLKey,
+	} {
+		if *field == "" {
+			if v, ok := entry.CustomAttributes[attr]; ok {
+				*field = v
+			}
+		}
+	}
+}
+
 // resolveKafkaSecrets iterates over instances and populates connection
 // fields from the secrets provider when a secret path is defined.
 func resolveKafkaSecrets(config *KafkaConfig) error {
 	if !pluginapi.HasSecrets() {
-		return nil // no provider — skip silently
+		return nil
 	}
 
 	for i := range config.Instances {
@@ -165,35 +191,7 @@ func resolveKafkaSecrets(config *KafkaConfig) error {
 			return fmt.Errorf("instance %q: %w", inst.Name, err)
 		}
 
-		// Override only blank fields so YAML values take precedence.
-		if inst.BootstrapServers == "" && entry.URL != "" {
-			inst.BootstrapServers = entry.URL
-		}
-		if inst.Security.Username == "" && entry.UserName != "" {
-			inst.Security.Username = entry.UserName
-		}
-		if inst.Security.Password == "" && entry.Password != "" {
-			inst.Security.Password = entry.Password
-		}
-		if inst.Name == "" && entry.Title != "" {
-			inst.Name = entry.Title
-		}
-		// Custom attributes for SSL paths
-		if inst.Security.SSLCACert == "" {
-			if v, ok := entry.CustomAttributes["ssl_ca_cert"]; ok {
-				inst.Security.SSLCACert = v
-			}
-		}
-		if inst.Security.SSLCert == "" {
-			if v, ok := entry.CustomAttributes["ssl_cert"]; ok {
-				inst.Security.SSLCert = v
-			}
-		}
-		if inst.Security.SSLKey == "" {
-			if v, ok := entry.CustomAttributes["ssl_key"]; ok {
-				inst.Security.SSLKey = v
-			}
-		}
+		resolveKafkaInstanceSecret(inst, entry)
 	}
 	return nil
 }

@@ -97,52 +97,49 @@ func (kc *K8sClient) SetContext(context string) error {
 	return nil
 }
 
-// GetUsers gets the list of certificate-based users
-func (kc *K8sClient) GetUsers() ([]*K8sUser, error) {
-	// First, let's try to get existing client certificate users from the kubeconfig
+func formatCertExpiry(certInfo *CertificateInfo) string {
+	daysUntilExpiry := int(certInfo.ExpiryDate.Sub(time.Now()).Hours() / 24)
+	return fmt.Sprintf("%s (%d days)", certInfo.ExpiryDate.Format("2006-01-02"), daysUntilExpiry)
+}
+
+func (kc *K8sClient) hasUser(username string) bool {
+	for _, user := range kc.Users {
+		if user.Username == username {
+			return true
+		}
+	}
+	return false
+}
+
+func (kc *K8sClient) loadKubeconfigUsers() error {
 	cmd := exec.Command("kubectl", "config", "view", "-o",
 		"jsonpath={range .users[*]}{.name}{\"\\t\"}{.user.client-certificate}{\"\\n\"}{end}")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("kubectl error: %v, output: %s", err, string(output))
+		return fmt.Errorf("kubectl error: %v, output: %s", err, string(output))
 	}
 
-	// Parse the output
-	userLines := strings.Split(strings.TrimSpace(string(output)), "\n")
-
-	kc.Users = make([]*K8sUser, 0)
-
-	for _, line := range userLines {
+	certManager := NewCertManager()
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
 		if line == "" {
 			continue
 		}
-
 		parts := strings.Split(line, "\t")
 		if len(parts) != 2 || parts[1] == "" {
-			// Skip users without client certificates
 			continue
 		}
-
 		username := parts[0]
-
-		// Get namespace bindings
 		namespace, roles := kc.getUserRoles(username)
 
-		// Create the user object
 		user := &K8sUser{
 			Username:  username,
 			Namespace: namespace,
 			Roles:     roles,
 		}
 
-		// Try to get certificate expiry
-		certManager := NewCertManager()
 		certInfo, err := certManager.GetCertificateInfo(username)
 		if err == nil {
-			// Format the expiry date
-			daysUntilExpiry := int(certInfo.ExpiryDate.Sub(time.Now()).Hours() / 24)
-			user.CertExpiry = fmt.Sprintf("%s (%d days)",
-				certInfo.ExpiryDate.Format("2006-01-02"), daysUntilExpiry)
+			user.CertExpiry = formatCertExpiry(certInfo)
 			user.Certificate = certInfo
 		} else {
 			user.CertExpiry = "Unknown"
@@ -150,182 +147,146 @@ func (kc *K8sClient) GetUsers() ([]*K8sUser, error) {
 
 		kc.Users = append(kc.Users, user)
 	}
+	return nil
+}
 
-	// Now, let's also add any users that have certificates in the .k8s-users directory
-	// but might not be in the kubeconfig
+func (kc *K8sClient) loadCertDirUsers() {
 	certManager := NewCertManager()
 	homeDir, err := os.UserHomeDir()
-	if err == nil {
-		usersDir := filepath.Join(homeDir, ".k8s-users")
-		entries, err := os.ReadDir(usersDir)
-		if err == nil {
-			for _, entry := range entries {
-				if entry.IsDir() {
-					username := entry.Name()
-
-					// Check if this user is already in our list
-					found := false
-					for _, user := range kc.Users {
-						if user.Username == username {
-							found = true
-							break
-						}
-					}
-
-					if !found {
-						// Get namespace bindings
-						namespace, roles := kc.getUserRoles(username)
-
-						// Try to get certificate info
-						certInfo, err := certManager.GetCertificateInfo(username)
-						if err == nil {
-							// Format the expiry date
-							daysUntilExpiry := int(certInfo.ExpiryDate.Sub(time.Now()).Hours() / 24)
-							expiryStr := fmt.Sprintf("%s (%d days)",
-								certInfo.ExpiryDate.Format("2006-01-02"), daysUntilExpiry)
-
-							// Create and add the user
-							kc.Users = append(kc.Users, &K8sUser{
-								Username:    username,
-								Namespace:   namespace,
-								Roles:       roles,
-								CertExpiry:  expiryStr,
-								Certificate: certInfo,
-							})
-						}
-					}
-				}
-			}
-		}
+	if err != nil {
+		return
 	}
+	usersDir := filepath.Join(homeDir, ".k8s-users")
+	entries, err := os.ReadDir(usersDir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		username := entry.Name()
+		if kc.hasUser(username) {
+			continue
+		}
+		certInfo, err := certManager.GetCertificateInfo(username)
+		if err != nil {
+			continue
+		}
+		namespace, roles := kc.getUserRoles(username)
+		kc.Users = append(kc.Users, &K8sUser{
+			Username:    username,
+			Namespace:   namespace,
+			Roles:       roles,
+			CertExpiry:  formatCertExpiry(certInfo),
+			Certificate: certInfo,
+		})
+	}
+}
 
-	// Also look for any users with CSRs
+func (kc *K8sClient) loadCSRUsers() {
 	csrCmd := exec.Command("kubectl", "get", "csr", "-o",
 		"jsonpath={range .items[*]}{.spec.username}{\",\"}{end}")
 	csrOutput, err := csrCmd.CombinedOutput()
-	if err == nil {
-		csrUsernames := strings.Split(strings.TrimSpace(string(csrOutput)), ",")
-		for _, csrUsername := range csrUsernames {
-			if csrUsername == "" {
-				continue
-			}
-
-			// Skip usernames that are already in our list
-			found := false
-			for _, user := range kc.Users {
-				if user.Username == csrUsername {
-					found = true
-					break
-				}
-			}
-
-			if !found {
-				// Get namespace bindings
-				namespace, roles := kc.getUserRoles(csrUsername)
-
-				// Add the user with CSR status
-				kc.Users = append(kc.Users, &K8sUser{
-					Username:   csrUsername,
-					Namespace:  namespace,
-					Roles:      roles,
-					CertExpiry: "CSR Pending",
-				})
-			}
-		}
+	if err != nil {
+		return
 	}
+	for _, csrUsername := range strings.Split(strings.TrimSpace(string(csrOutput)), ",") {
+		if csrUsername == "" || kc.hasUser(csrUsername) {
+			continue
+		}
+		namespace, roles := kc.getUserRoles(csrUsername)
+		kc.Users = append(kc.Users, &K8sUser{
+			Username:   csrUsername,
+			Namespace:  namespace,
+			Roles:      roles,
+			CertExpiry: "CSR Pending",
+		})
+	}
+}
+
+// GetUsers gets the list of certificate-based users
+func (kc *K8sClient) GetUsers() ([]*K8sUser, error) {
+	kc.Users = make([]*K8sUser, 0)
+
+	if err := kc.loadKubeconfigUsers(); err != nil {
+		return nil, err
+	}
+
+	kc.loadCertDirUsers()
+	kc.loadCSRUsers()
 
 	return kc.Users, nil
 }
 
-// getUserRoles gets the roles assigned to a user in Kubernetes
-func (kc *K8sClient) getUserRoles(username string) (string, string) {
-	// Get the namespaces for role bindings associated with this user
-	namespaces := make(map[string]bool)
-	roleBindings := make(map[string]bool)
-
-	// Check for RoleBindings in all namespaces
+func collectRoleBindings(username string, namespaces map[string]bool, roleBindings map[string]bool) {
 	cmd := exec.Command("kubectl", "get", "rolebindings", "--all-namespaces", "-o",
 		"jsonpath={range .items[*]}{.metadata.namespace}{\"\\t\"}{.metadata.name}{\"\\t\"}{.subjects[*].name}{\"\\n\"}{end}")
 	output, err := cmd.CombinedOutput()
-	if err == nil {
-		lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-
-		for _, line := range lines {
-			if line == "" {
-				continue
-			}
-
-			parts := strings.Split(line, "\t")
-			if len(parts) < 3 {
-				continue
-			}
-
-			namespace := parts[0]
-			binding := parts[1]
-			usernames := strings.Split(parts[2], " ")
-
-			for _, name := range usernames {
-				// Check both with and without system prefix
-				if name == username {
-					namespaces[namespace] = true
-					roleBindings[binding] = true
-				}
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		if line == "" {
+			continue
+		}
+		parts := strings.Split(line, "\t")
+		if len(parts) < 3 {
+			continue
+		}
+		for _, name := range strings.Split(parts[2], " ") {
+			if name == username {
+				namespaces[parts[0]] = true
+				roleBindings[parts[1]] = true
 			}
 		}
 	}
+}
 
-	// Check for ClusterRoleBindings
-	cmd = exec.Command("kubectl", "get", "clusterrolebindings", "-o",
+func collectClusterRoleBindings(username string, namespaces map[string]bool, roleBindings map[string]bool) {
+	cmd := exec.Command("kubectl", "get", "clusterrolebindings", "-o",
 		"jsonpath={range .items[*]}{.metadata.name}{\"\\t\"}{.subjects[*].name}{\"\\n\"}{end}")
-	output, err = cmd.CombinedOutput()
-	if err == nil {
-		lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-
-		for _, line := range lines {
-			if line == "" {
-				continue
-			}
-
-			parts := strings.Split(line, "\t")
-			if len(parts) < 2 {
-				continue
-			}
-
-			binding := parts[0]
-			usernames := strings.Split(parts[1], " ")
-
-			for _, name := range usernames {
-				// Check both with and without system prefix
-				if name == username {
-					namespaces["cluster-wide"] = true
-					roleBindings[binding] = true
-				}
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		if line == "" {
+			continue
+		}
+		parts := strings.Split(line, "\t")
+		if len(parts) < 2 {
+			continue
+		}
+		for _, name := range strings.Split(parts[1], " ") {
+			if name == username {
+				namespaces["cluster-wide"] = true
+				roleBindings[parts[0]] = true
 			}
 		}
 	}
+}
 
-	// Build strings for namespaces and roles
-	namespaceList := make([]string, 0, len(namespaces))
-	for namespace := range namespaces {
-		namespaceList = append(namespaceList, namespace)
+func mapKeysJoined(m map[string]bool, fallback string) string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
 	}
-
-	rolesList := make([]string, 0, len(roleBindings))
-	for role := range roleBindings {
-		rolesList = append(rolesList, role)
+	if len(keys) == 0 {
+		return fallback
 	}
+	return strings.Join(keys, ", ")
+}
 
-	namespaceStr := strings.Join(namespaceList, ", ")
-	if namespaceStr == "" {
-		namespaceStr = "none"
-	}
+// getUserRoles gets the roles assigned to a user in Kubernetes
+func (kc *K8sClient) getUserRoles(username string) (string, string) {
+	namespaces := make(map[string]bool)
+	roleBindings := make(map[string]bool)
 
-	rolesStr := strings.Join(rolesList, ", ")
-	if rolesStr == "" {
-		rolesStr = "none"
-	}
+	collectRoleBindings(username, namespaces, roleBindings)
+	collectClusterRoleBindings(username, namespaces, roleBindings)
 
-	return namespaceStr, rolesStr
+	return mapKeysJoined(namespaces, "none"), mapKeysJoined(roleBindings, "none")
 }
 
 // CreateUser creates a new Kubernetes user with certificate
@@ -546,90 +507,79 @@ roleRef:
 	return nil
 }
 
+func deleteUserRoleBindings(username string) {
+	cmd := exec.Command("kubectl", "get", "rolebindings", "--all-namespaces", "-o",
+		"jsonpath={range .items[*]}{.metadata.namespace}{\"\\t\"}{.metadata.name}{\"\\t\"}{.subjects[*].name}{\"\\n\"}{end}")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		if line == "" {
+			continue
+		}
+		parts := strings.Split(line, "\t")
+		if len(parts) < 3 {
+			continue
+		}
+		for _, name := range strings.Split(parts[2], " ") {
+			if name == username {
+				deleteCmd := exec.Command("kubectl", "delete", "rolebinding", parts[1], "-n", parts[0])
+				deleteCmd.CombinedOutput()
+			}
+		}
+	}
+}
+
+func deleteUserClusterRoleBindings(username string) {
+	cmd := exec.Command("kubectl", "get", "clusterrolebindings", "-o",
+		"jsonpath={range .items[*]}{.metadata.name}{\"\\t\"}{.subjects[*].name}{\"\\n\"}{end}")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		if line == "" {
+			continue
+		}
+		parts := strings.Split(line, "\t")
+		if len(parts) < 2 {
+			continue
+		}
+		for _, name := range strings.Split(parts[1], " ") {
+			if name == username {
+				deleteCmd := exec.Command("kubectl", "delete", "clusterrolebinding", parts[0])
+				deleteCmd.CombinedOutput()
+			}
+		}
+	}
+}
+
+func deleteUserCSRs(username string) {
+	cmd := exec.Command("kubectl", "get", "csr", "-o", "jsonpath={.items[*].metadata.name}")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return
+	}
+	for _, csrName := range strings.Split(strings.TrimSpace(string(output)), " ") {
+		if strings.Contains(csrName, username) {
+			deleteCmd := exec.Command("kubectl", "delete", "csr", csrName)
+			deleteCmd.CombinedOutput()
+		}
+	}
+}
+
 // DeleteUser deletes a user from Kubernetes
 func (kc *K8sClient) DeleteUser(username string) error {
-	// Delete the user's certificate files
 	certManager := NewCertManager()
 	err := certManager.DeleteCertificate(username)
 	if err != nil {
 		return fmt.Errorf("failed to delete certificate files: %v", err)
 	}
 
-	// Delete any RoleBindings for this user
-	cmd := exec.Command("kubectl", "get", "rolebindings", "--all-namespaces", "-o",
-		"jsonpath={range .items[*]}{.metadata.namespace}{\"\\t\"}{.metadata.name}{\"\\t\"}{.subjects[*].name}{\"\\n\"}{end}")
-	output, err := cmd.CombinedOutput()
-	if err == nil {
-		lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-
-		for _, line := range lines {
-			if line == "" {
-				continue
-			}
-
-			parts := strings.Split(line, "\t")
-			if len(parts) < 3 {
-				continue
-			}
-
-			namespace := parts[0]
-			binding := parts[1]
-			usernames := strings.Split(parts[2], " ")
-
-			for _, name := range usernames {
-				if name == username {
-					// Delete this binding
-					deleteCmd := exec.Command("kubectl", "delete", "rolebinding", binding, "-n", namespace)
-					deleteCmd.CombinedOutput()
-					// Ignore errors as we want to continue deleting other bindings
-				}
-			}
-		}
-	}
-
-	// Delete any ClusterRoleBindings for this user
-	cmd = exec.Command("kubectl", "get", "clusterrolebindings", "-o",
-		"jsonpath={range .items[*]}{.metadata.name}{\"\\t\"}{.subjects[*].name}{\"\\n\"}{end}")
-	output, err = cmd.CombinedOutput()
-	if err == nil {
-		lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-
-		for _, line := range lines {
-			if line == "" {
-				continue
-			}
-
-			parts := strings.Split(line, "\t")
-			if len(parts) < 2 {
-				continue
-			}
-
-			binding := parts[0]
-			usernames := strings.Split(parts[1], " ")
-
-			for _, name := range usernames {
-				if name == username {
-					// Delete this binding
-					deleteCmd := exec.Command("kubectl", "delete", "clusterrolebinding", binding)
-					deleteCmd.CombinedOutput()
-					// Ignore errors as we want to continue deleting other bindings
-				}
-			}
-		}
-	}
-
-	// Also check for and delete any pending CSRs for this user
-	cmd = exec.Command("kubectl", "get", "csr", "-o", "jsonpath={.items[*].metadata.name}")
-	output, err = cmd.CombinedOutput()
-	if err == nil {
-		csrNames := strings.Split(strings.TrimSpace(string(output)), " ")
-		for _, csrName := range csrNames {
-			if strings.Contains(csrName, username) {
-				deleteCmd := exec.Command("kubectl", "delete", "csr", csrName)
-				deleteCmd.CombinedOutput()
-			}
-		}
-	}
+	deleteUserRoleBindings(username)
+	deleteUserClusterRoleBindings(username)
+	deleteUserCSRs(username)
 
 	return nil
 }

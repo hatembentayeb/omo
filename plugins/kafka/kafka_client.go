@@ -465,6 +465,65 @@ type MessageInfo struct {
 	Headers   map[string]string
 }
 
+func saramaMessageToInfo(msg *sarama.ConsumerMessage) MessageInfo {
+	info := MessageInfo{
+		Partition: msg.Partition,
+		Offset:    msg.Offset,
+		Key:       string(msg.Key),
+		Value:     string(msg.Value),
+		Timestamp: msg.Timestamp,
+		Headers:   make(map[string]string),
+	}
+	for _, h := range msg.Headers {
+		info.Headers[string(h.Key)] = string(h.Value)
+	}
+	return info
+}
+
+func (c *KafkaClient) consumePartitionMessages(
+	consumer sarama.Consumer, topic string, partition int32,
+	perPartition int, msgMu *sync.Mutex, allMessages *[]MessageInfo,
+) {
+	newestOffset, err := c.client.GetOffset(topic, partition, sarama.OffsetNewest)
+	if err != nil || newestOffset <= 0 {
+		return
+	}
+
+	oldestOffset, err := c.client.GetOffset(topic, partition, sarama.OffsetOldest)
+	if err != nil {
+		return
+	}
+
+	startOffset := newestOffset - int64(perPartition)
+	if startOffset < oldestOffset {
+		startOffset = oldestOffset
+	}
+
+	pc, err := consumer.ConsumePartition(topic, partition, startOffset)
+	if err != nil {
+		return
+	}
+	defer pc.Close()
+
+	count := 0
+	timeout := time.After(5 * time.Second)
+	for count < perPartition {
+		select {
+		case msg, ok := <-pc.Messages():
+			if !ok {
+				return
+			}
+			info := saramaMessageToInfo(msg)
+			msgMu.Lock()
+			*allMessages = append(*allMessages, info)
+			msgMu.Unlock()
+			count++
+		case <-timeout:
+			return
+		}
+	}
+}
+
 // ConsumeMessages reads the latest N messages from a topic across all partitions.
 // It reads from the newest offset backwards (tail behavior).
 func (c *KafkaClient) ConsumeMessages(topic string, maxMessages int) ([]MessageInfo, error) {
@@ -486,7 +545,6 @@ func (c *KafkaClient) ConsumeMessages(topic string, maxMessages int) ([]MessageI
 		return nil, fmt.Errorf("failed to get partitions for topic %s: %v", topic, err)
 	}
 
-	// Calculate how many messages per partition
 	perPartition := maxMessages / len(partitions)
 	if perPartition < 1 {
 		perPartition = 1
@@ -500,62 +558,12 @@ func (c *KafkaClient) ConsumeMessages(topic string, maxMessages int) ([]MessageI
 		wg.Add(1)
 		go func(p int32) {
 			defer wg.Done()
-
-			newestOffset, err := c.client.GetOffset(topic, p, sarama.OffsetNewest)
-			if err != nil || newestOffset <= 0 {
-				return
-			}
-
-			oldestOffset, err := c.client.GetOffset(topic, p, sarama.OffsetOldest)
-			if err != nil {
-				return
-			}
-
-			// Start reading from (newest - perPartition), clamped to oldest
-			startOffset := newestOffset - int64(perPartition)
-			if startOffset < oldestOffset {
-				startOffset = oldestOffset
-			}
-
-			pc, err := consumer.ConsumePartition(topic, p, startOffset)
-			if err != nil {
-				return
-			}
-			defer pc.Close()
-
-			count := 0
-			timeout := time.After(5 * time.Second)
-			for count < perPartition {
-				select {
-				case msg, ok := <-pc.Messages():
-					if !ok {
-						return
-					}
-					info := MessageInfo{
-						Partition: msg.Partition,
-						Offset:    msg.Offset,
-						Key:       string(msg.Key),
-						Value:     string(msg.Value),
-						Timestamp: msg.Timestamp,
-						Headers:   make(map[string]string),
-					}
-					for _, h := range msg.Headers {
-						info.Headers[string(h.Key)] = string(h.Value)
-					}
-					msgMu.Lock()
-					allMessages = append(allMessages, info)
-					msgMu.Unlock()
-					count++
-				case <-timeout:
-					return
-				}
-			}
+			c.consumePartitionMessages(consumer, topic, p, perPartition, &msgMu, &allMessages)
 		}(partition)
 	}
 
 	wg.Wait()
 
-	// Sort by timestamp descending (newest first)
 	sort.Slice(allMessages, func(i, j int) bool {
 		if allMessages[i].Timestamp.Equal(allMessages[j].Timestamp) {
 			return allMessages[i].Offset > allMessages[j].Offset
@@ -563,7 +571,6 @@ func (c *KafkaClient) ConsumeMessages(topic string, maxMessages int) ([]MessageI
 		return allMessages[i].Timestamp.After(allMessages[j].Timestamp)
 	})
 
-	// Cap to maxMessages
 	if len(allMessages) > maxMessages {
 		allMessages = allMessages[:maxMessages]
 	}

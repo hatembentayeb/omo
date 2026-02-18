@@ -309,76 +309,80 @@ func (pv *ProcessView) handleAction(action string, payload map[string]interface{
 		}
 	case "keypress":
 		if key, ok := payload["key"].(string); ok {
-			// View-specific actions
-			if pv.currentViewName == viewProcesses {
-				switch key {
-				case "K":
-					pv.killSelectedProcess()
-					return nil
-				case "T":
-					pv.sortByCPU()
-					return nil
-				case "M":
-					pv.sortByMemory()
-					return nil
-				}
-			}
-			if pv.currentViewName == viewPorts {
-				switch key {
-				case "K":
-					pv.killProcessOnPort()
-					return nil
-				case "W":
-					pv.showDetailsForPort()
-					return nil
-				case "J":
-					pv.jumpToProcessForPort()
-					return nil
-				}
-			}
-
-			// Global navigation keys (available in all views)
-			switch key {
-			case "W":
-				if pv.currentViewName != viewPorts {
-					pv.showDetails()
-				}
-				return nil
-			case "L":
-				pv.showPorts()
-				return nil
-			case "G":
-				pv.showWarnings()
-				return nil
-			case "S":
-				pv.showMetrics()
-				return nil
-			case "D":
-				pv.showDisk()
-				return nil
-			case "U":
-				if pv.currentViewName == viewDisk {
-					pv.diskGoUp()
-				}
-				return nil
-			case "P":
-				pv.showProcesses()
-				return nil
-			case "?":
-				pv.showHelp()
-				return nil
-			case "R":
-				go pv.loadProcessData()
+			if pv.handleProcessKeys(key) {
 				return nil
 			}
 		}
 	case "navigate_back":
-		// ESC always navigates back to process list
 		pv.switchToView(viewProcesses)
 		return nil
 	}
 
 	return fmt.Errorf("unhandled")
+}
+
+func (pv *ProcessView) handleProcessKeys(key string) bool {
+	if pv.currentViewName == viewProcesses {
+		switch key {
+		case "K":
+			pv.killSelectedProcess()
+			return true
+		case "T":
+			pv.sortByCPU()
+			return true
+		case "M":
+			pv.sortByMemory()
+			return true
+		}
+	}
+	if pv.currentViewName == viewPorts {
+		switch key {
+		case "K":
+			pv.killProcessOnPort()
+			return true
+		case "W":
+			pv.showDetailsForPort()
+			return true
+		case "J":
+			pv.jumpToProcessForPort()
+			return true
+		}
+	}
+
+	switch key {
+	case "W":
+		if pv.currentViewName != viewPorts {
+			pv.showDetails()
+		}
+		return true
+	case "L":
+		pv.showPorts()
+		return true
+	case "G":
+		pv.showWarnings()
+		return true
+	case "S":
+		pv.showMetrics()
+		return true
+	case "D":
+		pv.showDisk()
+		return true
+	case "U":
+		if pv.currentViewName == viewDisk {
+			pv.diskGoUp()
+		}
+		return true
+	case "P":
+		pv.showProcesses()
+		return true
+	case "?":
+		pv.showHelp()
+		return true
+	case "R":
+		go pv.loadProcessData()
+		return true
+	}
+	return false
 }
 
 // showHelp displays the plugin help modal

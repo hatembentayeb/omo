@@ -50,13 +50,61 @@ func (bv *BucketsView) ShowProfileSelector() {
 	)
 }
 
+func parseAWSConfigRegions(configPath string) map[string]string {
+	regionMap := make(map[string]string)
+	configData, err := os.ReadFile(configPath)
+	if err != nil {
+		return regionMap
+	}
+	var currentProfile string
+	for _, line := range strings.Split(string(configData), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
+			profileLine := line[1 : len(line)-1]
+			if strings.HasPrefix(profileLine, "profile ") {
+				currentProfile = strings.TrimSpace(strings.TrimPrefix(profileLine, "profile "))
+			} else {
+				currentProfile = profileLine
+			}
+		} else if strings.HasPrefix(line, "region") && currentProfile != "" {
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				regionMap[currentProfile] = strings.TrimSpace(parts[1])
+			}
+		}
+	}
+	return regionMap
+}
+
+func parseAWSCredentialProfiles(credsPath string, regionMap map[string]string, existing map[string]bool) []S3ProfileInfo {
+	credsData, err := os.ReadFile(credsPath)
+	if err != nil {
+		return nil
+	}
+	var profiles []S3ProfileInfo
+	for _, line := range strings.Split(string(credsData), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
+			profile := line[1 : len(line)-1]
+			if existing[profile] {
+				continue
+			}
+			region := regionMap[profile]
+			if region == "" {
+				region = "us-east-1"
+			}
+			profiles = append(profiles, S3ProfileInfo{Name: profile, Region: region})
+		}
+	}
+	return profiles
+}
+
 // getAWSProfiles retrieves available AWS profiles from credentials and config files.
 // It merges profiles from ~/.aws/credentials with region info from ~/.aws/config,
 // and also includes any profiles defined in the S3 plugin YAML config.
 func (bv *BucketsView) getAWSProfiles() []S3ProfileInfo {
-	profileInfos := []S3ProfileInfo{}
+	var profileInfos []S3ProfileInfo
 
-	// 1. Try to load profiles from the S3 plugin config (YAML + KeePass)
 	s3Profiles, err := GetAvailableS3Profiles()
 	if err == nil && len(s3Profiles) > 0 {
 		for _, p := range s3Profiles {
@@ -64,15 +112,11 @@ func (bv *BucketsView) getAWSProfiles() []S3ProfileInfo {
 			if region == "" {
 				region = "us-east-1"
 			}
-			profileInfos = append(profileInfos, S3ProfileInfo{
-				Name:   p.Name,
-				Region: region,
-			})
+			profileInfos = append(profileInfos, S3ProfileInfo{Name: p.Name, Region: region})
 		}
 		bv.cores.Log(fmt.Sprintf("[green]Found %d profiles from S3 config", len(s3Profiles)))
 	}
 
-	// 2. Also load profiles from ~/.aws/credentials + ~/.aws/config
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		bv.cores.Log(fmt.Sprintf("[red]Error getting home directory: %v", err))
@@ -85,73 +129,19 @@ func (bv *BucketsView) getAWSProfiles() []S3ProfileInfo {
 	credsPath := filepath.Join(homeDir, ".aws", "credentials")
 	configPath := filepath.Join(homeDir, ".aws", "config")
 
-	// Read credentials file for profile names
-	credsData, err := os.ReadFile(credsPath)
-	if err != nil {
-		bv.cores.Log(fmt.Sprintf("[yellow]Could not read AWS credentials file: %v", err))
-		if len(profileInfos) == 0 {
-			return []S3ProfileInfo{{Name: "default", Region: "us-east-1"}}
-		}
-		return profileInfos
-	}
+	regionMap := parseAWSConfigRegions(configPath)
 
-	// Read config file for regions
-	regionMap := make(map[string]string)
-	configData, err := os.ReadFile(configPath)
-	if err == nil {
-		configLines := strings.Split(string(configData), "\n")
-		var currentProfile string
-
-		for _, line := range configLines {
-			line = strings.TrimSpace(line)
-
-			if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
-				profileLine := line[1 : len(line)-1]
-				if strings.HasPrefix(profileLine, "profile ") {
-					currentProfile = strings.TrimPrefix(profileLine, "profile ")
-					currentProfile = strings.TrimSpace(currentProfile)
-				} else {
-					currentProfile = profileLine
-				}
-			} else if strings.HasPrefix(line, "region") && currentProfile != "" {
-				parts := strings.SplitN(line, "=", 2)
-				if len(parts) == 2 {
-					region := strings.TrimSpace(parts[1])
-					regionMap[currentProfile] = region
-				}
-			}
-		}
-	}
-
-	// Build a set of already-added profile names (from YAML config)
 	existing := make(map[string]bool)
 	for _, p := range profileInfos {
 		existing[p.Name] = true
 	}
 
-	// Parse profiles from credentials file
-	lines := strings.Split(string(credsData), "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
-			profile := line[1 : len(line)-1]
-
-			// Skip if already added from YAML config
-			if existing[profile] {
-				continue
-			}
-
-			region, ok := regionMap[profile]
-			if !ok {
-				region = "us-east-1"
-			}
-
-			profileInfos = append(profileInfos, S3ProfileInfo{
-				Name:   profile,
-				Region: region,
-			})
-		}
+	credProfiles := parseAWSCredentialProfiles(credsPath, regionMap, existing)
+	if credProfiles == nil && len(profileInfos) == 0 {
+		bv.cores.Log("[yellow]Could not read AWS credentials file")
+		return []S3ProfileInfo{{Name: "default", Region: "us-east-1"}}
 	}
+	profileInfos = append(profileInfos, credProfiles...)
 
 	if len(profileInfos) == 0 {
 		bv.cores.Log("[yellow]No profiles found, using default")

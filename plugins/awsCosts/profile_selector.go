@@ -77,88 +77,66 @@ func (p *ProfileSelector) Show() {
 	)
 }
 
+func parseAWSConfigRegionMap(configPath string) map[string]string {
+	regionMap := make(map[string]string)
+	configData, err := os.ReadFile(configPath)
+	if err != nil {
+		return regionMap
+	}
+	var currentProfile string
+	for _, line := range strings.Split(string(configData), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
+			profileLine := line[1 : len(line)-1]
+			if strings.HasPrefix(profileLine, "profile ") {
+				currentProfile = strings.TrimSpace(strings.TrimPrefix(profileLine, "profile "))
+			} else {
+				currentProfile = profileLine
+			}
+		} else if strings.HasPrefix(line, "region") && currentProfile != "" {
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				regionMap[currentProfile] = strings.TrimSpace(parts[1])
+			}
+		}
+	}
+	return regionMap
+}
+
+func parseCredentialFileProfiles(credsPath string, regionMap map[string]string) []AWSProfileInfo {
+	credsData, err := os.ReadFile(credsPath)
+	if err != nil {
+		return nil
+	}
+	var profiles []AWSProfileInfo
+	for _, line := range strings.Split(string(credsData), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
+			profile := line[1 : len(line)-1]
+			region := regionMap[profile]
+			if region == "" {
+				region = "us-east-1"
+			}
+			profiles = append(profiles, AWSProfileInfo{Name: profile, Region: region})
+		}
+	}
+	return profiles
+}
+
 // getAWSProfiles retrieves available AWS profiles from config files
 func (p *ProfileSelector) getAWSProfiles() []AWSProfileInfo {
-	// Get user's home directory
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		p.log(fmt.Sprintf("[red]Error getting user home directory: %v", err))
 		return []AWSProfileInfo{{Name: "default", Region: "us-east-1"}}
 	}
 
-	// Path to AWS credentials and config files
 	credsPath := filepath.Join(homeDir, ".aws", "credentials")
 	configPath := filepath.Join(homeDir, ".aws", "config")
 
-	// Read credentials file
-	credsData, err := os.ReadFile(credsPath)
-	if err != nil {
-		p.log(fmt.Sprintf("[yellow]Could not read AWS credentials file: %v", err))
-		return []AWSProfileInfo{{Name: "default", Region: "us-east-1"}}
-	}
+	regionMap := parseAWSConfigRegionMap(configPath)
+	profileInfos := parseCredentialFileProfiles(credsPath, regionMap)
 
-	// Get regions from config file
-	regionMap := make(map[string]string)
-	configData, err := os.ReadFile(configPath)
-	if err == nil {
-		// Parse config file for regions
-		configLines := strings.Split(string(configData), "\n")
-		var currentProfile string
-
-		for _, line := range configLines {
-			line = strings.TrimSpace(line)
-
-			// Look for profile sections: [profile name] or [default]
-			if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
-				profileLine := line[1 : len(line)-1]
-
-				// Handle 'profile name' format
-				if strings.HasPrefix(profileLine, "profile ") {
-					currentProfile = strings.TrimPrefix(profileLine, "profile ")
-					currentProfile = strings.TrimSpace(currentProfile)
-				} else {
-					// Direct profile name (like [default])
-					currentProfile = profileLine
-				}
-			} else if strings.HasPrefix(line, "region") && currentProfile != "" {
-				// Extract region value
-				parts := strings.SplitN(line, "=", 2)
-				if len(parts) == 2 {
-					region := strings.TrimSpace(parts[1])
-					regionMap[currentProfile] = region
-					p.log(fmt.Sprintf("[blue]Found region %s for profile %s", region, currentProfile))
-				}
-			}
-		}
-	} else {
-		p.log(fmt.Sprintf("[yellow]Could not read AWS config file: %v", err))
-	}
-
-	// Parse profiles from credentials file
-	// Profiles are in format [profile-name]
-	profileInfos := []AWSProfileInfo{}
-	lines := strings.Split(string(credsData), "\n")
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
-			profile := line[1 : len(line)-1]
-
-			// Get region for this profile, default to us-east-1 if not found
-			region, exists := regionMap[profile]
-			if !exists {
-				region = "us-east-1"
-				p.log(fmt.Sprintf("[yellow]No region found for profile %s, defaulting to us-east-1", profile))
-			}
-
-			profileInfos = append(profileInfos, AWSProfileInfo{
-				Name:   profile,
-				Region: region,
-			})
-		}
-	}
-
-	// If no profiles found, return default
 	if len(profileInfos) == 0 {
 		p.log("[yellow]No profiles found in AWS credentials file")
 		return []AWSProfileInfo{{Name: "default", Region: "us-east-1"}}

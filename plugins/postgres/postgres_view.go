@@ -623,6 +623,106 @@ Esc     - Navigate back
 	)
 }
 
+func (pv *PostgresView) handleNavKeys(key string) bool {
+	switch key {
+	case "1":
+		pv.showUsers()
+	case "2":
+		pv.showDatabases()
+	case "3":
+		pv.showTables()
+	case "4":
+		pv.showSchemas()
+	case "5":
+		pv.showExtensions()
+	case "6":
+		pv.showConnections()
+	case "7":
+		pv.showStats()
+	case "8":
+		pv.showConfig()
+	case "9":
+		pv.showLogs()
+	case "0":
+		pv.showLocks()
+	case "I":
+		pv.showIndexes()
+	case "Y":
+		pv.showReplication()
+	case "T":
+		pv.showTablespaces()
+	case "B":
+		pv.showDbStats()
+	case "?":
+		pv.showHelp()
+	case "R":
+		pv.refresh()
+	default:
+		return false
+	}
+	return true
+}
+
+func (pv *PostgresView) handleViewSpecificKeys(key string) bool {
+	switch key {
+	case "N":
+		switch pv.currentView {
+		case viewUsers:
+			pv.showCreateUserForm()
+		case viewDatabases:
+			pv.showCreateDatabaseForm()
+		case viewExtensions:
+			pv.showInstallExtensionForm()
+		default:
+			return false
+		}
+	case "D":
+		switch pv.currentView {
+		case viewUsers:
+			pv.showDropUserConfirmation()
+		case viewDatabases:
+			pv.showDropDatabaseConfirmation()
+		case viewExtensions:
+			pv.showDropExtensionConfirmation()
+		default:
+			return false
+		}
+	case "P":
+		if pv.currentView == viewUsers {
+			pv.showChangePasswordForm()
+		} else {
+			return false
+		}
+	case "G":
+		if pv.currentView == viewUsers {
+			pv.showGrantRoleForm()
+		} else {
+			return false
+		}
+	case "V":
+		if pv.currentView == viewUsers {
+			pv.showRevokeRoleForm()
+		} else {
+			return false
+		}
+	case "K":
+		if pv.currentView == viewConnections {
+			pv.showTerminateConnectionConfirmation()
+		} else {
+			return false
+		}
+	case "C":
+		if pv.currentView == viewConnections {
+			pv.showCancelQueryConfirmation()
+		} else {
+			return false
+		}
+	default:
+		return false
+	}
+	return true
+}
+
 // handleAction handles actions triggered by the UI
 func (pv *PostgresView) handleAction(action string, payload map[string]interface{}) error {
 	switch action {
@@ -631,100 +731,12 @@ func (pv *PostgresView) handleAction(action string, payload map[string]interface
 		return nil
 	case "keypress":
 		if key, ok := payload["key"].(string); ok {
-			switch key {
-			case "1":
-				pv.showUsers()
+			handled := pv.handleNavKeys(key)
+			if !handled {
+				handled = pv.handleViewSpecificKeys(key)
+			}
+			if handled {
 				return nil
-			case "2":
-				pv.showDatabases()
-				return nil
-			case "3":
-				pv.showTables()
-				return nil
-			case "4":
-				pv.showSchemas()
-				return nil
-			case "5":
-				pv.showExtensions()
-				return nil
-			case "6":
-				pv.showConnections()
-				return nil
-			case "7":
-				pv.showStats()
-				return nil
-			case "8":
-				pv.showConfig()
-				return nil
-			case "9":
-				pv.showLogs()
-				return nil
-			case "0":
-				pv.showLocks()
-				return nil
-			case "I":
-				pv.showIndexes()
-				return nil
-			case "Y":
-				pv.showReplication()
-				return nil
-			case "T":
-				pv.showTablespaces()
-				return nil
-			case "B":
-				pv.showDbStats()
-				return nil
-			case "?":
-				pv.showHelp()
-				return nil
-			case "R":
-				pv.refresh()
-				return nil
-			case "N":
-				switch pv.currentView {
-				case viewUsers:
-					pv.showCreateUserForm()
-				case viewDatabases:
-					pv.showCreateDatabaseForm()
-				case viewExtensions:
-					pv.showInstallExtensionForm()
-				}
-				return nil
-			case "D":
-				switch pv.currentView {
-				case viewUsers:
-					pv.showDropUserConfirmation()
-				case viewDatabases:
-					pv.showDropDatabaseConfirmation()
-				case viewExtensions:
-					pv.showDropExtensionConfirmation()
-				}
-				return nil
-			case "P":
-				if pv.currentView == viewUsers {
-					pv.showChangePasswordForm()
-					return nil
-				}
-			case "G":
-				if pv.currentView == viewUsers {
-					pv.showGrantRoleForm()
-					return nil
-				}
-			case "V":
-				if pv.currentView == viewUsers {
-					pv.showRevokeRoleForm()
-					return nil
-				}
-			case "K":
-				if pv.currentView == viewConnections {
-					pv.showTerminateConnectionConfirmation()
-					return nil
-				}
-			case "C":
-				if pv.currentView == viewConnections {
-					pv.showCancelQueryConfirmation()
-					return nil
-				}
 			}
 		}
 	case "navigate_back":

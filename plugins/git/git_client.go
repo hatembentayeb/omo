@@ -170,6 +170,40 @@ func (g *GitClient) Pull(repoPath string) (string, error) {
 	return "Pulled latest changes", nil
 }
 
+func stagingSymbol(code git.StatusCode) string {
+	switch code {
+	case git.Added:
+		return "A"
+	case git.Modified:
+		return "M"
+	case git.Deleted:
+		return "D"
+	case git.Renamed:
+		return "R"
+	case git.Copied:
+		return "C"
+	default:
+		return " "
+	}
+}
+
+func worktreeSymbol(code git.StatusCode) string {
+	switch code {
+	case git.Added, git.Untracked:
+		return "?"
+	case git.Modified:
+		return "M"
+	case git.Deleted:
+		return "D"
+	case git.Renamed:
+		return "R"
+	case git.Copied:
+		return "C"
+	default:
+		return " "
+	}
+}
+
 // GetDetailedStatus gets detailed status for a repository
 func (g *GitClient) GetDetailedStatus(repoPath string) (string, error) {
 	repo, err := git.PlainOpen(repoPath)
@@ -195,43 +229,8 @@ func (g *GitClient) GetDetailedStatus(repoPath string) (string, error) {
 	result.WriteString("Changes:\n\n")
 
 	for file, fileStatus := range status {
-		statusSymbol := ""
-
-		if fileStatus.Staging != git.Unmodified {
-			switch fileStatus.Staging {
-			case git.Added:
-				statusSymbol += "A"
-			case git.Modified:
-				statusSymbol += "M"
-			case git.Deleted:
-				statusSymbol += "D"
-			case git.Renamed:
-				statusSymbol += "R"
-			case git.Copied:
-				statusSymbol += "C"
-			}
-		} else {
-			statusSymbol += " "
-		}
-
-		if fileStatus.Worktree != git.Unmodified {
-			switch fileStatus.Worktree {
-			case git.Added, git.Untracked:
-				statusSymbol += "?"
-			case git.Modified:
-				statusSymbol += "M"
-			case git.Deleted:
-				statusSymbol += "D"
-			case git.Renamed:
-				statusSymbol += "R"
-			case git.Copied:
-				statusSymbol += "C"
-			}
-		} else {
-			statusSymbol += " "
-		}
-
-		result.WriteString(fmt.Sprintf("%s %s\n", statusSymbol, file))
+		s := stagingSymbol(fileStatus.Staging) + worktreeSymbol(fileStatus.Worktree)
+		result.WriteString(fmt.Sprintf("%s %s\n", s, file))
 	}
 
 	return result.String(), nil

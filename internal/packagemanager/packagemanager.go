@@ -30,55 +30,10 @@ func NewPackageManager(app *tview.Application, pages *tview.Pages, pluginsDir st
 	core.AddKeyBinding("Z", "Update All", nil)
 	core.AddKeyBinding("Q", "Back", nil)
 
-	// Shared state: the index, loaded once and refreshed on Sync.
 	var index *pluginapi.PluginIndex
 
 	core.SetRefreshCallback(func() ([][]string, error) {
-		// Load cached index if we don't have one yet
-		if index == nil {
-			cached, err := pluginapi.LoadLocalIndex()
-			if err == nil && cached != nil {
-				index = cached
-			}
-		}
-
-		// If still no index, show a hint
-		if index == nil || len(index.Plugins) == 0 {
-			core.Log("[yellow]No plugin index loaded. Press S to sync from remote.")
-			return [][]string{}, nil
-		}
-
-		rows := make([][]string, 0, len(index.Plugins))
-		for _, entry := range index.Plugins {
-			installedVer := pluginapi.InstalledVersion(entry.Name)
-			installed := pluginapi.IsInstalled(entry.Name)
-
-			status := "[red]Not Installed"
-			verDisplay := "-"
-			if installed {
-				if installedVer != "" {
-					verDisplay = installedVer
-				} else {
-					verDisplay = "?"
-				}
-				if installedVer == entry.Version {
-					status = "[green]Up to date"
-				} else {
-					status = "[yellow]Update available"
-				}
-			}
-
-			rows = append(rows, []string{
-				entry.Name,
-				verDisplay,
-				entry.Version,
-				status,
-				entry.Description,
-			})
-		}
-
-		updateInfoPanel(core, rows)
-		return rows, nil
+		return refreshPluginList(core, &index)
 	})
 
 	core.SetActionCallback(func(action string, payload map[string]interface{}) error {
@@ -92,182 +47,19 @@ func NewPackageManager(app *tview.Application, pages *tview.Pages, pluginsDir st
 
 		switch key {
 		case "S":
-			// Sync index from remote
-			core.Log("[yellow]Syncing plugin index...")
-			go func() {
-				fetched, err := pluginapi.FetchIndex("")
-				app.QueueUpdateDraw(func() {
-					if err != nil {
-						core.Log(fmt.Sprintf("[red]Sync failed: %v", err))
-						// Fall back to loading from the repo's local index.yaml
-						localPath := "index.yaml"
-						data, readErr := os.ReadFile(localPath)
-						if readErr != nil {
-							core.Log("[red]No local index.yaml fallback either")
-							return
-						}
-						parsed, parseErr := pluginapi.ParseIndex(data)
-						if parseErr != nil {
-							core.Log(fmt.Sprintf("[red]Failed to parse local index: %v", parseErr))
-							return
-						}
-						index = parsed
-						pluginapi.SaveLocalIndex(index)
-						core.Log(fmt.Sprintf("[green]Loaded %d plugins from local index", len(index.Plugins)))
-						core.RefreshData()
-						return
-					}
-					index = fetched
-					pluginapi.SaveLocalIndex(index)
-					core.Log(fmt.Sprintf("[green]Index synced: %d plugins available", len(index.Plugins)))
-					core.RefreshData()
-				})
-			}()
-
+			handleSyncIndex(core, app, pages, &index)
 		case "I":
-			row := core.GetSelectedRowData()
-			if row == nil {
-				core.Log("[red]No plugin selected")
-				return nil
-			}
-			name := row[0]
-			if pluginapi.IsInstalled(name) {
-				core.Log(fmt.Sprintf("[yellow]%s is already installed", name))
-				return nil
-			}
-			if index == nil {
-				core.Log("[red]No index loaded. Press S to sync first.")
-				return nil
-			}
-			entry := findEntry(index, name)
-			if entry == nil {
-				return nil
-			}
-			core.Log(fmt.Sprintf("[yellow]Installing %s v%s...", name, entry.Version))
-			go func() {
-				err := downloadPlugin(entry, index.DownloadURLTemplate)
-				app.QueueUpdateDraw(func() {
-					if err != nil {
-						core.Log(fmt.Sprintf("[red]Install failed: %v", err))
-						return
-					}
-					pluginapi.RecordInstalledVersion(name, entry.Version)
-					core.Log(fmt.Sprintf("[green]%s v%s installed", name, entry.Version))
-					core.RefreshData()
-				})
-			}()
-
+			handleInstallPlugin(core, app, index)
 		case "U":
-			row := core.GetSelectedRowData()
-			if row == nil {
-				core.Log("[red]No plugin selected")
-				return nil
-			}
-			name := row[0]
-			if !pluginapi.IsInstalled(name) {
-				core.Log(fmt.Sprintf("[yellow]%s is not installed", name))
-				return nil
-			}
-			if index == nil {
-				core.Log("[red]No index loaded")
-				return nil
-			}
-			entry := findEntry(index, name)
-			if entry == nil {
-				return nil
-			}
-			current := pluginapi.InstalledVersion(name)
-			if current == entry.Version {
-				core.Log(fmt.Sprintf("[yellow]%s is already at v%s", name, current))
-				return nil
-			}
-			core.Log(fmt.Sprintf("[yellow]Updating %s %s → %s...", name, current, entry.Version))
-			go func() {
-				err := downloadPlugin(entry, index.DownloadURLTemplate)
-				app.QueueUpdateDraw(func() {
-					if err != nil {
-						core.Log(fmt.Sprintf("[red]Update failed: %v", err))
-						return
-					}
-					pluginapi.RecordInstalledVersion(name, entry.Version)
-					core.Log(fmt.Sprintf("[green]%s updated to v%s", name, entry.Version))
-					core.RefreshData()
-				})
-			}()
-
+			handleUpdatePlugin(core, app, index)
 		case "D":
-			row := core.GetSelectedRowData()
-			if row == nil {
-				core.Log("[red]No plugin selected")
-				return nil
-			}
-			name := row[0]
-			if !pluginapi.IsInstalled(name) {
-				core.Log(fmt.Sprintf("[yellow]%s is not installed", name))
-				return nil
-			}
-
-			ui.ShowStandardConfirmationModal(
-				pages, app,
-				"Remove Plugin",
-				fmt.Sprintf("Remove plugin [red]%s[white]?\nThis will delete the .so file.", name),
-				func(confirmed bool) {
-					if !confirmed {
-						app.SetFocus(core.GetTable())
-						return
-					}
-					pluginDir := filepath.Join(pluginapi.PluginsDir(), name)
-					if err := os.RemoveAll(pluginDir); err != nil {
-						core.Log(fmt.Sprintf("[red]Remove failed: %v", err))
-					} else {
-						pluginapi.RemoveInstalledRecord(name)
-						core.Log(fmt.Sprintf("[green]%s removed", name))
-						core.RefreshData()
-					}
-					app.SetFocus(core.GetTable())
-				},
-			)
-
+			handleRemovePlugin(core, app, pages)
 		case "Z":
-			if index == nil {
-				core.Log("[red]No index loaded")
-				return nil
-			}
-			core.Log("[yellow]Updating all plugins...")
-			go func() {
-				updated := 0
-				for _, entry := range index.Plugins {
-					if !pluginapi.IsInstalled(entry.Name) {
-						continue
-					}
-					current := pluginapi.InstalledVersion(entry.Name)
-					if current == entry.Version {
-						continue
-					}
-					if err := downloadPlugin(&entry, index.DownloadURLTemplate); err != nil {
-						app.QueueUpdateDraw(func() {
-							core.Log(fmt.Sprintf("[red]Failed to update %s: %v", entry.Name, err))
-						})
-						continue
-					}
-					pluginapi.RecordInstalledVersion(entry.Name, entry.Version)
-					updated++
-				}
-				app.QueueUpdateDraw(func() {
-					if updated == 0 {
-						core.Log("[green]All plugins are up to date")
-					} else {
-						core.Log(fmt.Sprintf("[green]Updated %d plugin(s)", updated))
-					}
-					core.RefreshData()
-				})
-			}()
-
+			handleUpdateAll(core, app, index)
 		case "Q":
 			core.UnregisterHandlers()
 			core.StopAutoRefresh()
 			pages.SwitchToPage("main")
-
 		case "?":
 			ui.ShowInfoModal(pages, app, "Package Manager Help", helpText(), func() {
 				app.SetFocus(core.GetTable())
@@ -281,6 +73,227 @@ func NewPackageManager(app *tview.Application, pages *tview.Pages, pluginsDir st
 	core.StartAutoRefresh(60 * time.Second)
 
 	return core
+}
+
+func refreshPluginList(core *ui.CoreView, index **pluginapi.PluginIndex) ([][]string, error) {
+	if *index == nil {
+		cached, err := pluginapi.LoadLocalIndex()
+		if err == nil && cached != nil {
+			*index = cached
+		}
+	}
+
+	if *index == nil || len((*index).Plugins) == 0 {
+		core.Log("[yellow]No plugin index loaded. Press S to sync from remote.")
+		return [][]string{}, nil
+	}
+
+	rows := make([][]string, 0, len((*index).Plugins))
+	for _, entry := range (*index).Plugins {
+		installedVer := pluginapi.InstalledVersion(entry.Name)
+		installed := pluginapi.IsInstalled(entry.Name)
+
+		status := "[red]Not Installed"
+		verDisplay := "-"
+		if installed {
+			if installedVer != "" {
+				verDisplay = installedVer
+			} else {
+				verDisplay = "?"
+			}
+			if installedVer == entry.Version {
+				status = "[green]Up to date"
+			} else {
+				status = "[yellow]Update available"
+			}
+		}
+
+		rows = append(rows, []string{
+			entry.Name,
+			verDisplay,
+			entry.Version,
+			status,
+			entry.Description,
+		})
+	}
+
+	updateInfoPanel(core, rows)
+	return rows, nil
+}
+
+func handleSyncIndex(core *ui.CoreView, app *tview.Application, pages *tview.Pages, index **pluginapi.PluginIndex) {
+	core.Log("[yellow]Syncing plugin index...")
+	go func() {
+		fetched, err := pluginapi.FetchIndex("")
+		app.QueueUpdateDraw(func() {
+			if err != nil {
+				core.Log(fmt.Sprintf("[red]Sync failed: %v", err))
+				localPath := "index.yaml"
+				data, readErr := os.ReadFile(localPath)
+				if readErr != nil {
+					core.Log("[red]No local index.yaml fallback either")
+					return
+				}
+				parsed, parseErr := pluginapi.ParseIndex(data)
+				if parseErr != nil {
+					core.Log(fmt.Sprintf("[red]Failed to parse local index: %v", parseErr))
+					return
+				}
+				*index = parsed
+				pluginapi.SaveLocalIndex(*index)
+				core.Log(fmt.Sprintf("[green]Loaded %d plugins from local index", len((*index).Plugins)))
+				core.RefreshData()
+				return
+			}
+			*index = fetched
+			pluginapi.SaveLocalIndex(*index)
+			core.Log(fmt.Sprintf("[green]Index synced: %d plugins available", len((*index).Plugins)))
+			core.RefreshData()
+		})
+	}()
+}
+
+func handleInstallPlugin(core *ui.CoreView, app *tview.Application, index *pluginapi.PluginIndex) {
+	row := core.GetSelectedRowData()
+	if row == nil {
+		core.Log("[red]No plugin selected")
+		return
+	}
+	name := row[0]
+	if pluginapi.IsInstalled(name) {
+		core.Log(fmt.Sprintf("[yellow]%s is already installed", name))
+		return
+	}
+	if index == nil {
+		core.Log("[red]No index loaded. Press S to sync first.")
+		return
+	}
+	entry := findEntry(index, name)
+	if entry == nil {
+		return
+	}
+	core.Log(fmt.Sprintf("[yellow]Installing %s v%s...", name, entry.Version))
+	go func() {
+		err := downloadPlugin(entry, index.DownloadURLTemplate)
+		app.QueueUpdateDraw(func() {
+			if err != nil {
+				core.Log(fmt.Sprintf("[red]Install failed: %v", err))
+				return
+			}
+			pluginapi.RecordInstalledVersion(name, entry.Version)
+			core.Log(fmt.Sprintf("[green]%s v%s installed", name, entry.Version))
+			core.RefreshData()
+		})
+	}()
+}
+
+func handleUpdatePlugin(core *ui.CoreView, app *tview.Application, index *pluginapi.PluginIndex) {
+	row := core.GetSelectedRowData()
+	if row == nil {
+		core.Log("[red]No plugin selected")
+		return
+	}
+	name := row[0]
+	if !pluginapi.IsInstalled(name) {
+		core.Log(fmt.Sprintf("[yellow]%s is not installed", name))
+		return
+	}
+	if index == nil {
+		core.Log("[red]No index loaded")
+		return
+	}
+	entry := findEntry(index, name)
+	if entry == nil {
+		return
+	}
+	current := pluginapi.InstalledVersion(name)
+	if current == entry.Version {
+		core.Log(fmt.Sprintf("[yellow]%s is already at v%s", name, current))
+		return
+	}
+	core.Log(fmt.Sprintf("[yellow]Updating %s %s → %s...", name, current, entry.Version))
+	go func() {
+		err := downloadPlugin(entry, index.DownloadURLTemplate)
+		app.QueueUpdateDraw(func() {
+			if err != nil {
+				core.Log(fmt.Sprintf("[red]Update failed: %v", err))
+				return
+			}
+			pluginapi.RecordInstalledVersion(name, entry.Version)
+			core.Log(fmt.Sprintf("[green]%s updated to v%s", name, entry.Version))
+			core.RefreshData()
+		})
+	}()
+}
+
+func handleRemovePlugin(core *ui.CoreView, app *tview.Application, pages *tview.Pages) {
+	row := core.GetSelectedRowData()
+	if row == nil {
+		core.Log("[red]No plugin selected")
+		return
+	}
+	name := row[0]
+	if !pluginapi.IsInstalled(name) {
+		core.Log(fmt.Sprintf("[yellow]%s is not installed", name))
+		return
+	}
+
+	ui.ShowStandardConfirmationModal(
+		pages, app,
+		"Remove Plugin",
+		fmt.Sprintf("Remove plugin [red]%s[white]?\nThis will delete the .so file.", name),
+		func(confirmed bool) {
+			if !confirmed {
+				app.SetFocus(core.GetTable())
+				return
+			}
+			pluginDir := filepath.Join(pluginapi.PluginsDir(), name)
+			if err := os.RemoveAll(pluginDir); err != nil {
+				core.Log(fmt.Sprintf("[red]Remove failed: %v", err))
+			} else {
+				pluginapi.RemoveInstalledRecord(name)
+				core.Log(fmt.Sprintf("[green]%s removed", name))
+				core.RefreshData()
+			}
+			app.SetFocus(core.GetTable())
+		},
+	)
+}
+
+func handleUpdateAll(core *ui.CoreView, app *tview.Application, index *pluginapi.PluginIndex) {
+	if index == nil {
+		core.Log("[red]No index loaded")
+		return
+	}
+	core.Log("[yellow]Updating all plugins...")
+	go func() {
+		updated := 0
+		for _, entry := range index.Plugins {
+			if !pluginapi.IsInstalled(entry.Name) {
+				continue
+			}
+			current := pluginapi.InstalledVersion(entry.Name)
+			if current == entry.Version {
+				continue
+			}
+			if err := downloadPlugin(&entry, index.DownloadURLTemplate); err != nil {
+				app.QueueUpdateDraw(func() {
+					core.Log(fmt.Sprintf("[red]Failed to update %s: %v", entry.Name, err))
+				})
+				continue
+			}
+			pluginapi.RecordInstalledVersion(entry.Name, entry.Version)
+			updated++
+		}
+		app.QueueUpdateDraw(func() {
+			if updated == 0 {
+				core.Log("[green]All plugins are up to date")
+			} else {
+				core.Log(fmt.Sprintf("[green]Updated %d plugin(s)", updated))
+			}
+			core.RefreshData()
+		})
+	}()
 }
 
 // downloadPlugin fetches the .so from the release URL and saves it.

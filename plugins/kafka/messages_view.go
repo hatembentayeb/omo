@@ -103,6 +103,62 @@ func (kv *KafkaView) refreshMessages() ([][]string, error) {
 	return tableData, nil
 }
 
+func formatFullMessageDetail(topic string, msg *MessageInfo) string {
+	key := msg.Key
+	if key == "" {
+		key = "(null)"
+	}
+	ts := ""
+	if !msg.Timestamp.IsZero() {
+		ts = msg.Timestamp.Format("2006-01-02 15:04:05.000")
+	}
+
+	text := fmt.Sprintf(`[yellow]Message Details[white]
+
+[aqua]Topic:[white]     %s
+[aqua]Partition:[white] %d
+[aqua]Offset:[white]    %d
+[aqua]Timestamp:[white] %s
+[aqua]Key:[white]       %s
+`,
+		topic, msg.Partition, msg.Offset, ts, key)
+
+	if len(msg.Headers) > 0 {
+		text += "\n[aqua]Headers:[white]\n"
+		for k, v := range msg.Headers {
+			text += fmt.Sprintf("  %s: %s\n", k, v)
+		}
+	}
+
+	value := msg.Value
+	if len(value) > 2000 {
+		value = value[:2000] + "\n... (truncated)"
+	}
+	text += fmt.Sprintf("\n[aqua]Value:[white]\n%s", value)
+	return text
+}
+
+func formatTableRowMessageDetail(row []string) string {
+	return fmt.Sprintf(`[yellow]Message Details[white]
+
+[aqua]Partition:[white] %s
+[aqua]Offset:[white]    %s
+[aqua]Key:[white]       %s
+[aqua]Timestamp:[white] %s
+
+[aqua]Value:[white]
+%s`,
+		row[0], row[1], row[2], row[4], row[3])
+}
+
+func isPlaceholderRow(partStr string) bool {
+	return partStr == "" ||
+		strings.HasPrefix(partStr, "Not connected") ||
+		strings.HasPrefix(partStr, "Error") ||
+		strings.HasPrefix(partStr, "No message") ||
+		strings.HasPrefix(partStr, "No topic")
+}
+
 // showMessageDetail shows the full message content for the selected row
 func (kv *KafkaView) showMessageDetail() {
 	selectedRow := kv.messagesView.GetSelectedRow()
@@ -113,16 +169,13 @@ func (kv *KafkaView) showMessageDetail() {
 	}
 
 	row := tableData[selectedRow]
-	partStr := row[0]
-	if partStr == "" || strings.HasPrefix(partStr, "Not connected") || strings.HasPrefix(partStr, "Error") || strings.HasPrefix(partStr, "No message") || strings.HasPrefix(partStr, "No topic") {
+	if isPlaceholderRow(row[0]) {
 		return
 	}
 
-	// Re-fetch the actual full message to show untruncated
-	partID, _ := strconv.ParseInt(partStr, 10, 32)
+	partID, _ := strconv.ParseInt(row[0], 10, 32)
 	offset, _ := strconv.ParseInt(row[1], 10, 64)
 
-	// Find the matching message from cached data
 	messages, err := kv.kafkaClient.ConsumeMessages(kv.selectedTopic, 200)
 	var fullMsg *MessageInfo
 	if err == nil {
@@ -136,50 +189,9 @@ func (kv *KafkaView) showMessageDetail() {
 
 	var infoText string
 	if fullMsg != nil {
-		key := fullMsg.Key
-		if key == "" {
-			key = "(null)"
-		}
-		ts := ""
-		if !fullMsg.Timestamp.IsZero() {
-			ts = fullMsg.Timestamp.Format("2006-01-02 15:04:05.000")
-		}
-
-		infoText = fmt.Sprintf(`[yellow]Message Details[white]
-
-[aqua]Topic:[white]     %s
-[aqua]Partition:[white] %d
-[aqua]Offset:[white]    %d
-[aqua]Timestamp:[white] %s
-[aqua]Key:[white]       %s
-`,
-			kv.selectedTopic, fullMsg.Partition, fullMsg.Offset, ts, key)
-
-		if len(fullMsg.Headers) > 0 {
-			infoText += "\n[aqua]Headers:[white]\n"
-			for k, v := range fullMsg.Headers {
-				infoText += fmt.Sprintf("  %s: %s\n", k, v)
-			}
-		}
-
-		// Show value (format if it looks like JSON)
-		value := fullMsg.Value
-		if len(value) > 2000 {
-			value = value[:2000] + "\n... (truncated)"
-		}
-		infoText += fmt.Sprintf("\n[aqua]Value:[white]\n%s", value)
+		infoText = formatFullMessageDetail(kv.selectedTopic, fullMsg)
 	} else {
-		// Fall back to table data
-		infoText = fmt.Sprintf(`[yellow]Message Details[white]
-
-[aqua]Partition:[white] %s
-[aqua]Offset:[white]    %s
-[aqua]Key:[white]       %s
-[aqua]Timestamp:[white] %s
-
-[aqua]Value:[white]
-%s`,
-			row[0], row[1], row[2], row[4], row[3])
+		infoText = formatTableRowMessageDetail(row)
 	}
 
 	ui.ShowInfoModal(

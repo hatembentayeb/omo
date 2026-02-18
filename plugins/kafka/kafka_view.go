@@ -308,42 +308,8 @@ func (kv *KafkaView) handleAction(action string, payload map[string]interface{})
 		return nil
 	case "keypress":
 		if key, ok := payload["key"].(string); ok {
-			switch key {
-			case "B":
-				kv.showBrokers()
+			if kv.handleKafkaKeys(key) {
 				return nil
-			case "T":
-				kv.showTopics()
-				return nil
-			case "G":
-				kv.showConsumers()
-				return nil
-			case "?":
-				kv.showHelp()
-				return nil
-			case "R":
-				kv.refresh()
-				return nil
-			case "I":
-				kv.showInfoForCurrentView()
-				return nil
-			case "M":
-				if kv.currentView == kafkaViewTopics {
-					kv.showMessagesForSelectedTopic()
-					return nil
-				}
-			case "P":
-				if kv.currentView == kafkaViewTopics {
-					kv.showPartitionsForSelectedTopic()
-					return nil
-				}
-				kv.showPartitions()
-				return nil
-			case "O":
-				if kv.currentView == kafkaViewConsumers {
-					kv.showConsumerOffsets()
-					return nil
-				}
 			}
 		}
 	case "navigate_back":
@@ -357,6 +323,44 @@ func (kv *KafkaView) handleAction(action string, payload map[string]interface{})
 		}
 	}
 	return fmt.Errorf("unhandled")
+}
+
+func (kv *KafkaView) handleKafkaKeys(key string) bool {
+	switch key {
+	case "B":
+		kv.showBrokers()
+	case "T":
+		kv.showTopics()
+	case "G":
+		kv.showConsumers()
+	case "?":
+		kv.showHelp()
+	case "R":
+		kv.refresh()
+	case "I":
+		kv.showInfoForCurrentView()
+	case "M":
+		if kv.currentView == kafkaViewTopics {
+			kv.showMessagesForSelectedTopic()
+			return true
+		}
+		return false
+	case "P":
+		if kv.currentView == kafkaViewTopics {
+			kv.showPartitionsForSelectedTopic()
+			return true
+		}
+		kv.showPartitions()
+	case "O":
+		if kv.currentView == kafkaViewConsumers {
+			kv.showConsumerOffsets()
+			return true
+		}
+		return false
+	default:
+		return false
+	}
+	return true
 }
 
 // showInfoForCurrentView shows detail info based on current view

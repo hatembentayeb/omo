@@ -276,33 +276,7 @@ func (av *AWSCostsView) handleAction(action string, payload map[string]interface
 		return nil
 	case "keypress":
 		if key, ok := payload["key"].(string); ok {
-			switch key {
-			case "R":
-				av.refreshCostData()
-				return nil
-			case "S":
-				av.showServicesView()
-				return nil
-			case "B":
-				av.showBudgetsView()
-				return nil
-			case "T":
-				av.showCostTypesView()
-				return nil
-			case "F":
-				av.showForecastView()
-				return nil
-			case "P":
-				av.showTimePeriodSelector()
-				return nil
-			case "G":
-				av.toggleGranularity()
-				return nil
-			case "M":
-				av.showMainView()
-				return nil
-			case "?":
-				av.showHelp()
+			if av.handleCostKeys(key) {
 				return nil
 			}
 		}
@@ -317,6 +291,32 @@ func (av *AWSCostsView) handleAction(action string, payload map[string]interface
 		}
 	}
 	return fmt.Errorf("unhandled")
+}
+
+func (av *AWSCostsView) handleCostKeys(key string) bool {
+	switch key {
+	case "R":
+		av.refreshCostData()
+	case "S":
+		av.showServicesView()
+	case "B":
+		av.showBudgetsView()
+	case "T":
+		av.showCostTypesView()
+	case "F":
+		av.showForecastView()
+	case "P":
+		av.showTimePeriodSelector()
+	case "G":
+		av.toggleGranularity()
+	case "M":
+		av.showMainView()
+	case "?":
+		av.showHelp()
+	default:
+		return false
+	}
+	return true
 }
 
 // showTimePeriodSelector displays a modal to select the time range

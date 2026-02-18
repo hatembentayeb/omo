@@ -29,283 +29,49 @@ func NewRoleView(app *tview.Application, pages *tview.Pages, cores *ui.CoreView,
 	}
 }
 
-// showCreateRoleModal shows a modal for creating a new custom role
-func (rv *RoleView) showCreateRoleModal() {
-	// Create a proper form
-	form := tview.NewForm()
+func parseCSVFields(text string) []string {
+	parts := strings.Split(text, ",")
+	for i, p := range parts {
+		parts[i] = strings.TrimSpace(p)
+	}
+	return parts
+}
 
-	// Create form elements
-	nameInput := tview.NewInputField().
-		SetLabel("Role Name: ").
-		SetFieldWidth(30)
+func formatRulesDisplayText(rules []map[string]interface{}) string {
+	if len(rules) == 0 {
+		return "[yellow]No rules defined yet. Click 'Add Rule' to define rules.[white]"
+	}
 
-	// Create dropdown for namespace
-	namespaceDropDown := tview.NewDropDown().
-		SetLabel("Namespace: ")
+	text := "[green]Defined Rules:[white]\n\n"
+	for i, rule := range rules {
+		text += fmt.Sprintf("[aqua]Rule %d:[white]\n", i+1)
 
-	// Add rules view to display rules
-	rulesView := tview.NewTextView().
-		SetDynamicColors(true).
-		SetText("[yellow]No rules defined yet. Click 'Add Rule' to define rules.[white]").
-		SetTextAlign(tview.AlignLeft)
-
-	// Remove border from rulesView
-	rulesView.SetBorder(false)
-
-	// Create a slice to store the rules
-	var rules []map[string]interface{}
-	rules = make([]map[string]interface{}, 0)
-
-	// Function to update rules display
-	updateRulesDisplay := func() {
-		rv.cores.Log(fmt.Sprintf("[yellow]Debug: Updating rules display, rules count: %d", len(rules)))
-
-		if len(rules) == 0 {
-			rulesView.SetText("[yellow]No rules defined yet. Click 'Add Rule' to define rules.[white]")
-			return
-		}
-
-		text := "[green]Defined Rules:[white]\n\n"
-		for i, rule := range rules {
-			text += fmt.Sprintf("[aqua]Rule %d:[white]\n", i+1)
-
-			// Display API Groups
-			apiGroups, ok := rule["apiGroups"].([]string)
-			if ok {
-				text += "  [yellow]API Groups:[white] "
-				if len(apiGroups) == 0 {
-					text += "core (\"\")"
-				} else {
-					text += strings.Join(apiGroups, ", ")
-				}
-				text += "\n"
+		if apiGroups, ok := rule["apiGroups"].([]string); ok {
+			text += "  [yellow]API Groups:[white] "
+			if len(apiGroups) == 0 {
+				text += "core (\"\")"
+			} else {
+				text += strings.Join(apiGroups, ", ")
 			}
-
-			// Display Resources
-			resources, ok := rule["resources"].([]string)
-			if ok {
-				text += "  [yellow]Resources:[white] " + strings.Join(resources, ", ") + "\n"
-			}
-
-			// Display Verbs
-			verbs, ok := rule["verbs"].([]string)
-			if ok {
-				text += "  [yellow]Verbs:[white] " + strings.Join(verbs, ", ") + "\n"
-			}
-
 			text += "\n"
 		}
 
-		rulesView.SetText(text)
-		rv.cores.Log(fmt.Sprintf("[blue]Rules display updated with %d rules", len(rules)))
+		if resources, ok := rule["resources"].([]string); ok {
+			text += "  [yellow]Resources:[white] " + strings.Join(resources, ", ") + "\n"
+		}
+
+		if verbs, ok := rule["verbs"].([]string); ok {
+			text += "  [yellow]Verbs:[white] " + strings.Join(verbs, ", ") + "\n"
+		}
+
+		text += "\n"
 	}
+	return text
+}
 
-	// Function to show the add rule modal
-	showAddRuleModal := func() {
-		// Create a proper form for adding rules
-		ruleForm := tview.NewForm()
-
-		// Create input fields for the rule
-		apiGroupsInput := tview.NewInputField().
-			SetLabel("API Groups: ").
-			SetFieldWidth(30)
-
-		resourcesInput := tview.NewInputField().
-			SetLabel("Resources: ").
-			SetFieldWidth(30)
-
-		verbsInput := tview.NewInputField().
-			SetLabel("Verbs: ").
-			SetFieldWidth(30)
-
-		// Add form items
-		ruleForm.AddFormItem(apiGroupsInput)
-		ruleForm.AddFormItem(resourcesInput)
-		ruleForm.AddFormItem(verbsInput)
-
-		// Add buttons to the form
-		ruleForm.AddButton("OK", func() {
-			// Parse inputs
-			apiGroupsText := apiGroupsInput.GetText()
-			resourcesText := resourcesInput.GetText()
-			verbsText := verbsInput.GetText()
-
-			// Validate inputs
-			if resourcesText == "" || verbsText == "" {
-				rv.cores.Log("[red]Resources and verbs are required")
-				return
-			}
-
-			// Parse comma-separated values
-			var apiGroups []string
-			if apiGroupsText != "" {
-				apiGroups = strings.Split(apiGroupsText, ",")
-				for i, group := range apiGroups {
-					apiGroups[i] = strings.TrimSpace(group)
-				}
-			} else {
-				apiGroups = []string{""}
-			}
-
-			resources := strings.Split(resourcesText, ",")
-			for i, res := range resources {
-				resources[i] = strings.TrimSpace(res)
-			}
-
-			verbs := strings.Split(verbsText, ",")
-			for i, verb := range verbs {
-				verbs[i] = strings.TrimSpace(verb)
-			}
-
-			// Create rule
-			rule := map[string]interface{}{
-				"apiGroups": apiGroups,
-				"resources": resources,
-				"verbs":     verbs,
-			}
-
-			// Debug log
-			rv.cores.Log(fmt.Sprintf("[yellow]Debug: Creating new rule with %d API Groups, %d Resources, %d Verbs",
-				len(apiGroups), len(resources), len(verbs)))
-
-			// Add to rules
-			rules = append(rules, rule)
-
-			// Debug log
-			rv.cores.Log(fmt.Sprintf("[yellow]Debug: Rules list now has %d rules", len(rules)))
-
-			// Update display
-			updateRulesDisplay()
-
-			// Close modal
-			rv.pages.RemovePage("add-rule-modal")
-
-			// Log success
-			rv.cores.Log(fmt.Sprintf("[green]Added rule for resources %s with verbs %s", resourcesText, verbsText))
-		})
-		ruleForm.AddButton("Cancel", func() {
-			rv.pages.RemovePage("add-rule-modal")
-		})
-
-		// Style the form
-		ruleForm.SetBorder(true)
-		ruleForm.SetTitle(" Add Rule ")
-		ruleForm.SetTitleAlign(tview.AlignCenter)
-		ruleForm.SetBorderColor(tcell.ColorBlue)
-		ruleForm.SetTitleColor(tcell.ColorYellow)
-		ruleForm.SetBackgroundColor(tcell.ColorDefault)
-		ruleForm.SetButtonsAlign(tview.AlignCenter)
-		ruleForm.SetButtonBackgroundColor(tcell.ColorDefault)
-		ruleForm.SetButtonTextColor(tcell.ColorWhite)
-		ruleForm.SetFieldBackgroundColor(tcell.ColorDefault)
-		ruleForm.SetFieldTextColor(tcell.ColorWhite)
-
-		// Create centered modal
-		width := 60
-		height := 10
-
-		centerFlex := tview.NewFlex().
-			AddItem(nil, 0, 1, false).
-			AddItem(tview.NewFlex().
-				SetDirection(tview.FlexRow).
-				AddItem(nil, 0, 1, false).
-				AddItem(ruleForm, height, 1, true).
-				AddItem(nil, 0, 1, false), width, 1, true).
-			AddItem(nil, 0, 1, false)
-
-		// Add to pages
-		rv.pages.AddPage("add-rule-modal", centerFlex, true, true)
-
-		// Set focus
-		rv.app.SetFocus(apiGroupsInput)
-
-		// Add ESC handler
-		ui.RemovePage(rv.pages, rv.app, "add-rule-modal", nil)
-	}
-
-	// Add form items to the main form
-	form.AddFormItem(nameInput)
-	form.AddFormItem(namespaceDropDown)
-
-	// Add the rules text view to the form using a custom FormItem
-	form.AddTextView("Rules:", "", 0, 10, true, false)
-	form.GetFormItemByLabel("Rules:").(*tview.TextView).SetText("") // Clear default text
-	form.GetFormItemByLabel("Rules:").(*tview.TextView).SetDynamicColors(true)
-
-	// Set the rulesView as our custom TextView inside the form
-	rulesView = form.GetFormItemByLabel("Rules:").(*tview.TextView)
-	rulesView.SetText("[yellow]No rules defined yet. Click 'Add Rule' to define rules.[white]")
-
-	// Make sure rulesView updates with our rules
-	updateRulesDisplay()
-
-	// Add buttons to the form
-	form.AddButton("Add Rule", showAddRuleModal)
-	form.AddButton("Create Role", func() {
-		// Get values
-		name := nameInput.GetText()
-		_, namespace := namespaceDropDown.GetCurrentOption()
-
-		// Validate
-		if name == "" {
-			rv.cores.Log("[red]Role name is required")
-			return
-		}
-
-		if namespace == "" {
-			rv.cores.Log("[red]Namespace is required")
-			return
-		}
-
-		if len(rules) == 0 {
-			rv.cores.Log("[red]At least one rule is required")
-			return
-		}
-
-		// Log the rules we're sending (for debugging)
-		rv.cores.Log(fmt.Sprintf("[blue]Creating role with %d rules", len(rules)))
-
-		// Close modal
-		rv.pages.RemovePage("create-role-modal")
-
-		// Show progress
-		pm := ui.ShowProgressModal(
-			rv.pages, rv.app, "Creating Role", 100, true,
-			nil, true,
-		)
-
-		// Create role
-		safeGo(func() {
-			err := rv.k8sClient.CreateCustomRole(name, namespace, rules)
-			if err != nil {
-				rv.app.QueueUpdateDraw(func() {
-					pm.Close()
-					ui.ShowStandardErrorModal(
-						rv.pages, rv.app, "Role Creation Error",
-						fmt.Sprintf("Failed to create role: %v", err),
-						nil,
-					)
-				})
-				return
-			}
-
-			// Success
-			rv.app.QueueUpdateDraw(func() {
-				pm.Close()
-				rv.cores.Log(fmt.Sprintf("[green]Role %s created successfully in %s", name, namespace))
-
-				// Refresh roles list
-				rv.cores.RefreshData()
-			})
-		})
-	})
-	form.AddButton("Cancel", func() {
-		rv.pages.RemovePage("create-role-modal")
-	})
-
-	// Style the form
+func styleFormModal(form *tview.Form, title string) {
 	form.SetBorder(true)
-	form.SetTitle(" Create Custom Role ")
+	form.SetTitle(title)
 	form.SetTitleAlign(tview.AlignCenter)
 	form.SetBorderColor(tcell.ColorBlue)
 	form.SetTitleColor(tcell.ColorYellow)
@@ -315,11 +81,139 @@ func (rv *RoleView) showCreateRoleModal() {
 	form.SetButtonTextColor(tcell.ColorWhite)
 	form.SetFieldBackgroundColor(tcell.ColorDefault)
 	form.SetFieldTextColor(tcell.ColorWhite)
+}
 
-	// Get namespaces
+// showCreateRoleModal shows a modal for creating a new custom role
+func (rv *RoleView) showCreateRoleModal() {
+	form := tview.NewForm()
+
+	nameInput := tview.NewInputField().
+		SetLabel("Role Name: ").
+		SetFieldWidth(30)
+
+	namespaceDropDown := tview.NewDropDown().
+		SetLabel("Namespace: ")
+
+	rules := make([]map[string]interface{}, 0)
+
+	form.AddFormItem(nameInput)
+	form.AddFormItem(namespaceDropDown)
+
+	form.AddTextView("Rules:", "", 0, 10, true, false)
+	form.GetFormItemByLabel("Rules:").(*tview.TextView).SetText("")
+	form.GetFormItemByLabel("Rules:").(*tview.TextView).SetDynamicColors(true)
+	rulesView := form.GetFormItemByLabel("Rules:").(*tview.TextView)
+	rulesView.SetText("[yellow]No rules defined yet. Click 'Add Rule' to define rules.[white]")
+
+	updateRulesDisplay := func() {
+		rulesView.SetText(formatRulesDisplayText(rules))
+	}
+
+	showAddRuleModal := func() {
+		ruleForm := tview.NewForm()
+
+		apiGroupsInput := tview.NewInputField().SetLabel("API Groups: ").SetFieldWidth(30)
+		resourcesInput := tview.NewInputField().SetLabel("Resources: ").SetFieldWidth(30)
+		verbsInput := tview.NewInputField().SetLabel("Verbs: ").SetFieldWidth(30)
+
+		ruleForm.AddFormItem(apiGroupsInput)
+		ruleForm.AddFormItem(resourcesInput)
+		ruleForm.AddFormItem(verbsInput)
+
+		ruleForm.AddButton("OK", func() {
+			resourcesText := resourcesInput.GetText()
+			verbsText := verbsInput.GetText()
+			if resourcesText == "" || verbsText == "" {
+				rv.cores.Log("[red]Resources and verbs are required")
+				return
+			}
+
+			apiGroupsText := apiGroupsInput.GetText()
+			var apiGroups []string
+			if apiGroupsText != "" {
+				apiGroups = parseCSVFields(apiGroupsText)
+			} else {
+				apiGroups = []string{""}
+			}
+
+			rule := map[string]interface{}{
+				"apiGroups": apiGroups,
+				"resources": parseCSVFields(resourcesText),
+				"verbs":     parseCSVFields(verbsText),
+			}
+
+			rules = append(rules, rule)
+			updateRulesDisplay()
+			rv.pages.RemovePage("add-rule-modal")
+			rv.cores.Log(fmt.Sprintf("[green]Added rule for resources %s with verbs %s", resourcesText, verbsText))
+		})
+		ruleForm.AddButton("Cancel", func() {
+			rv.pages.RemovePage("add-rule-modal")
+		})
+
+		styleFormModal(ruleForm, " Add Rule ")
+
+		centerFlex := tview.NewFlex().
+			AddItem(nil, 0, 1, false).
+			AddItem(tview.NewFlex().
+				SetDirection(tview.FlexRow).
+				AddItem(nil, 0, 1, false).
+				AddItem(ruleForm, 10, 1, true).
+				AddItem(nil, 0, 1, false), 60, 1, true).
+			AddItem(nil, 0, 1, false)
+
+		rv.pages.AddPage("add-rule-modal", centerFlex, true, true)
+		rv.app.SetFocus(apiGroupsInput)
+		ui.RemovePage(rv.pages, rv.app, "add-rule-modal", nil)
+	}
+
+	form.AddButton("Add Rule", showAddRuleModal)
+	form.AddButton("Create Role", func() {
+		name := nameInput.GetText()
+		_, namespace := namespaceDropDown.GetCurrentOption()
+
+		if name == "" {
+			rv.cores.Log("[red]Role name is required")
+			return
+		}
+		if namespace == "" {
+			rv.cores.Log("[red]Namespace is required")
+			return
+		}
+		if len(rules) == 0 {
+			rv.cores.Log("[red]At least one rule is required")
+			return
+		}
+
+		rv.cores.Log(fmt.Sprintf("[blue]Creating role with %d rules", len(rules)))
+		rv.pages.RemovePage("create-role-modal")
+
+		pm := ui.ShowProgressModal(rv.pages, rv.app, "Creating Role", 100, true, nil, true)
+
+		safeGo(func() {
+			err := rv.k8sClient.CreateCustomRole(name, namespace, rules)
+			if err != nil {
+				rv.app.QueueUpdateDraw(func() {
+					pm.Close()
+					ui.ShowStandardErrorModal(rv.pages, rv.app, "Role Creation Error",
+						fmt.Sprintf("Failed to create role: %v", err), nil)
+				})
+				return
+			}
+			rv.app.QueueUpdateDraw(func() {
+				pm.Close()
+				rv.cores.Log(fmt.Sprintf("[green]Role %s created successfully in %s", name, namespace))
+				rv.cores.RefreshData()
+			})
+		})
+	})
+	form.AddButton("Cancel", func() {
+		rv.pages.RemovePage("create-role-modal")
+	})
+
+	styleFormModal(form, " Create Custom Role ")
+
 	rv.cores.Log("[blue]Getting namespaces for role creation...")
-
-	// Load namespaces
 	safeGo(func() {
 		namespaces, err := rv.k8sClient.GetNamespaces()
 		if err != nil {
@@ -329,34 +223,23 @@ func (rv *RoleView) showCreateRoleModal() {
 			})
 			return
 		}
-
-		// Update the namespace dropdown
 		rv.app.QueueUpdateDraw(func() {
 			namespaceDropDown.SetOptions(namespaces, nil)
 			namespaceDropDown.SetCurrentOption(0)
 		})
 	})
 
-	// Create centered modal
-	width := 70
-	height := 25
-
 	centerFlex := tview.NewFlex().
 		AddItem(nil, 0, 1, false).
 		AddItem(tview.NewFlex().
 			SetDirection(tview.FlexRow).
 			AddItem(nil, 0, 1, false).
-			AddItem(form, height, 1, true).
-			AddItem(nil, 0, 1, false), width, 1, true).
+			AddItem(form, 25, 1, true).
+			AddItem(nil, 0, 1, false), 70, 1, true).
 		AddItem(nil, 0, 1, false)
 
-	// Add to pages
 	rv.pages.AddPage("create-role-modal", centerFlex, true, true)
-
-	// Set focus
 	rv.app.SetFocus(nameInput)
-
-	// Add ESC handler
 	ui.RemovePage(rv.pages, rv.app, "create-role-modal", nil)
 }
 

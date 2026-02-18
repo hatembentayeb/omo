@@ -30,6 +30,56 @@ func (av *AWSCostsView) newForecastView() *ui.CoreView {
 	return cores
 }
 
+func formatForecastRow(fc *costexplorer.ForecastResult) []string {
+	period := ""
+	if fc.TimePeriod != nil && fc.TimePeriod.Start != nil {
+		t, err := time.Parse("2006-01-02", aws.StringValue(fc.TimePeriod.Start))
+		if err == nil {
+			period = t.Format("Jan 2006")
+		} else {
+			period = aws.StringValue(fc.TimePeriod.Start)
+		}
+	}
+
+	mean := "N/A"
+	if fc.MeanValue != nil {
+		mean = fmt.Sprintf("$%s", aws.StringValue(fc.MeanValue))
+	}
+
+	lower := "N/A"
+	if fc.PredictionIntervalLowerBound != nil {
+		lower = fmt.Sprintf("$%s", aws.StringValue(fc.PredictionIntervalLowerBound))
+	}
+	upper := "N/A"
+	if fc.PredictionIntervalUpperBound != nil {
+		upper = fmt.Sprintf("$%s", aws.StringValue(fc.PredictionIntervalUpperBound))
+	}
+
+	return []string{period, "", mean, lower, upper}
+}
+
+func getCurrentMonthActual(ce *costexplorer.CostExplorer, now time.Time) string {
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	actualInput := &costexplorer.GetCostAndUsageInput{
+		TimePeriod: &costexplorer.DateInterval{
+			Start: aws.String(monthStart.Format("2006-01-02")),
+			End:   aws.String(now.Format("2006-01-02")),
+		},
+		Granularity: aws.String("MONTHLY"),
+		Metrics:     []*string{aws.String("BlendedCost")},
+	}
+
+	actualResult, _ := ce.GetCostAndUsage(actualInput)
+	if actualResult != nil {
+		for _, r := range actualResult.ResultsByTime {
+			if total, ok := r.Total["BlendedCost"]; ok && total.Amount != nil {
+				return fmt.Sprintf("$%s", aws.StringValue(total.Amount))
+			}
+		}
+	}
+	return "N/A"
+}
+
 func (av *AWSCostsView) refreshForecastData() ([][]string, error) {
 	if av.profile == "" {
 		return [][]string{{"No profile selected", "", "", "", ""}}, nil
@@ -44,17 +94,12 @@ func (av *AWSCostsView) refreshForecastData() ([][]string, error) {
 	}
 
 	ce := costexplorer.New(sess)
-
 	now := time.Now()
-	// Forecast starts from tomorrow
-	startDate := now.AddDate(0, 0, 1)
-	// Forecast 3 months out
-	endDate := now.AddDate(0, 3, 0)
 
 	input := &costexplorer.GetCostForecastInput{
 		TimePeriod: &costexplorer.DateInterval{
-			Start: aws.String(startDate.Format("2006-01-02")),
-			End:   aws.String(endDate.Format("2006-01-02")),
+			Start: aws.String(now.AddDate(0, 0, 1).Format("2006-01-02")),
+			End:   aws.String(now.AddDate(0, 3, 0).Format("2006-01-02")),
 		},
 		Granularity: aws.String("MONTHLY"),
 		Metric:      aws.String("BLENDED_COST"),
@@ -65,82 +110,18 @@ func (av *AWSCostsView) refreshForecastData() ([][]string, error) {
 		return [][]string{{"Error fetching forecast", err.Error(), "", "", ""}}, nil
 	}
 
-	// Also get actual costs for the current month to show alongside forecast
-	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-	actualInput := &costexplorer.GetCostAndUsageInput{
-		TimePeriod: &costexplorer.DateInterval{
-			Start: aws.String(monthStart.Format("2006-01-02")),
-			End:   aws.String(now.Format("2006-01-02")),
-		},
-		Granularity: aws.String("MONTHLY"),
-		Metrics:     []*string{aws.String("BlendedCost")},
+	tableData := [][]string{
+		{now.Format("Jan 2006") + " (current)", getCurrentMonthActual(ce, now), "", "", ""},
 	}
 
-	actualResult, _ := ce.GetCostAndUsage(actualInput)
-	currentActual := "N/A"
-	if actualResult != nil {
-		for _, r := range actualResult.ResultsByTime {
-			if total, ok := r.Total["BlendedCost"]; ok && total.Amount != nil {
-				currentActual = fmt.Sprintf("$%s", aws.StringValue(total.Amount))
-			}
-		}
-	}
-
-	tableData := make([][]string, 0)
-
-	// Add current month actual
-	tableData = append(tableData, []string{
-		now.Format("Jan 2006") + " (current)",
-		currentActual,
-		"",
-		"",
-		"",
-	})
-
-	// Total forecast
 	if result.Total != nil && result.Total.Amount != nil {
 		tableData = append(tableData, []string{
-			"Total Forecast",
-			"",
-			fmt.Sprintf("$%s", aws.StringValue(result.Total.Amount)),
-			"",
-			"",
+			"Total Forecast", "", fmt.Sprintf("$%s", aws.StringValue(result.Total.Amount)), "", "",
 		})
 	}
 
-	// Per-period forecast
 	for _, fc := range result.ForecastResultsByTime {
-		period := ""
-		if fc.TimePeriod != nil && fc.TimePeriod.Start != nil {
-			t, err := time.Parse("2006-01-02", aws.StringValue(fc.TimePeriod.Start))
-			if err == nil {
-				period = t.Format("Jan 2006")
-			} else {
-				period = aws.StringValue(fc.TimePeriod.Start)
-			}
-		}
-
-		mean := "N/A"
-		if fc.MeanValue != nil {
-			mean = fmt.Sprintf("$%s", aws.StringValue(fc.MeanValue))
-		}
-
-		lower := "N/A"
-		upper := "N/A"
-		if fc.PredictionIntervalLowerBound != nil {
-			lower = fmt.Sprintf("$%s", aws.StringValue(fc.PredictionIntervalLowerBound))
-		}
-		if fc.PredictionIntervalUpperBound != nil {
-			upper = fmt.Sprintf("$%s", aws.StringValue(fc.PredictionIntervalUpperBound))
-		}
-
-		tableData = append(tableData, []string{
-			period,
-			"",
-			mean,
-			lower,
-			upper,
-		})
+		tableData = append(tableData, formatForecastRow(fc))
 	}
 
 	if len(tableData) == 0 {
