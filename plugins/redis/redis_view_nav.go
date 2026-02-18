@@ -5,21 +5,21 @@ import (
 )
 
 const (
-	viewRoot       = "redis"
-	viewKeys       = "keys"
-	viewInfo       = "info"
-	viewSlowlog    = "slowlog"
-	viewStats      = "stats"
-	viewClients    = "clients"
-	viewConfig     = "config"
-	viewMemory     = "memory"
-	viewRepl       = "replication"
-	viewPersist    = "persistence"
-	viewPubSub     = "pubsub"
+	viewRoot        = "redis"
+	viewKeys        = "keys"
+	viewInfo        = "info"
+	viewSlowlog     = "slowlog"
+	viewStats       = "stats"
+	viewClients     = "clients"
+	viewConfig      = "config"
+	viewMemory      = "memory"
+	viewRepl        = "replication"
+	viewPersist     = "persistence"
+	viewPubSub      = "pubsub"
 	viewKeyAnalysis = "keyanalysis"
-	viewDatabases  = "databases"
-	viewCmdStats   = "commandstats"
-	viewLatency    = "latency"
+	viewDatabases   = "databases"
+	viewCmdStats    = "commandstats"
+	viewLatency     = "latency"
 )
 
 func (rv *RedisView) currentCores() *ui.CoreView {
@@ -135,4 +135,3 @@ func (rv *RedisView) showCommandStats() {
 func (rv *RedisView) showLatency() {
 	rv.switchView(viewLatency)
 }
-

@@ -83,7 +83,7 @@ func (pv *ProcessView) fetchMetricsData() ([][]string, error) {
 		data = append(data, []string{"[yellow]Host[white]", ""})
 		data = append(data, []string{"Hostname", hostInfo.Hostname})
 		data = append(data, []string{"Platform", hostInfo.Platform})
-		data = append(data, []string{"Uptime", formatDuration(time.Duration(hostInfo.Uptime)*time.Second)})
+		data = append(data, []string{"Uptime", formatDuration(time.Duration(hostInfo.Uptime) * time.Second)})
 		data = append(data, []string{"", ""})
 	}
 

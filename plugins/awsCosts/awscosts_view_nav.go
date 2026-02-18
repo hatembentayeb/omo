@@ -5,12 +5,12 @@ import (
 )
 
 const (
-	awsViewRoot     = "awsCosts"
-	awsViewMain     = "main"
-	awsViewServices = "services"
-	awsViewBudgets  = "budgets"
+	awsViewRoot      = "awsCosts"
+	awsViewMain      = "main"
+	awsViewServices  = "services"
+	awsViewBudgets   = "budgets"
 	awsViewCostTypes = "costtypes"
-	awsViewForecast = "forecast"
+	awsViewForecast  = "forecast"
 )
 
 func (av *AWSCostsView) currentCores() *ui.CoreView {

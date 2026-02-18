@@ -28,10 +28,10 @@ const gitConfigHeader = `# Git Plugin Configuration
 
 // GitConfig represents the configuration for the Git plugin
 type GitConfig struct {
-	SearchPaths  []string      `yaml:"search_paths"`
+	SearchPaths  []string        `yaml:"search_paths"`
 	Repositories []GitRepoConfig `yaml:"repositories"`
-	UI           UIConfig      `yaml:"ui"`
-	DefaultRepo  string        `yaml:"default_repo"`
+	UI           UIConfig        `yaml:"ui"`
+	DefaultRepo  string          `yaml:"default_repo"`
 }
 
 // GitRepoConfig represents a configured Git repository.

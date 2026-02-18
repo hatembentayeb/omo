@@ -41,26 +41,26 @@ type OverviewInfo struct {
 	ClusterName       string `json:"cluster_name"`
 	Node              string `json:"node"`
 	MessageStats      struct {
-		Publish            int64       `json:"publish"`
-		PublishDetails     *RateDetail `json:"publish_details,omitempty"`
-		DeliverGet         int64       `json:"deliver_get"`
-		DeliverGetDetails  *RateDetail `json:"deliver_get_details,omitempty"`
-		Ack                int64       `json:"ack"`
-		AckDetails         *RateDetail `json:"ack_details,omitempty"`
-		Confirm            int64       `json:"confirm"`
-		ConfirmDetails     *RateDetail `json:"confirm_details,omitempty"`
-		Redeliver          int64       `json:"redeliver"`
-		RedeliverDetails   *RateDetail `json:"redeliver_details,omitempty"`
-		Deliver            int64       `json:"deliver"`
-		Get                int64       `json:"get"`
-		ReturnUnroutable   int64       `json:"return_unroutable"`
-		DiskReads          int64       `json:"disk_reads"`
-		DiskWrites         int64       `json:"disk_writes"`
+		Publish           int64       `json:"publish"`
+		PublishDetails    *RateDetail `json:"publish_details,omitempty"`
+		DeliverGet        int64       `json:"deliver_get"`
+		DeliverGetDetails *RateDetail `json:"deliver_get_details,omitempty"`
+		Ack               int64       `json:"ack"`
+		AckDetails        *RateDetail `json:"ack_details,omitempty"`
+		Confirm           int64       `json:"confirm"`
+		ConfirmDetails    *RateDetail `json:"confirm_details,omitempty"`
+		Redeliver         int64       `json:"redeliver"`
+		RedeliverDetails  *RateDetail `json:"redeliver_details,omitempty"`
+		Deliver           int64       `json:"deliver"`
+		Get               int64       `json:"get"`
+		ReturnUnroutable  int64       `json:"return_unroutable"`
+		DiskReads         int64       `json:"disk_reads"`
+		DiskWrites        int64       `json:"disk_writes"`
 	} `json:"message_stats"`
 	QueueTotals struct {
-		Messages       int64 `json:"messages"`
-		MessagesReady  int64 `json:"messages_ready"`
-		MessagesUnack  int64 `json:"messages_unacknowledged"`
+		Messages      int64 `json:"messages"`
+		MessagesReady int64 `json:"messages_ready"`
+		MessagesUnack int64 `json:"messages_unacknowledged"`
 	} `json:"queue_totals"`
 	ObjectTotals struct {
 		Queues      int `json:"queues"`
@@ -77,35 +77,35 @@ type OverviewInfo struct {
 
 // QueueInfo represents a RabbitMQ queue
 type QueueInfo struct {
-	Name       string `json:"name"`
-	VHost      string `json:"vhost"`
-	Durable    bool   `json:"durable"`
-	AutoDelete bool   `json:"auto_delete"`
-	Exclusive  bool   `json:"exclusive"`
-	Messages   int64  `json:"messages"`
-	Ready      int64  `json:"messages_ready"`
-	Unacked    int64  `json:"messages_unacknowledged"`
-	Consumers  int    `json:"consumers"`
-	State      string `json:"state"`
-	Node       string `json:"node"`
-	Type       string `json:"type"`
-	Memory     int64  `json:"memory"`
+	Name         string `json:"name"`
+	VHost        string `json:"vhost"`
+	Durable      bool   `json:"durable"`
+	AutoDelete   bool   `json:"auto_delete"`
+	Exclusive    bool   `json:"exclusive"`
+	Messages     int64  `json:"messages"`
+	Ready        int64  `json:"messages_ready"`
+	Unacked      int64  `json:"messages_unacknowledged"`
+	Consumers    int    `json:"consumers"`
+	State        string `json:"state"`
+	Node         string `json:"node"`
+	Type         string `json:"type"`
+	Memory       int64  `json:"memory"`
 	MessageStats struct {
-		PublishIn   int64 `json:"publish"`
-		DeliverGet  int64 `json:"deliver_get"`
-		Ack         int64 `json:"ack"`
-		Redeliver   int64 `json:"redeliver"`
+		PublishIn  int64 `json:"publish"`
+		DeliverGet int64 `json:"deliver_get"`
+		Ack        int64 `json:"ack"`
+		Redeliver  int64 `json:"redeliver"`
 	} `json:"message_stats"`
 }
 
 // ExchangeInfo represents a RabbitMQ exchange
 type ExchangeInfo struct {
-	Name       string `json:"name"`
-	VHost      string `json:"vhost"`
-	Type       string `json:"type"`
-	Durable    bool   `json:"durable"`
-	AutoDelete bool   `json:"auto_delete"`
-	Internal   bool   `json:"internal"`
+	Name         string `json:"name"`
+	VHost        string `json:"vhost"`
+	Type         string `json:"type"`
+	Durable      bool   `json:"durable"`
+	AutoDelete   bool   `json:"auto_delete"`
+	Internal     bool   `json:"internal"`
 	MessageStats struct {
 		PublishIn  int64 `json:"publish_in"`
 		PublishOut int64 `json:"publish_out"`
@@ -141,38 +141,38 @@ type ConnectionInfo struct {
 
 // ChannelInfo represents a RabbitMQ channel
 type ChannelInfo struct {
-	Name          string `json:"name"`
-	Node          string `json:"node"`
-	User          string `json:"user"`
-	VHost         string `json:"vhost"`
-	Number        int    `json:"number"`
-	State         string `json:"state"`
-	Consumers     int    `json:"consumer_count"`
-	PrefetchCount int    `json:"prefetch_count"`
-	Confirm       bool   `json:"confirm"`
-	Transactional bool   `json:"transactional"`
-	MessagesUnack int64  `json:"messages_unacknowledged"`
-	MessagesUnconfirmed int64 `json:"messages_unconfirmed"`
-	Connection    string `json:"connection_details,omitempty"`
+	Name                string `json:"name"`
+	Node                string `json:"node"`
+	User                string `json:"user"`
+	VHost               string `json:"vhost"`
+	Number              int    `json:"number"`
+	State               string `json:"state"`
+	Consumers           int    `json:"consumer_count"`
+	PrefetchCount       int    `json:"prefetch_count"`
+	Confirm             bool   `json:"confirm"`
+	Transactional       bool   `json:"transactional"`
+	MessagesUnack       int64  `json:"messages_unacknowledged"`
+	MessagesUnconfirmed int64  `json:"messages_unconfirmed"`
+	Connection          string `json:"connection_details,omitempty"`
 }
 
 // NodeInfo represents a RabbitMQ cluster node
 type NodeInfo struct {
-	Name         string  `json:"name"`
-	Type         string  `json:"type"`
-	Running      bool    `json:"running"`
-	MemUsed      int64   `json:"mem_used"`
-	MemLimit     int64   `json:"mem_limit"`
-	DiskFree     int64   `json:"disk_free"`
+	Name          string `json:"name"`
+	Type          string `json:"type"`
+	Running       bool   `json:"running"`
+	MemUsed       int64  `json:"mem_used"`
+	MemLimit      int64  `json:"mem_limit"`
+	DiskFree      int64  `json:"disk_free"`
 	DiskFreeLimit int64  `json:"disk_free_limit"`
-	FDUsed       int     `json:"fd_used"`
-	FDTotal      int     `json:"fd_total"`
-	SocketsUsed  int     `json:"sockets_used"`
-	SocketsTotal int     `json:"sockets_total"`
-	ProcUsed     int     `json:"proc_used"`
-	ProcTotal    int     `json:"proc_total"`
-	Uptime       int64   `json:"uptime"`
-	RatesMode    string  `json:"rates_mode"`
+	FDUsed        int    `json:"fd_used"`
+	FDTotal       int    `json:"fd_total"`
+	SocketsUsed   int    `json:"sockets_used"`
+	SocketsTotal  int    `json:"sockets_total"`
+	ProcUsed      int    `json:"proc_used"`
+	ProcTotal     int    `json:"proc_total"`
+	Uptime        int64  `json:"uptime"`
+	RatesMode     string `json:"rates_mode"`
 }
 
 // VHostInfo represents a RabbitMQ virtual host

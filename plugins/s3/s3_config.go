@@ -42,26 +42,26 @@ type S3Config struct {
 // it references a KeePass entry whose fields override AccessKey,
 // SecretKey, etc. at load time.
 type S3Profile struct {
-	Name       string `yaml:"name"`
+	Name        string `yaml:"name"`
 	Description string `yaml:"description"`
-	Secret     string `yaml:"secret,omitempty"` // KeePass path: pluginName/env/entryName
-	Region     string `yaml:"region"`
-	AccessKey  string `yaml:"access_key,omitempty"`
-	SecretKey  string `yaml:"secret_key,omitempty"`
-	Endpoint   string `yaml:"endpoint,omitempty"` // Custom S3-compatible endpoint
-	RoleARN    string `yaml:"role_arn,omitempty"`
+	Secret      string `yaml:"secret,omitempty"` // KeePass path: pluginName/env/entryName
+	Region      string `yaml:"region"`
+	AccessKey   string `yaml:"access_key,omitempty"`
+	SecretKey   string `yaml:"secret_key,omitempty"`
+	Endpoint    string `yaml:"endpoint,omitempty"` // Custom S3-compatible endpoint
+	RoleARN     string `yaml:"role_arn,omitempty"`
 }
 
 // S3UIConfig represents UI configuration options
 type S3UIConfig struct {
-	RefreshInterval    int    `yaml:"refresh_interval"`
-	DefaultRegion      string `yaml:"default_region"`
-	MaxBucketsDisplay  int    `yaml:"max_buckets_display"`
-	MaxObjectsDisplay  int    `yaml:"max_objects_display"`
-	EnableMetrics      bool   `yaml:"enable_metrics"`
-	EnableObjectBrowser bool  `yaml:"enable_object_browser"`
-	EnablePolicies     bool   `yaml:"enable_policies_viewer"`
-	PageSize           int    `yaml:"page_size"`
+	RefreshInterval     int    `yaml:"refresh_interval"`
+	DefaultRegion       string `yaml:"default_region"`
+	MaxBucketsDisplay   int    `yaml:"max_buckets_display"`
+	MaxObjectsDisplay   int    `yaml:"max_objects_display"`
+	EnableMetrics       bool   `yaml:"enable_metrics"`
+	EnableObjectBrowser bool   `yaml:"enable_object_browser"`
+	EnablePolicies      bool   `yaml:"enable_policies_viewer"`
+	PageSize            int    `yaml:"page_size"`
 }
 
 // DefaultS3Config returns the default configuration
@@ -69,14 +69,14 @@ func DefaultS3Config() *S3Config {
 	return &S3Config{
 		Profiles: []S3Profile{},
 		UI: S3UIConfig{
-			RefreshInterval:    30,
-			DefaultRegion:      "us-east-1",
-			MaxBucketsDisplay:  100,
-			MaxObjectsDisplay:  1000,
-			EnableMetrics:      true,
+			RefreshInterval:     30,
+			DefaultRegion:       "us-east-1",
+			MaxBucketsDisplay:   100,
+			MaxObjectsDisplay:   1000,
+			EnableMetrics:       true,
 			EnableObjectBrowser: true,
-			EnablePolicies:     true,
-			PageSize:           50,
+			EnablePolicies:      true,
+			PageSize:            50,
 		},
 	}
 }

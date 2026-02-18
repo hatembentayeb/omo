@@ -11,11 +11,11 @@ import (
 
 // diskEntry holds a directory entry with its size for the ncdu-like view
 type diskEntry struct {
-	name      string
-	path      string
-	size      int64
-	isDir     bool
-	isParent  bool
+	name     string
+	path     string
+	size     int64
+	isDir    bool
+	isParent bool
 }
 
 // newDiskView creates the disk usage (ncdu-like) CoreView
@@ -114,10 +114,10 @@ func (pv *ProcessView) scanDirectory(path string) []diskEntry {
 	if path != "/" {
 		parent := filepath.Dir(path)
 		entries = append(entries, diskEntry{
-			name:      "..",
-			path:      parent,
-			isDir:     true,
-			isParent:  true,
+			name:     "..",
+			path:     parent,
+			isDir:    true,
+			isParent: true,
 		})
 	}
 

@@ -32,31 +32,31 @@ const awsCostsConfigHeader = `# AWS Costs Plugin Configuration
 
 // AWSCostsConfig represents the configuration for the AWS Costs plugin
 type AWSCostsConfig struct {
-	Profiles []AWSProfile       `yaml:"profiles"`
-	UI       AWSCostsUIConfig   `yaml:"ui"`
+	Profiles []AWSProfile     `yaml:"profiles"`
+	UI       AWSCostsUIConfig `yaml:"ui"`
 }
 
 // AWSProfile represents a configured AWS profile.
 // When the Secret field is set (e.g. "awsCosts/production/billing"),
 // it references a KeePass entry whose fields override AccessKey, SecretKey, etc.
 type AWSProfile struct {
-	Name       string `yaml:"name"`
+	Name        string `yaml:"name"`
 	Description string `yaml:"description"`
-	Secret     string `yaml:"secret,omitempty"` // KeePass path: pluginName/env/entryName
-	Region     string `yaml:"region"`
-	AccessKey  string `yaml:"access_key,omitempty"`
-	SecretKey  string `yaml:"secret_key,omitempty"`
-	RoleARN    string `yaml:"role_arn,omitempty"`
+	Secret      string `yaml:"secret,omitempty"` // KeePass path: pluginName/env/entryName
+	Region      string `yaml:"region"`
+	AccessKey   string `yaml:"access_key,omitempty"`
+	SecretKey   string `yaml:"secret_key,omitempty"`
+	RoleARN     string `yaml:"role_arn,omitempty"`
 }
 
 // AWSCostsUIConfig represents UI configuration options
 type AWSCostsUIConfig struct {
-	RefreshInterval int    `yaml:"refresh_interval"`
-	DefaultTimeRange string `yaml:"default_time_range"`
+	RefreshInterval    int    `yaml:"refresh_interval"`
+	DefaultTimeRange   string `yaml:"default_time_range"`
 	DefaultGranularity string `yaml:"default_granularity"`
-	DefaultRegion   string `yaml:"default_region"`
-	EnableBudgets   bool   `yaml:"enable_budgets"`
-	EnableForecasts bool   `yaml:"enable_forecasts"`
+	DefaultRegion      string `yaml:"default_region"`
+	EnableBudgets      bool   `yaml:"enable_budgets"`
+	EnableForecasts    bool   `yaml:"enable_forecasts"`
 }
 
 // DefaultAWSCostsConfig returns the default configuration

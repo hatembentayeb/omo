@@ -42,8 +42,8 @@ type CoreView struct {
 	filteredIndices []int
 
 	// Key binding management
-	keyBindings  map[string]string
-	keyHandlers  map[string]func()
+	keyBindings map[string]string
+	keyHandlers map[string]func()
 
 	// Data refresh management
 	refreshMutex  sync.Mutex

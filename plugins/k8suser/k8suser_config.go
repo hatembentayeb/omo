@@ -33,8 +33,8 @@ const k8sUserConfigHeader = `# K8sUser Plugin Configuration
 
 // K8sUserConfig represents the configuration for the K8s User plugin
 type K8sUserConfig struct {
-	Clusters []K8sCluster     `yaml:"clusters"`
-	UI       K8sUserUIConfig  `yaml:"ui"`
+	Clusters []K8sCluster    `yaml:"clusters"`
+	UI       K8sUserUIConfig `yaml:"ui"`
 }
 
 // K8sCluster represents a configured Kubernetes cluster.

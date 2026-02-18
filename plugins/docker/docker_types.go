@@ -53,10 +53,10 @@ func (i *DockerImage) GetTableRow() []string {
 		id = id[:12]
 	}
 	return []string{
-		id,           // Short ID
-		i.Repository, // Repository name
-		i.Tag,        // Tag
-		i.Size,       // Size (formatted)
+		id,             // Short ID
+		i.Repository,   // Repository name
+		i.Tag,          // Tag
+		i.Size,         // Size (formatted)
 		i.CreatedSince, // Relative creation time
 	}
 }
