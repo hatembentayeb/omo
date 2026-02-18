@@ -107,3 +107,12 @@ plugins:
     url: "https://github.com/ohmyops/omo-rabbitmq"
     tags: ["messaging", "broker", "amqp"]
     arch: ["amd64", "arm64"]
+
+  - name: ssh
+    version: "1.0.0"
+    description: "Manage SSH connections, remote execution, and server monitoring"
+    author: "ohmyops"
+    license: "MIT"
+    url: "https://github.com/ohmyops/omo-ssh"
+    tags: ["ssh", "remote", "server", "devops"]
+    arch: ["amd64", "arm64"]

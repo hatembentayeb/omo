@@ -65,7 +65,7 @@ One binary. One config directory. Every service you run.
 
 ## Plugins
 
-omo ships with 11 official plugins. Each one is a standalone `.so` binary that the host loads at runtime.
+omo ships with 12 official plugins. Each one is a standalone `.so` binary that the host loads at runtime.
 
 | Plugin | Description | Key Features |
 |--------|-------------|--------------|
@@ -74,6 +74,7 @@ omo ships with 11 official plugins. Each one is a standalone `.so` binary that t
 | **kafka** | Brokers, topics, partitions, consumer groups | Topic creation, partition details, lag monitoring |
 | **rabbitmq** | Queues, exchanges, bindings, connections, nodes | Publish/browse messages, purge, create/delete |
 | **postgres** | Databases, schemas, tables, connections, replication | Query execution, connection monitoring |
+| **ssh** | Remote servers, execution, monitoring | Key/password/proxy/jump host auth, remote exec, system info |
 | **argocd** | Applications, projects, accounts, sync status | Sync, refresh, rollback |
 | **k8suser** | Kubernetes user certificate management | CSR generation, RBAC binding, KeePass storage |
 | **awsCosts** | Cost explorer, budgets, forecasts | Daily/monthly breakdown, budget alerts |
