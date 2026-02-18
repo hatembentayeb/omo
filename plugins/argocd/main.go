@@ -268,6 +268,92 @@ func (p *ArgocdPlugin) initializeMainView() {
 	p.cores.Log("Plugin initialized")
 }
 
+func (p *ArgocdPlugin) handleApplicationKeys(key string) bool {
+	switch key {
+	case "R":
+		p.refreshApplications()
+	case "C":
+		p.applicationView.showCreateApplicationModal()
+	case "D":
+		p.applicationView.showDeleteApplicationModal()
+	case "S":
+		p.applicationView.showSyncApplicationModal()
+	case "V":
+		p.applicationView.showApplicationDetailsModal()
+	case "F":
+		p.applicationView.showRefreshApplicationModal()
+	case "A":
+		p.switchToAccountsView()
+	case "P":
+		p.switchToProjectsView()
+	case "?":
+		p.showHelpModal()
+	case "^B":
+		p.returnToPreviousView()
+	case "^D":
+		p.showDebugLogsModal()
+	default:
+		return false
+	}
+	return true
+}
+
+func (p *ArgocdPlugin) handleProjectKeys(key string) bool {
+	switch key {
+	case "R":
+		p.refreshProjects()
+	case "C":
+		p.projectView.showCreateProjectModal()
+	case "D":
+		p.projectView.showDeleteProjectModal()
+	case "V":
+		p.projectView.showProjectDetailsModal()
+	case "O":
+		p.projectView.showProjectRolesModal()
+	case "A":
+		p.switchToApplicationsView()
+	case "U":
+		p.switchToAccountsView()
+	case "?":
+		p.showHelpModal()
+	case "^B":
+		p.returnToPreviousView()
+	case "^D":
+		p.showDebugLogsModal()
+	default:
+		return false
+	}
+	return true
+}
+
+func (p *ArgocdPlugin) handleAccountKeys(key string) bool {
+	switch key {
+	case "R":
+		p.refreshAccounts()
+	case "C":
+		p.accountView.showCreateAccountModal()
+	case "D":
+		p.accountView.showDeleteAccountModal()
+	case "V":
+		p.accountView.showAccountDetailsModal()
+	case "T":
+		p.accountView.showCreateTokenModal()
+	case "A":
+		p.switchToApplicationsView()
+	case "P":
+		p.switchToProjectsView()
+	case "?":
+		p.showHelpModal()
+	case "^B":
+		p.returnToPreviousView()
+	case "^D":
+		p.showDebugLogsModal()
+	default:
+		return false
+	}
+	return true
+}
+
 // setupActionHandler configures the action handler for the plugin
 func (p *ArgocdPlugin) setupActionHandler() {
 	p.cores.SetActionCallback(func(action string, payload map[string]interface{}) error {
@@ -275,83 +361,14 @@ func (p *ArgocdPlugin) setupActionHandler() {
 			if key, ok := payload["key"].(string); ok {
 				switch p.currentView {
 				case "applications":
-					// Application view actions
-					switch key {
-					case "R":
-						p.refreshApplications()
-					case "C":
-						p.applicationView.showCreateApplicationModal()
-					case "D":
-						p.applicationView.showDeleteApplicationModal()
-					case "S":
-						p.applicationView.showSyncApplicationModal()
-					case "V":
-						p.applicationView.showApplicationDetailsModal()
-					case "F":
-						p.applicationView.showRefreshApplicationModal()
-					case "A":
-						p.switchToAccountsView()
-					case "P":
-						p.switchToProjectsView()
-					case "?":
-						p.showHelpModal()
-					case "^B":
-						p.returnToPreviousView()
-					case "^D":
-						p.showDebugLogsModal()
-					}
+					p.handleApplicationKeys(key)
 				case "projects":
-					// Project view actions
-					switch key {
-					case "R":
-						p.refreshProjects()
-					case "C":
-						p.projectView.showCreateProjectModal()
-					case "D":
-						p.projectView.showDeleteProjectModal()
-					case "V":
-						p.projectView.showProjectDetailsModal()
-					case "O":
-						p.projectView.showProjectRolesModal()
-					case "A":
-						p.switchToApplicationsView()
-					case "U":
-						p.switchToAccountsView()
-					case "?":
-						p.showHelpModal()
-					case "^B":
-						p.returnToPreviousView()
-					case "^D":
-						p.showDebugLogsModal()
-					}
+					p.handleProjectKeys(key)
 				case "accounts":
-					// Account view actions
-					switch key {
-					case "R":
-						p.refreshAccounts()
-					case "C":
-						p.accountView.showCreateAccountModal()
-					case "D":
-						p.accountView.showDeleteAccountModal()
-					case "V":
-						p.accountView.showAccountDetailsModal()
-					case "T":
-						p.accountView.showCreateTokenModal()
-					case "A":
-						p.switchToApplicationsView()
-					case "P":
-						p.switchToProjectsView()
-					case "?":
-						p.showHelpModal()
-					case "^B":
-						p.returnToPreviousView()
-					case "^D":
-						p.showDebugLogsModal()
-					}
+					p.handleAccountKeys(key)
 				}
 			}
 		} else if action == "enter_pressed" {
-			// Handle Enter key based on current view
 			switch p.currentView {
 			case "applications":
 				p.applicationView.showApplicationDetailsModal()
@@ -362,17 +379,13 @@ func (p *ArgocdPlugin) setupActionHandler() {
 			}
 			return nil
 		} else if action == "navigate_back" {
-			// When ESC is pressed, the Core UI automatically pops the view,
-			// and we just need to update our internal state to match
 			currentView := p.cores.GetCurrentView()
 			p.switchToView(currentView)
 		} else if action == "back" {
-			// This is triggered when ESC is pressed, before navigate_back
 			if fromView, ok := payload["from"].(string); ok {
 				p.cores.Log(fmt.Sprintf("[blue]Navigating back from %s view", fromView))
 			}
 		} else if action == "rowSelected" {
-			// Handle row selection if needed at the global level
 			Debug("Row selected: %v", payload)
 		}
 		return nil

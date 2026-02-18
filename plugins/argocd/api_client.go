@@ -93,12 +93,127 @@ type Application struct {
 	Spec      map[string]interface{} `json:"spec"`
 }
 
+func extractStringFromMap(m map[string]interface{}, key string) string {
+	if m == nil {
+		return ""
+	}
+	if v, ok := m[key].(string); ok {
+		return v
+	}
+	return ""
+}
+
+func extractNestedString(m map[string]interface{}, outerKey, innerKey string) string {
+	if m == nil {
+		return ""
+	}
+	if inner, ok := m[outerKey].(map[string]interface{}); ok {
+		return extractStringFromMap(inner, innerKey)
+	}
+	return ""
+}
+
+func extractStringSliceFromMap(m map[string]interface{}, key string) []string {
+	if m == nil {
+		return nil
+	}
+	items, ok := m[key].([]interface{})
+	if !ok {
+		return nil
+	}
+	var result []string
+	for _, item := range items {
+		if s, ok := item.(string); ok {
+			result = append(result, s)
+		}
+	}
+	return result
+}
+
+func resolveStatusFromInterface(v interface{}) string {
+	if v == nil {
+		return ""
+	}
+	if s, ok := v.(string); ok {
+		return s
+	}
+	if m, ok := v.(map[string]interface{}); ok {
+		return extractStringFromMap(m, "status")
+	}
+	return ""
+}
+
+func (a *Application) resolveProjectFromJSON(spec map[string]interface{}, projectName interface{}) {
+	if a.Project != "" {
+		return
+	}
+
+	if s := extractStringFromMap(spec, "project"); s != "" {
+		a.Project = s
+		return
+	}
+
+	if s := resolveStatusFromInterface(projectName); s != "" {
+		a.Project = s
+		return
+	}
+
+	if a.Metadata != nil {
+		if s := extractStringFromMap(a.Metadata, "project"); s != "" {
+			a.Project = s
+			return
+		}
+		if s := extractNestedString(a.Metadata, "labels", "argocd.argoproj.io/project"); s != "" {
+			a.Project = s
+			return
+		}
+	}
+
+	if s := extractNestedString(a.Status, "spec", "project"); s != "" {
+		a.Project = s
+		return
+	}
+
+	if a.Project == "" && spec != nil {
+		a.Spec = spec
+	}
+}
+
+func (a *Application) resolveHealthFromJSON(healthStatus interface{}) {
+	if a.Health.Status != "" {
+		return
+	}
+
+	if s := resolveStatusFromInterface(healthStatus); s != "" {
+		a.Health.Status = s
+		return
+	}
+
+	if s := extractNestedString(a.Status, "health", "status"); s != "" {
+		a.Health.Status = s
+	}
+}
+
+func (a *Application) resolveSyncFromJSON(syncStatus interface{}) {
+	if a.Sync.Status != "" {
+		return
+	}
+
+	if s := resolveStatusFromInterface(syncStatus); s != "" {
+		a.Sync.Status = s
+		return
+	}
+
+	if s := extractNestedString(a.Status, "sync", "status"); s != "" {
+		a.Sync.Status = s
+	}
+}
+
 // UnmarshalJSON implements custom unmarshaling for Application
 func (a *Application) UnmarshalJSON(data []byte) error {
 	type Alias Application
 	aux := &struct {
 		*Alias
-		// Extra fields to handle various API response formats
 		HealthStatus interface{}            `json:"healthStatus"`
 		SyncStatus   interface{}            `json:"syncStatus"`
 		ProjectName  interface{}            `json:"projectName"`
@@ -111,97 +226,9 @@ func (a *Application) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	// Extract project name from various locations if it's empty
-	if a.Project == "" {
-		// Try from the Spec field
-		if aux.Spec != nil {
-			if project, ok := aux.Spec["project"].(string); ok && project != "" {
-				a.Project = project
-			}
-		}
-
-		// Try from the ProjectName field
-		if a.Project == "" && aux.ProjectName != nil {
-			if project, ok := aux.ProjectName.(string); ok && project != "" {
-				a.Project = project
-			}
-		}
-
-		// Try from metadata
-		if a.Project == "" && a.Metadata != nil {
-			// Try metadata.project
-			if project, ok := a.Metadata["project"].(string); ok && project != "" {
-				a.Project = project
-			} else if labels, ok := a.Metadata["labels"].(map[string]interface{}); ok {
-				// Try metadata.labels['argocd.argoproj.io/project']
-				if project, ok := labels["argocd.argoproj.io/project"].(string); ok && project != "" {
-					a.Project = project
-				}
-			}
-		}
-
-		// Try from status
-		if a.Project == "" && a.Status != nil {
-			if statusSpec, ok := a.Status["spec"].(map[string]interface{}); ok {
-				if project, ok := statusSpec["project"].(string); ok && project != "" {
-					a.Project = project
-				}
-			}
-		}
-
-		// If still empty after all attempts, store from Spec
-		if a.Project == "" && aux.Spec != nil {
-			a.Spec = aux.Spec
-		}
-	}
-
-	// Handle Health status
-	// If health object is missing completely or has empty status
-	if a.Health.Status == "" {
-		// Try direct healthStatus field
-		if aux.HealthStatus != nil {
-			if status, ok := aux.HealthStatus.(string); ok && status != "" {
-				a.Health.Status = status
-			} else if healthObj, ok := aux.HealthStatus.(map[string]interface{}); ok {
-				if status, ok := healthObj["status"].(string); ok && status != "" {
-					a.Health.Status = status
-				}
-			}
-		}
-
-		// Try from status field
-		if a.Health.Status == "" && a.Status != nil {
-			if health, ok := a.Status["health"].(map[string]interface{}); ok {
-				if status, ok := health["status"].(string); ok && status != "" {
-					a.Health.Status = status
-				}
-			}
-		}
-	}
-
-	// Handle Sync status
-	// If sync object is missing completely or has empty status
-	if a.Sync.Status == "" {
-		// Try direct syncStatus field
-		if aux.SyncStatus != nil {
-			if status, ok := aux.SyncStatus.(string); ok && status != "" {
-				a.Sync.Status = status
-			} else if syncObj, ok := aux.SyncStatus.(map[string]interface{}); ok {
-				if status, ok := syncObj["status"].(string); ok && status != "" {
-					a.Sync.Status = status
-				}
-			}
-		}
-
-		// Try from status field
-		if a.Sync.Status == "" && a.Status != nil {
-			if sync, ok := a.Status["sync"].(map[string]interface{}); ok {
-				if status, ok := sync["status"].(string); ok && status != "" {
-					a.Sync.Status = status
-				}
-			}
-		}
-	}
+	a.resolveProjectFromJSON(aux.Spec, aux.ProjectName)
+	a.resolveHealthFromJSON(aux.HealthStatus)
+	a.resolveSyncFromJSON(aux.SyncStatus)
 
 	return nil
 }
@@ -1014,6 +1041,168 @@ func (c *ArgoAPIClient) GetProjects() ([]Project, error) {
 	return nil, fmt.Errorf("failed to get projects from any known endpoint")
 }
 
+func tryParseProjectsSpecFormat(data []byte) ([]Project, bool) {
+	var result struct {
+		Items []struct {
+			Metadata struct {
+				Name string `json:"name"`
+			} `json:"metadata"`
+			Spec Project `json:"spec"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(data, &result); err != nil || len(result.Items) == 0 {
+		return nil, false
+	}
+	Debug("Found %d projects in spec format", len(result.Items))
+	projects := make([]Project, 0, len(result.Items))
+	for _, item := range result.Items {
+		project := item.Spec
+		project.Name = item.Metadata.Name
+		projects = append(projects, project)
+	}
+	return projects, true
+}
+
+func tryParseProjectsItemsArray(data []byte) ([]Project, bool) {
+	var result struct {
+		Items []Project `json:"items"`
+	}
+	if err := json.Unmarshal(data, &result); err != nil {
+		Debug("Failed to unmarshal projects as items array: %v", err)
+		return nil, false
+	}
+	if len(result.Items) == 0 {
+		return nil, false
+	}
+	Debug("Found %d projects in items array", len(result.Items))
+	for i, proj := range result.Items {
+		Debug("Project %d: Name=%s, Description=%s, Destinations=%d, SourceRepos=%d, Roles=%d",
+			i, proj.Name, proj.Description, len(proj.Destinations), len(proj.SourceRepos), len(proj.Roles))
+	}
+	return result.Items, true
+}
+
+func tryParseProjectsDirectArray(data []byte) ([]Project, bool) {
+	var result []Project
+	if err := json.Unmarshal(data, &result); err != nil {
+		Debug("Failed to unmarshal projects as direct array: %v", err)
+		return nil, false
+	}
+	if len(result) == 0 {
+		return nil, false
+	}
+	Debug("Found %d projects in direct array", len(result))
+	for i, proj := range result {
+		Debug("Project %d: Name=%s, Description=%s, Destinations=%d, SourceRepos=%d, Roles=%d",
+			i, proj.Name, proj.Description, len(proj.Destinations), len(proj.SourceRepos), len(proj.Roles))
+	}
+	return result, true
+}
+
+func tryParseProjectsFromNestedKey(data []byte) ([]Project, bool) {
+	var projArray []Project
+	if err := json.Unmarshal(data, &projArray); err == nil && len(projArray) > 0 {
+		return projArray, true
+	}
+
+	var projWithItems struct {
+		Items []Project `json:"items"`
+	}
+	if err := json.Unmarshal(data, &projWithItems); err == nil && len(projWithItems.Items) > 0 {
+		return projWithItems.Items, true
+	}
+
+	var projMap map[string]Project
+	if err := json.Unmarshal(data, &projMap); err == nil && len(projMap) > 0 {
+		projects := make([]Project, 0, len(projMap))
+		for name, project := range projMap {
+			if project.Name == "" {
+				project.Name = name
+			}
+			projects = append(projects, project)
+		}
+		return projects, true
+	}
+
+	return nil, false
+}
+
+func tryParseProjectsNested(data []byte) ([]Project, bool) {
+	var nestedResult map[string]interface{}
+	if err := json.Unmarshal(data, &nestedResult); err != nil {
+		return nil, false
+	}
+	Debug("Parsed response as map, looking for projects array")
+
+	for _, key := range []string{"projects", "project", "resources", "data", "result", "appProjects"} {
+		projData, ok := nestedResult[key]
+		if !ok {
+			continue
+		}
+		Debug("Found potential projects array in key: %s", key)
+
+		projBytes, err := json.Marshal(projData)
+		if err != nil {
+			Debug("Error marshaling projects data: %v", err)
+			continue
+		}
+
+		if projects, ok := tryParseProjectsFromNestedKey(projBytes); ok {
+			Debug("Found %d projects in nested structure (key: %s)", len(projects), key)
+			return projects, true
+		}
+	}
+	return nil, false
+}
+
+func tryExtractProjectFromMap(m map[string]interface{}) (Project, bool) {
+	if _, hasName := m["name"]; !hasName {
+		return Project{}, false
+	}
+	project := Project{
+		Name: fmt.Sprintf("%v", m["name"]),
+	}
+	if desc, hasDesc := m["description"]; hasDesc {
+		project.Description = fmt.Sprintf("%v", desc)
+	}
+	return project, true
+}
+
+func tryParseProjectsMalformed(data []byte) ([]Project, bool) {
+	if len(data) <= 10 || !strings.Contains(string(data), "\"name\"") {
+		return nil, false
+	}
+	Debug("Trying to extract projects from potentially malformed response")
+
+	var anyMap map[string]interface{}
+	if err := json.Unmarshal(data, &anyMap); err != nil {
+		return nil, false
+	}
+
+	var extracted []Project
+	for _, value := range anyMap {
+		if mapValue, isMap := value.(map[string]interface{}); isMap {
+			if p, ok := tryExtractProjectFromMap(mapValue); ok {
+				extracted = append(extracted, p)
+			}
+		} else if arrayValue, isArray := value.([]interface{}); isArray {
+			for _, item := range arrayValue {
+				if mapItem, isMap := item.(map[string]interface{}); isMap {
+					if p, ok := tryExtractProjectFromMap(mapItem); ok {
+						extracted = append(extracted, p)
+					}
+				}
+			}
+		}
+	}
+
+	if len(extracted) > 0 {
+		Debug("Extracted %d projects from malformed response", len(extracted))
+		return extracted, true
+	}
+	return nil, false
+}
+
 // tryGetProjects attempts to get projects from a specific endpoint
 func (c *ArgoAPIClient) tryGetProjects(path string) ([]Project, error) {
 	requestURL := path
@@ -1036,158 +1225,22 @@ func (c *ArgoAPIClient) tryGetProjects(path string) ([]Project, error) {
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	Debug("Response body: %s", string(bodyBytes))
 
-	// First try the standard structure where spec contains the project details
-	var projResult struct {
-		Items []struct {
-			Metadata struct {
-				Name string `json:"name"`
-			} `json:"metadata"`
-			Spec Project `json:"spec"`
-		} `json:"items"`
+	if projects, ok := tryParseProjectsSpecFormat(bodyBytes); ok {
+		return projects, nil
 	}
-
-	if err := json.Unmarshal(bodyBytes, &projResult); err == nil && len(projResult.Items) > 0 {
-		Debug("Found %d projects in spec format", len(projResult.Items))
-		projects := make([]Project, 0, len(projResult.Items))
-
-		for _, item := range projResult.Items {
-			project := item.Spec
-			project.Name = item.Metadata.Name
-			projects = append(projects, project)
-		}
-
+	if projects, ok := tryParseProjectsItemsArray(bodyBytes); ok {
+		return projects, nil
+	}
+	if projects, ok := tryParseProjectsDirectArray(bodyBytes); ok {
+		return projects, nil
+	}
+	if projects, ok := tryParseProjectsNested(bodyBytes); ok {
+		return projects, nil
+	}
+	if projects, ok := tryParseProjectsMalformed(bodyBytes); ok {
 		return projects, nil
 	}
 
-	// Try to parse as items array first
-	var itemsResult struct {
-		Items []Project `json:"items"`
-	}
-	if err := json.Unmarshal(bodyBytes, &itemsResult); err != nil {
-		Debug("Failed to unmarshal projects as items array: %v", err)
-	} else if len(itemsResult.Items) > 0 {
-		Debug("Found %d projects in items array", len(itemsResult.Items))
-		for i, proj := range itemsResult.Items {
-			Debug("Project %d: Name=%s, Description=%s, Destinations=%d, SourceRepos=%d, Roles=%d",
-				i, proj.Name, proj.Description, len(proj.Destinations), len(proj.SourceRepos), len(proj.Roles))
-		}
-		return itemsResult.Items, nil
-	}
-
-	// Try direct array
-	var directArray []Project
-	if err := json.Unmarshal(bodyBytes, &directArray); err != nil {
-		Debug("Failed to unmarshal projects as direct array: %v", err)
-	} else if len(directArray) > 0 {
-		Debug("Found %d projects in direct array", len(directArray))
-		for i, proj := range directArray {
-			Debug("Project %d: Name=%s, Description=%s, Destinations=%d, SourceRepos=%d, Roles=%d",
-				i, proj.Name, proj.Description, len(proj.Destinations), len(proj.SourceRepos), len(proj.Roles))
-		}
-		return directArray, nil
-	}
-
-	// Try to parse as nested structure
-	var nestedResult map[string]interface{}
-	if err := json.Unmarshal(bodyBytes, &nestedResult); err == nil {
-		Debug("Parsed response as map, looking for projects array")
-
-		// Look for projects in different locations
-		for _, key := range []string{"projects", "project", "resources", "data", "result", "appProjects"} {
-			if projData, ok := nestedResult[key]; ok {
-				Debug("Found potential projects array in key: %s", key)
-
-				// Marshal and unmarshal this section
-				projBytes, err := json.Marshal(projData)
-				if err != nil {
-					Debug("Error marshaling projects data: %v", err)
-					continue
-				}
-
-				// Try as array
-				var projArray []Project
-				if err := json.Unmarshal(projBytes, &projArray); err != nil {
-					Debug("Error unmarshaling as array: %v", err)
-				} else if len(projArray) > 0 {
-					Debug("Found %d projects in nested structure", len(projArray))
-					return projArray, nil
-				}
-
-				// Try as object with items
-				var projWithItems struct {
-					Items []Project `json:"items"`
-				}
-				if err := json.Unmarshal(projBytes, &projWithItems); err != nil {
-					Debug("Error unmarshaling as items container: %v", err)
-				} else if len(projWithItems.Items) > 0 {
-					Debug("Found %d projects in nested items structure", len(projWithItems.Items))
-					return projWithItems.Items, nil
-				}
-
-				// Try to parse as map of projects
-				var projMap map[string]Project
-				if err := json.Unmarshal(projBytes, &projMap); err != nil {
-					Debug("Error unmarshaling as map: %v", err)
-				} else if len(projMap) > 0 {
-					projects := make([]Project, 0, len(projMap))
-					for name, project := range projMap {
-						if project.Name == "" {
-							project.Name = name
-						}
-						projects = append(projects, project)
-					}
-					Debug("Found %d projects in map structure", len(projects))
-					return projects, nil
-				}
-			}
-		}
-	}
-
-	// Try to extract from malformed JSON (common in some API versions)
-	if len(bodyBytes) > 10 && strings.Contains(string(bodyBytes), "\"name\"") {
-		Debug("Trying to extract projects from potentially malformed response")
-		var extractedProjects []Project
-
-		// Extract anything that looks like a project
-		var anyMap map[string]interface{}
-		if err := json.Unmarshal(bodyBytes, &anyMap); err == nil {
-			for _, value := range anyMap {
-				if mapValue, isMap := value.(map[string]interface{}); isMap {
-					// If this map has keys that look like a project, try to extract it
-					if _, hasName := mapValue["name"]; hasName {
-						project := Project{
-							Name: fmt.Sprintf("%v", mapValue["name"]),
-						}
-						if desc, hasDesc := mapValue["description"]; hasDesc {
-							project.Description = fmt.Sprintf("%v", desc)
-						}
-						extractedProjects = append(extractedProjects, project)
-					}
-				} else if arrayValue, isArray := value.([]interface{}); isArray {
-					for _, item := range arrayValue {
-						if mapItem, isMap := item.(map[string]interface{}); isMap {
-							if name, hasName := mapItem["name"]; hasName {
-								project := Project{
-									Name: fmt.Sprintf("%v", name),
-								}
-								if desc, hasDesc := mapItem["description"]; hasDesc {
-									project.Description = fmt.Sprintf("%v", desc)
-								}
-								extractedProjects = append(extractedProjects, project)
-							}
-						}
-					}
-				}
-			}
-		}
-
-		if len(extractedProjects) > 0 {
-			Debug("Extracted %d projects from malformed response", len(extractedProjects))
-			return extractedProjects, nil
-		}
-	}
-
-	// If response has length but we couldn't parse it into any expected format
 	if len(bodyBytes) > 10 {
 		Debug("Received data but couldn't parse project list - likely format mismatch")
 		return nil, fmt.Errorf("received data but couldn't parse project list: %s", string(bodyBytes[:100]))
@@ -1510,6 +1563,83 @@ func (c *ArgoAPIClient) CreateApplication(app interface{}) error {
 	return nil
 }
 
+func parseDestination(raw interface{}) (Destination, bool) {
+	m, ok := raw.(map[string]interface{})
+	if !ok {
+		return Destination{}, false
+	}
+	return Destination{
+		Server:    extractStringFromMap(m, "server"),
+		Name:      extractStringFromMap(m, "name"),
+		Namespace: extractStringFromMap(m, "namespace"),
+	}, true
+}
+
+func parseDestinations(spec map[string]interface{}) []Destination {
+	items, ok := spec["destinations"].([]interface{})
+	if !ok {
+		return nil
+	}
+	var result []Destination
+	for _, item := range items {
+		if d, ok := parseDestination(item); ok {
+			result = append(result, d)
+		}
+	}
+	return result
+}
+
+func parseProjectRole(raw interface{}) (ProjectRole, bool) {
+	m, ok := raw.(map[string]interface{})
+	if !ok {
+		return ProjectRole{}, false
+	}
+	return ProjectRole{
+		Name:        extractStringFromMap(m, "name"),
+		Description: extractStringFromMap(m, "description"),
+		Policies:    extractStringSliceFromMap(m, "policies"),
+		Groups:      extractStringSliceFromMap(m, "groups"),
+	}, true
+}
+
+func parseProjectRoles(spec map[string]interface{}) []ProjectRole {
+	items, ok := spec["roles"].([]interface{})
+	if !ok {
+		return nil
+	}
+	var result []ProjectRole
+	for _, item := range items {
+		if r, ok := parseProjectRole(item); ok {
+			result = append(result, r)
+		}
+	}
+	return result
+}
+
+func (p *Project) resolveFieldsFromSpec(spec map[string]interface{}) {
+	if spec == nil {
+		return
+	}
+	if len(p.Destinations) == 0 {
+		if dests := parseDestinations(spec); len(dests) > 0 {
+			p.Destinations = dests
+		}
+	}
+	if len(p.SourceRepos) == 0 {
+		if repos := extractStringSliceFromMap(spec, "sourceRepos"); len(repos) > 0 {
+			p.SourceRepos = repos
+		}
+	}
+	if p.Description == "" {
+		p.Description = extractStringFromMap(spec, "description")
+	}
+	if len(p.Roles) == 0 {
+		if roles := parseProjectRoles(spec); len(roles) > 0 {
+			p.Roles = roles
+		}
+	}
+}
+
 // UnmarshalJSON custom unmarshaler for Project to handle potential missing fields
 func (p *Project) UnmarshalJSON(data []byte) error {
 	type Alias Project
@@ -1526,97 +1656,11 @@ func (p *Project) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	// If name is empty, try to get it from metadata
-	if p.Name == "" && aux.Metadata != nil {
-		if name, ok := aux.Metadata["name"].(string); ok {
-			p.Name = name
-		}
+	if p.Name == "" {
+		p.Name = extractStringFromMap(aux.Metadata, "name")
 	}
 
-	// If fields are missing from the root level, check if they're in spec
-	if aux.Spec != nil {
-		// Check for destinations in spec
-		if len(p.Destinations) == 0 {
-			if destinations, ok := aux.Spec["destinations"].([]interface{}); ok {
-				for _, dest := range destinations {
-					if destMap, ok := dest.(map[string]interface{}); ok {
-						destination := Destination{}
-
-						if server, ok := destMap["server"].(string); ok {
-							destination.Server = server
-						}
-
-						if name, ok := destMap["name"].(string); ok {
-							destination.Name = name
-						}
-
-						if namespace, ok := destMap["namespace"].(string); ok {
-							destination.Namespace = namespace
-						}
-
-						p.Destinations = append(p.Destinations, destination)
-					}
-				}
-			}
-		}
-
-		// Check for source repos in spec
-		if len(p.SourceRepos) == 0 {
-			if repos, ok := aux.Spec["sourceRepos"].([]interface{}); ok {
-				for _, repo := range repos {
-					if repoStr, ok := repo.(string); ok {
-						p.SourceRepos = append(p.SourceRepos, repoStr)
-					}
-				}
-			}
-		}
-
-		// Check for description in spec
-		if p.Description == "" {
-			if description, ok := aux.Spec["description"].(string); ok {
-				p.Description = description
-			}
-		}
-
-		// Check for roles in spec
-		if len(p.Roles) == 0 {
-			if roles, ok := aux.Spec["roles"].([]interface{}); ok {
-				for _, role := range roles {
-					if roleMap, ok := role.(map[string]interface{}); ok {
-						projectRole := ProjectRole{}
-
-						if name, ok := roleMap["name"].(string); ok {
-							projectRole.Name = name
-						}
-
-						if description, ok := roleMap["description"].(string); ok {
-							projectRole.Description = description
-						}
-
-						// Handle policies
-						if policies, ok := roleMap["policies"].([]interface{}); ok {
-							for _, policy := range policies {
-								if policyStr, ok := policy.(string); ok {
-									projectRole.Policies = append(projectRole.Policies, policyStr)
-								}
-							}
-						}
-
-						// Handle groups
-						if groups, ok := roleMap["groups"].([]interface{}); ok {
-							for _, group := range groups {
-								if groupStr, ok := group.(string); ok {
-									projectRole.Groups = append(projectRole.Groups, groupStr)
-								}
-							}
-						}
-
-						p.Roles = append(p.Roles, projectRole)
-					}
-				}
-			}
-		}
-	}
+	p.resolveFieldsFromSpec(aux.Spec)
 
 	return nil
 }

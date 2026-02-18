@@ -304,6 +304,47 @@ func (c *RedisClient) ScanKeys(pattern string, cursor uint64, count int64) ([]st
 	return keys, nextCursor, nil
 }
 
+func formatTTL(ttl time.Duration) string {
+	if ttl == -1 {
+		return "No expiration"
+	}
+	if ttl == -2 {
+		return "Not found"
+	}
+	return fmt.Sprintf("%d", int64(ttl.Seconds()))
+}
+
+func (c *RedisClient) getKeySize(key, keyType string) string {
+	switch strings.ToLower(keyType) {
+	case "string":
+		val, err := c.client.Get(c.ctx, key).Result()
+		if err == nil {
+			return fmt.Sprintf("%d", len(val))
+		}
+	case "hash":
+		count, err := c.client.HLen(c.ctx, key).Result()
+		if err == nil {
+			return fmt.Sprintf("%d fields", count)
+		}
+	case "list":
+		count, err := c.client.LLen(c.ctx, key).Result()
+		if err == nil {
+			return fmt.Sprintf("%d items", count)
+		}
+	case "set":
+		count, err := c.client.SCard(c.ctx, key).Result()
+		if err == nil {
+			return fmt.Sprintf("%d members", count)
+		}
+	case "zset":
+		count, err := c.client.ZCard(c.ctx, key).Result()
+		if err == nil {
+			return fmt.Sprintf("%d members", count)
+		}
+	}
+	return "0"
+}
+
 // GetKeyInfo gets information about a key
 func (c *RedisClient) GetKeyInfo(key string) (map[string]string, error) {
 	if !c.connected || c.client == nil {
@@ -314,61 +355,79 @@ func (c *RedisClient) GetKeyInfo(key string) (map[string]string, error) {
 		return nil, errors.New("key cannot be empty")
 	}
 
-	// Get key type
 	keyType, err := c.client.Type(c.ctx, key).Result()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get key type: %v", err)
 	}
 
-	// Get key TTL
 	ttl, err := c.client.TTL(c.ctx, key).Result()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get key TTL: %v", err)
 	}
 
-	// Format TTL
-	ttlStr := fmt.Sprintf("%d", int64(ttl.Seconds()))
-	if ttl == -1 {
-		ttlStr = "No expiration"
-	} else if ttl == -2 {
-		ttlStr = "Not found"
-	}
-
-	// Get size based on key type
-	size := "0"
-	switch strings.ToLower(keyType) {
-	case "string":
-		val, err := c.client.Get(c.ctx, key).Result()
-		if err == nil {
-			size = fmt.Sprintf("%d", len(val))
-		}
-	case "hash":
-		count, err := c.client.HLen(c.ctx, key).Result()
-		if err == nil {
-			size = fmt.Sprintf("%d fields", count)
-		}
-	case "list":
-		count, err := c.client.LLen(c.ctx, key).Result()
-		if err == nil {
-			size = fmt.Sprintf("%d items", count)
-		}
-	case "set":
-		count, err := c.client.SCard(c.ctx, key).Result()
-		if err == nil {
-			size = fmt.Sprintf("%d members", count)
-		}
-	case "zset":
-		count, err := c.client.ZCard(c.ctx, key).Result()
-		if err == nil {
-			size = fmt.Sprintf("%d members", count)
-		}
-	}
-
 	return map[string]string{
 		"type": keyType,
-		"ttl":  ttlStr,
-		"size": size,
+		"ttl":  formatTTL(ttl),
+		"size": c.getKeySize(key, keyType),
 	}, nil
+}
+
+func (c *RedisClient) getStringContent(key string) (string, error) {
+	value, err := c.client.Get(c.ctx, key).Result()
+	if err != nil {
+		return "", fmt.Errorf("failed to get string value: %v", err)
+	}
+	return value, nil
+}
+
+func (c *RedisClient) getHashContent(key string) (string, error) {
+	values, err := c.client.HGetAll(c.ctx, key).Result()
+	if err != nil {
+		return "", fmt.Errorf("failed to get hash values: %v", err)
+	}
+	var b strings.Builder
+	i := 1
+	for field, value := range values {
+		b.WriteString(fmt.Sprintf("%d) \"%s\" => \"%s\"\n", i, field, value))
+		i++
+	}
+	return b.String(), nil
+}
+
+func (c *RedisClient) getListContent(key string) (string, error) {
+	values, err := c.client.LRange(c.ctx, key, 0, -1).Result()
+	if err != nil {
+		return "", fmt.Errorf("failed to get list values: %v", err)
+	}
+	var b strings.Builder
+	for i, value := range values {
+		b.WriteString(fmt.Sprintf("%d) \"%s\"\n", i+1, value))
+	}
+	return b.String(), nil
+}
+
+func (c *RedisClient) getSetContent(key string) (string, error) {
+	values, err := c.client.SMembers(c.ctx, key).Result()
+	if err != nil {
+		return "", fmt.Errorf("failed to get set members: %v", err)
+	}
+	var b strings.Builder
+	for i, value := range values {
+		b.WriteString(fmt.Sprintf("%d) \"%s\"\n", i+1, value))
+	}
+	return b.String(), nil
+}
+
+func (c *RedisClient) getZSetContent(key string) (string, error) {
+	values, err := c.client.ZRangeWithScores(c.ctx, key, 0, -1).Result()
+	if err != nil {
+		return "", fmt.Errorf("failed to get sorted set values: %v", err)
+	}
+	var b strings.Builder
+	for i, z := range values {
+		b.WriteString(fmt.Sprintf("%d) \"%v\" [score: %v]\n", i+1, z.Member, z.Score))
+	}
+	return b.String(), nil
 }
 
 // GetKeyContent gets the content of a key
@@ -381,70 +440,25 @@ func (c *RedisClient) GetKeyContent(key string) (string, error) {
 		return "", errors.New("key cannot be empty")
 	}
 
-	// Get key type
 	keyType, err := c.client.Type(c.ctx, key).Result()
 	if err != nil {
 		return "", fmt.Errorf("failed to get key type: %v", err)
 	}
 
-	var content strings.Builder
-
-	// Get content based on key type
 	switch strings.ToLower(keyType) {
 	case "string":
-		value, err := c.client.Get(c.ctx, key).Result()
-		if err != nil {
-			return "", fmt.Errorf("failed to get string value: %v", err)
-		}
-		content.WriteString(value)
-
+		return c.getStringContent(key)
 	case "hash":
-		values, err := c.client.HGetAll(c.ctx, key).Result()
-		if err != nil {
-			return "", fmt.Errorf("failed to get hash values: %v", err)
-		}
-
-		i := 1
-		for field, value := range values {
-			content.WriteString(fmt.Sprintf("%d) \"%s\" => \"%s\"\n", i, field, value))
-			i++
-		}
-
+		return c.getHashContent(key)
 	case "list":
-		values, err := c.client.LRange(c.ctx, key, 0, -1).Result()
-		if err != nil {
-			return "", fmt.Errorf("failed to get list values: %v", err)
-		}
-
-		for i, value := range values {
-			content.WriteString(fmt.Sprintf("%d) \"%s\"\n", i+1, value))
-		}
-
+		return c.getListContent(key)
 	case "set":
-		values, err := c.client.SMembers(c.ctx, key).Result()
-		if err != nil {
-			return "", fmt.Errorf("failed to get set members: %v", err)
-		}
-
-		for i, value := range values {
-			content.WriteString(fmt.Sprintf("%d) \"%s\"\n", i+1, value))
-		}
-
+		return c.getSetContent(key)
 	case "zset":
-		values, err := c.client.ZRangeWithScores(c.ctx, key, 0, -1).Result()
-		if err != nil {
-			return "", fmt.Errorf("failed to get sorted set values: %v", err)
-		}
-
-		for i, z := range values {
-			content.WriteString(fmt.Sprintf("%d) \"%v\" [score: %v]\n", i+1, z.Member, z.Score))
-		}
-
+		return c.getZSetContent(key)
 	default:
 		return fmt.Sprintf("Unknown key type: %s", keyType), nil
 	}
-
-	return content.String(), nil
 }
 
 // DeleteKey deletes a key
@@ -639,6 +653,35 @@ func (c *RedisClient) GetSlowLog(limit int64) ([]SlowLogEntry, error) {
 	return entries, nil
 }
 
+func parseClientLine(line string) ClientInfo {
+	entry := ClientInfo{}
+	for _, field := range strings.Fields(line) {
+		parts := strings.SplitN(field, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		switch parts[0] {
+		case "id":
+			entry.ID = parts[1]
+		case "addr":
+			entry.Addr = parts[1]
+		case "name":
+			entry.Name = parts[1]
+		case "age":
+			entry.Age = parts[1]
+		case "idle":
+			entry.Idle = parts[1]
+		case "flags":
+			entry.Flags = parts[1]
+		case "cmd":
+			entry.Cmd = parts[1]
+		case "db":
+			entry.DB = parts[1]
+		}
+	}
+	return entry
+}
+
 // GetClients returns a list of connected clients.
 func (c *RedisClient) GetClients() ([]ClientInfo, error) {
 	if !c.connected || c.client == nil {
@@ -650,42 +693,13 @@ func (c *RedisClient) GetClients() ([]ClientInfo, error) {
 		return nil, fmt.Errorf("failed to get client list: %v", err)
 	}
 
-	clients := make([]ClientInfo, 0)
-	lines := strings.Split(raw, "\n")
-	for _, line := range lines {
+	var clients []ClientInfo
+	for _, line := range strings.Split(raw, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-
-		fields := strings.Fields(line)
-		entry := ClientInfo{}
-		for _, field := range fields {
-			parts := strings.SplitN(field, "=", 2)
-			if len(parts) != 2 {
-				continue
-			}
-			switch parts[0] {
-			case "id":
-				entry.ID = parts[1]
-			case "addr":
-				entry.Addr = parts[1]
-			case "name":
-				entry.Name = parts[1]
-			case "age":
-				entry.Age = parts[1]
-			case "idle":
-				entry.Idle = parts[1]
-			case "flags":
-				entry.Flags = parts[1]
-			case "cmd":
-				entry.Cmd = parts[1]
-			case "db":
-				entry.DB = parts[1]
-			}
-		}
-
-		clients = append(clients, entry)
+		clients = append(clients, parseClientLine(line))
 	}
 
 	return clients, nil
@@ -868,6 +882,28 @@ func (c *RedisClient) PublishMessage(channel, message string) error {
 	return c.client.Publish(c.ctx, channel, message).Err()
 }
 
+func keyToPattern(key string) string {
+	if idx := strings.Index(key, ":"); idx > 0 {
+		return key[:idx] + ":*"
+	}
+	return key
+}
+
+func (c *RedisClient) collectKeyMetadata(key string, p *KeyPattern) {
+	p.Count++
+	if len(p.SampleKeys) < 3 {
+		p.SampleKeys = append(p.SampleKeys, key)
+	}
+	keyType, err := c.client.Type(c.ctx, key).Result()
+	if err == nil {
+		p.Types[keyType]++
+	}
+	ttl, err := c.client.TTL(c.ctx, key).Result()
+	if err == nil && ttl > 0 {
+		p.AvgTTL += int64(ttl.Seconds())
+	}
+}
+
 // AnalyzeKeyPatterns analyzes keys and groups them by pattern prefix
 func (c *RedisClient) AnalyzeKeyPatterns(maxKeys int) ([]KeyPattern, error) {
 	if !c.connected || c.client == nil {
@@ -878,7 +914,6 @@ func (c *RedisClient) AnalyzeKeyPatterns(maxKeys int) ([]KeyPattern, error) {
 		maxKeys = 1000
 	}
 
-	// Scan keys
 	keys, err := c.GetKeys("*")
 	if err != nil {
 		return nil, err
@@ -888,47 +923,20 @@ func (c *RedisClient) AnalyzeKeyPatterns(maxKeys int) ([]KeyPattern, error) {
 		keys = keys[:maxKeys]
 	}
 
-	// Group keys by pattern (prefix before first colon)
 	patterns := make(map[string]*KeyPattern)
 
 	for _, key := range keys {
-		// Extract pattern (prefix before first colon or full key if no colon)
-		pattern := key
-		if idx := strings.Index(key, ":"); idx > 0 {
-			pattern = key[:idx] + ":*"
-		}
-
+		pattern := keyToPattern(key)
 		if _, exists := patterns[pattern]; !exists {
 			patterns[pattern] = &KeyPattern{
 				Pattern:    pattern,
-				Count:      0,
 				SampleKeys: make([]string, 0, 3),
 				Types:      make(map[string]int),
 			}
 		}
-
-		p := patterns[pattern]
-		p.Count++
-
-		// Add sample keys (max 3)
-		if len(p.SampleKeys) < 3 {
-			p.SampleKeys = append(p.SampleKeys, key)
-		}
-
-		// Get key type
-		keyType, err := c.client.Type(c.ctx, key).Result()
-		if err == nil {
-			p.Types[keyType]++
-		}
-
-		// Get TTL for average calculation
-		ttl, err := c.client.TTL(c.ctx, key).Result()
-		if err == nil && ttl > 0 {
-			p.AvgTTL += int64(ttl.Seconds())
-		}
+		c.collectKeyMetadata(key, patterns[pattern])
 	}
 
-	// Convert map to slice and calculate averages
 	result := make([]KeyPattern, 0, len(patterns))
 	for _, p := range patterns {
 		if p.Count > 0 && p.AvgTTL > 0 {

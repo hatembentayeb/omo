@@ -174,78 +174,85 @@ func (p *K8sUserPlugin) initializeMainView() {
 // setupActionHandler configures the action handler for the plugin
 func (p *K8sUserPlugin) setupActionHandler() {
 	p.cores.SetActionCallback(func(action string, payload map[string]interface{}) error {
-		if action == "keypress" {
+		switch action {
+		case "keypress":
 			if key, ok := payload["key"].(string); ok {
 				switch p.currentView {
 				case "users":
-					// User view actions
-					switch key {
-					case "R":
-						p.refreshUsers()
-					case "C":
-						p.userView.showCreateUserModal()
-					case "D":
-						p.userView.showDeleteUserModal()
-					case "A":
-						p.userView.showAssignRoleModal()
-					case "V":
-						p.userView.showUserDetails()
-					case "T":
-						p.userView.showTestAccessModal()
-					case "E":
-						p.userView.exportUserConfig()
-					case "K":
-						p.userView.showConnectionCommand()
-					case "W":
-						p.userView.downloadUserFromKeePass()
-					case "M":
-						p.switchToRolesView()
-					case "?":
-						p.showHelpModal()
-					case "^B":
-						p.returnToPreviousView()
-					}
+					p.handleUsersKeypress(key)
 				case "roles":
-					// Role view actions
-					switch key {
-					case "R":
-						p.refreshRoles()
-					case "C":
-						p.roleView.showCreateRoleModal()
-					case "D":
-						p.roleView.showDeleteRoleModal()
-					case "V":
-						p.roleView.showRoleDetailsModal()
-					case "U":
-						p.switchToUsersView()
-					case "?":
-						p.showHelpModal()
-					case "^B":
-						p.returnToPreviousView()
-					}
+					p.handleRolesKeypress(key)
 				default:
-					// Default actions for any view
-					switch key {
-					case "R":
-						p.refreshUsers()
-					case "?":
-						p.showHelpModal()
-					}
+					p.handleDefaultKeypress(key)
 				}
 			}
-		} else if action == "navigate_back" {
-			// When ESC is pressed, the Core UI automatically pops the view,
-			// and we just need to update our internal state to match
+		case "navigate_back":
 			currentView := p.cores.GetCurrentView()
 			p.switchToView(currentView)
-		} else if action == "back" {
-			// This is triggered when ESC is pressed, before navigate_back
+		case "back":
 			if fromView, ok := payload["from"].(string); ok {
 				p.cores.Log(fmt.Sprintf("[blue]Navigating back from %s view", fromView))
 			}
 		}
 		return nil
 	})
+}
+
+func (p *K8sUserPlugin) handleUsersKeypress(key string) {
+	switch key {
+	case "R":
+		p.refreshUsers()
+	case "C":
+		p.userView.showCreateUserModal()
+	case "D":
+		p.userView.showDeleteUserModal()
+	case "A":
+		p.userView.showAssignRoleModal()
+	case "V":
+		p.userView.showUserDetails()
+	case "T":
+		p.userView.showTestAccessModal()
+	case "E":
+		p.userView.exportUserConfig()
+	case "K":
+		p.userView.showConnectionCommand()
+	case "W":
+		p.userView.downloadUserFromKeePass()
+	case "M":
+		p.switchToRolesView()
+	case "?":
+		p.showHelpModal()
+	case "^B":
+		p.returnToPreviousView()
+	}
+}
+
+func (p *K8sUserPlugin) handleRolesKeypress(key string) {
+	switch key {
+	case "R":
+		p.refreshRoles()
+	case "C":
+		p.roleView.showCreateRoleModal()
+	case "D":
+		p.roleView.showDeleteRoleModal()
+	case "V":
+		p.roleView.showRoleDetailsModal()
+	case "U":
+		p.switchToUsersView()
+	case "?":
+		p.showHelpModal()
+	case "^B":
+		p.returnToPreviousView()
+	}
+}
+
+func (p *K8sUserPlugin) handleDefaultKeypress(key string) {
+	switch key {
+	case "R":
+		p.refreshUsers()
+	case "?":
+		p.showHelpModal()
+	}
 }
 
 // fetchUsers retrieves Kubernetes users and formats them for display

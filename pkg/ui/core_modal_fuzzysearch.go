@@ -14,6 +14,58 @@ type FuzzySearchItem struct {
 	Data        interface{}
 }
 
+func newFuzzyContainer(title string) *tview.Flex {
+	container := tview.NewFlex()
+	container.SetDirection(tview.FlexRow)
+	container.SetBorder(true)
+	container.SetTitle(" " + title + " ")
+	container.SetTitleAlign(tview.AlignCenter)
+	container.SetBorderColor(tcell.ColorAqua)
+	container.SetTitleColor(tcell.ColorOrange)
+	container.SetBackgroundColor(tcell.ColorDefault)
+	container.SetBorderPadding(0, 0, 1, 1)
+	return container
+}
+
+func newFuzzyInput() *tview.InputField {
+	inputField := tview.NewInputField()
+	inputField.SetLabel(" 🔍 ")
+	inputField.SetLabelColor(tcell.ColorYellow)
+	inputField.SetFieldBackgroundColor(tcell.ColorDefault)
+	inputField.SetFieldTextColor(tcell.ColorWhite)
+	inputField.SetPlaceholder("Type to search...")
+	inputField.SetPlaceholderTextColor(tcell.ColorGray)
+	return inputField
+}
+
+func newFuzzyList() *tview.List {
+	list := tview.NewList()
+	list.SetBackgroundColor(tcell.ColorDefault)
+	list.SetMainTextColor(tcell.ColorWhite)
+	list.SetSecondaryTextColor(tcell.ColorGray)
+	list.SetSelectedTextColor(tcell.ColorBlack)
+	list.SetSelectedBackgroundColor(tcell.ColorAqua)
+	list.SetHighlightFullLine(true)
+	list.ShowSecondaryText(true)
+	return list
+}
+
+func centerModal(content tview.Primitive, width, height int) *tview.Flex {
+	innerFlex := tview.NewFlex()
+	innerFlex.SetDirection(tview.FlexRow)
+	innerFlex.SetBackgroundColor(tcell.ColorDefault)
+	innerFlex.AddItem(nil, 0, 1, false)
+	innerFlex.AddItem(content, height, 0, true)
+	innerFlex.AddItem(nil, 0, 1, false)
+
+	flex := tview.NewFlex()
+	flex.SetBackgroundColor(tcell.ColorDefault)
+	flex.AddItem(nil, 0, 1, false)
+	flex.AddItem(innerFlex, width, 0, true)
+	flex.AddItem(nil, 0, 1, false)
+	return flex
+}
+
 // ShowFuzzySearchModal displays a modal with real-time fuzzy search filtering
 func ShowFuzzySearchModal(
 	pages *tview.Pages,
@@ -24,43 +76,15 @@ func ShowFuzzySearchModal(
 ) {
 	const pageID = "fuzzy-search-modal"
 
-	// Create the main container
-	container := tview.NewFlex()
-	container.SetDirection(tview.FlexRow)
-	container.SetBorder(true)
-	container.SetTitle(" " + title + " ")
-	container.SetTitleAlign(tview.AlignCenter)
-	container.SetBorderColor(tcell.ColorAqua)
-	container.SetTitleColor(tcell.ColorOrange)
-	container.SetBackgroundColor(tcell.ColorDefault)
-	container.SetBorderPadding(0, 0, 1, 1)
+	container := newFuzzyContainer(title)
+	inputField := newFuzzyInput()
+	list := newFuzzyList()
 
-	// Create the search input field
-	inputField := tview.NewInputField()
-	inputField.SetLabel(" 🔍 ")
-	inputField.SetLabelColor(tcell.ColorYellow)
-	inputField.SetFieldBackgroundColor(tcell.ColorDefault)
-	inputField.SetFieldTextColor(tcell.ColorWhite)
-	inputField.SetPlaceholder("Type to search...")
-	inputField.SetPlaceholderTextColor(tcell.ColorGray)
-
-	// Create the results list
-	list := tview.NewList()
-	list.SetBackgroundColor(tcell.ColorDefault)
-	list.SetMainTextColor(tcell.ColorWhite)
-	list.SetSecondaryTextColor(tcell.ColorGray)
-	list.SetSelectedTextColor(tcell.ColorBlack)
-	list.SetSelectedBackgroundColor(tcell.ColorAqua)
-	list.SetHighlightFullLine(true)
-	list.ShowSecondaryText(true)
-
-	// Track filtered items
-	filteredItems := make([]int, len(items)) // Maps list index to original items index
+	filteredItems := make([]int, len(items))
 	for i := range items {
 		filteredItems[i] = i
 	}
 
-	// Function to update the list based on search query
 	updateList := func(query string) {
 		list.Clear()
 		filteredItems = filteredItems[:0]
@@ -79,96 +103,71 @@ func ShowFuzzySearchModal(
 		}
 	}
 
-	// Initialize with all items
 	updateList("")
 
-	// Handle input changes for real-time filtering
 	inputField.SetChangedFunc(func(text string) {
 		updateList(text)
 	})
 
-	// Track if selection is in progress to prevent double-trigger
+	cancelModal := func() {
+		pages.RemovePage(pageID)
+		if callback != nil {
+			callback(-1, nil, true)
+		}
+	}
+
 	selecting := false
 
-	// Handle selection
 	selectItem := func() {
 		if selecting {
 			return
 		}
 		selecting = true
 
-		if list.GetItemCount() == 0 {
-			// No items to select, close modal
-			pages.RemovePage(pageID)
-			if callback != nil {
-				callback(-1, nil, true)
-			}
-			return
-		}
-
 		currentIndex := list.GetCurrentItem()
-		if currentIndex < 0 || currentIndex >= len(filteredItems) {
-			// Invalid index, close modal
-			pages.RemovePage(pageID)
-			if callback != nil {
-				callback(-1, nil, true)
-			}
+		if list.GetItemCount() == 0 || currentIndex < 0 || currentIndex >= len(filteredItems) {
+			cancelModal()
 			return
 		}
 
 		originalIndex := filteredItems[currentIndex]
 		if originalIndex < 0 || originalIndex >= len(items) {
-			// Invalid original index, close modal
-			pages.RemovePage(pageID)
-			if callback != nil {
-				callback(-1, nil, true)
-			}
+			cancelModal()
 			return
 		}
 
 		selectedItem := items[originalIndex]
-		// Remove page first, then call callback
 		pages.RemovePage(pageID)
 		if callback != nil {
 			callback(originalIndex, &selectedItem, false)
 		}
 	}
 
-	// Set up list selection
 	list.SetSelectedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
 		selectItem()
 	})
 
-	// Handle Enter in input field
 	inputField.SetDoneFunc(func(key tcell.Key) {
-		if key == tcell.KeyEnter {
+		switch key {
+		case tcell.KeyEnter:
 			selectItem()
-		} else if key == tcell.KeyEscape {
-			pages.RemovePage(pageID)
-			if callback != nil {
-				callback(-1, nil, true)
-			}
-		} else if key == tcell.KeyDown || key == tcell.KeyTab {
+		case tcell.KeyEscape:
+			cancelModal()
+		case tcell.KeyDown, tcell.KeyTab:
 			app.SetFocus(list)
 		}
 	})
 
-	// Handle navigation in list
 	list.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyEnter:
 			selectItem()
 			return nil
 		case tcell.KeyEscape:
-			pages.RemovePage(pageID)
-			if callback != nil {
-				callback(-1, nil, true)
-			}
+			cancelModal()
 			return nil
 		case tcell.KeyRune:
-			// If typing, go back to input field
 			app.SetFocus(inputField)
-			// Re-send the key to input field
 			return event
 		case tcell.KeyBackspace, tcell.KeyBackspace2:
 			app.SetFocus(inputField)
@@ -177,50 +176,25 @@ func ShowFuzzySearchModal(
 		return event
 	})
 
-	// Container input capture for global ESC
 	container.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyEscape {
-			pages.RemovePage(pageID)
-			if callback != nil {
-				callback(-1, nil, true)
-			}
+			cancelModal()
 			return nil
 		}
 		return event
 	})
 
-	// Add info text
 	infoText := tview.NewTextView()
 	infoText.SetText(" ↑↓ Navigate  Enter Select  Esc Cancel")
 	infoText.SetTextColor(tcell.ColorGray)
 	infoText.SetBackgroundColor(tcell.ColorDefault)
 	infoText.SetTextAlign(tview.AlignCenter)
 
-	// Build the layout
 	container.AddItem(inputField, 1, 0, true)
 	container.AddItem(list, 0, 1, false)
 	container.AddItem(infoText, 1, 0, false)
 
-	// Set modal size
-	width := 70
-	height := 20
-
-	// Center the modal
-	innerFlex := tview.NewFlex()
-	innerFlex.SetDirection(tview.FlexRow)
-	innerFlex.SetBackgroundColor(tcell.ColorDefault)
-	innerFlex.AddItem(nil, 0, 1, false)
-	innerFlex.AddItem(container, height, 0, true)
-	innerFlex.AddItem(nil, 0, 1, false)
-
-	flex := tview.NewFlex()
-	flex.SetBackgroundColor(tcell.ColorDefault)
-	flex.AddItem(nil, 0, 1, false)
-	flex.AddItem(innerFlex, width, 0, true)
-	flex.AddItem(nil, 0, 1, false)
-
-	// Show the modal
-	pages.AddPage(pageID, flex, true, true)
+	pages.AddPage(pageID, centerModal(container, 70, 20), true, true)
 	app.SetFocus(inputField)
 }
 

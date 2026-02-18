@@ -395,6 +395,38 @@ func (rv *RedisView) resetKeyScan() {
 	rv.scanDone = false
 }
 
+func (rv *RedisView) handleScanError(err error) {
+	rv.cores.Log(fmt.Sprintf("[red]Failed to scan keys: %v", err))
+	if strings.Contains(err.Error(), "connection") ||
+		strings.Contains(err.Error(), "timeout") {
+		rv.cores.Log("[red]Connection to Redis lost. Please reconnect.")
+		if rv.redisClient != nil {
+			rv.redisClient.Disconnect()
+		}
+		rv.cores.SetInfoText("[yellow]Redis Manager[white]\nStatus: Not Connected\nUse [green]Ctrl+T[white] to select instance")
+	}
+}
+
+func (rv *RedisView) scanKeysBatch(limit int) ([]string, error) {
+	allKeys := make([]string, 0, limit)
+	for len(allKeys) < limit && !rv.scanDone {
+		keys, nextCursor, err := rv.redisClient.ScanKeys("*", rv.scanCursor, int64(limit))
+		if err != nil {
+			rv.handleScanError(err)
+			return nil, err
+		}
+		rv.scanCursor = nextCursor
+		if nextCursor == 0 {
+			rv.scanDone = true
+		}
+		allKeys = append(allKeys, keys...)
+	}
+	if len(allKeys) > limit {
+		allKeys = allKeys[:limit]
+	}
+	return allKeys, nil
+}
+
 func (rv *RedisView) loadKeysPage(offset, limit int) ([][]string, error) {
 	if rv.redisClient == nil || !rv.redisClient.IsConnected() {
 		return [][]string{}, nil
@@ -406,38 +438,9 @@ func (rv *RedisView) loadKeysPage(offset, limit int) ([][]string, error) {
 		return [][]string{}, nil
 	}
 
-	// Collect keys across multiple SCAN iterations.
-	// Redis SCAN with COUNT is only a hint — a single call can return
-	// zero keys even when the database is not empty.  We must keep
-	// scanning until we either have enough keys or the cursor wraps to 0.
-	allKeys := make([]string, 0, limit)
-	for len(allKeys) < limit && !rv.scanDone {
-		keys, nextCursor, err := rv.redisClient.ScanKeys("*", rv.scanCursor, int64(limit))
-		if err != nil {
-			rv.cores.Log(fmt.Sprintf("[red]Failed to scan keys: %v", err))
-
-			if strings.Contains(err.Error(), "connection") ||
-				strings.Contains(err.Error(), "timeout") {
-				rv.cores.Log("[red]Connection to Redis lost. Please reconnect.")
-				if rv.redisClient != nil {
-					rv.redisClient.Disconnect()
-				}
-				rv.cores.SetInfoText("[yellow]Redis Manager[white]\nStatus: Not Connected\nUse [green]Ctrl+T[white] to select instance")
-			}
-			return [][]string{}, err
-		}
-
-		rv.scanCursor = nextCursor
-		if nextCursor == 0 {
-			rv.scanDone = true
-		}
-
-		allKeys = append(allKeys, keys...)
-	}
-
-	// Trim to limit in case the last batch pushed us over.
-	if len(allKeys) > limit {
-		allKeys = allKeys[:limit]
+	allKeys, err := rv.scanKeysBatch(limit)
+	if err != nil {
+		return [][]string{}, err
 	}
 
 	tableData := make([][]string, 0, len(allKeys))
@@ -446,12 +449,7 @@ func (rv *RedisView) loadKeysPage(offset, limit int) ([][]string, error) {
 		if err != nil {
 			continue
 		}
-
-		keyType := keyInfo["type"]
-		ttl := keyInfo["ttl"]
-		size := keyInfo["size"]
-
-		tableData = append(tableData, []string{key, keyType, ttl, size})
+		tableData = append(tableData, []string{key, keyInfo["type"], keyInfo["ttl"], keyInfo["size"]})
 	}
 
 	if offset == 0 {
@@ -549,6 +547,82 @@ Esc        - Close modal dialogs
 	)
 }
 
+func (rv *RedisView) handleNavKeys(key string) bool {
+	switch key {
+	case "I":
+		rv.showServerInfo()
+	case "L":
+		rv.showSlowlog()
+	case "T":
+		rv.showStats()
+	case "C":
+		rv.showClients()
+	case "G":
+		rv.showConfig()
+	case "M":
+		rv.showMemory()
+	case "P":
+		rv.showPersistence()
+	case "Y":
+		rv.showReplication()
+	case "B":
+		rv.showPubSub()
+	case "A":
+		rv.showKeyAnalysis()
+	case "W":
+		rv.showDatabases()
+	case "X":
+		rv.showCommandStats()
+	case "Z":
+		rv.showLatency()
+	case "K":
+		rv.switchView(viewKeys)
+	case "?":
+		rv.showHelp()
+	case "R":
+		rv.refresh()
+	default:
+		return false
+	}
+	return true
+}
+
+func (rv *RedisView) handleKeysViewKeys(key string) bool {
+	if rv.currentView != viewKeys {
+		return false
+	}
+	switch key {
+	case "D":
+		rv.showDeleteKeyConfirmation()
+	case "F":
+		rv.showFlushDBConfirmation()
+	case "N":
+		rv.showNewKeyForm()
+	case "S":
+		rv.showDBSelector()
+	case "E":
+		rv.showSelectedKeyContent()
+	case "Enter":
+		rv.showSelectedKeyContent()
+	default:
+		return false
+	}
+	return true
+}
+
+func (rv *RedisView) handleMemoryViewKeys(key string) bool {
+	if rv.currentView != viewMemory {
+		return false
+	}
+	switch key {
+	case "D":
+		rv.showMemoryDoctor()
+	default:
+		return false
+	}
+	return true
+}
+
 // handleAction handles actions triggered by the UI
 func (rv *RedisView) handleAction(action string, payload map[string]interface{}) error {
 	switch action {
@@ -556,97 +630,21 @@ func (rv *RedisView) handleAction(action string, payload map[string]interface{})
 		rv.refresh()
 		return nil
 	case "keypress":
-		// Handle specific key presses
 		if key, ok := payload["key"].(string); ok {
-			switch key {
-			case "I":
-				rv.showServerInfo()
+			handled := rv.handleNavKeys(key)
+			if !handled {
+				handled = rv.handleKeysViewKeys(key)
+			}
+			if !handled {
+				handled = rv.handleMemoryViewKeys(key)
+			}
+			if handled {
 				return nil
-			case "L":
-				rv.showSlowlog()
-				return nil
-			case "T":
-				rv.showStats()
-				return nil
-			case "C":
-				rv.showClients()
-				return nil
-			case "G":
-				rv.showConfig()
-				return nil
-			case "M":
-				rv.showMemory()
-				return nil
-			case "P":
-				rv.showPersistence()
-				return nil
-			case "Y":
-				rv.showReplication()
-				return nil
-			case "B":
-				rv.showPubSub()
-				return nil
-			case "A":
-				rv.showKeyAnalysis()
-				return nil
-			case "W":
-				rv.showDatabases()
-				return nil
-			case "X":
-				rv.showCommandStats()
-				return nil
-			case "Z":
-				rv.showLatency()
-				return nil
-			case "K":
-				rv.switchView(viewKeys)
-				return nil
-			case "?":
-				rv.showHelp()
-				return nil
-			case "R":
-				rv.refresh()
-				return nil
-			case "D":
-				if rv.currentView == viewKeys {
-					rv.showDeleteKeyConfirmation()
-					return nil
-				}
-				if rv.currentView == viewMemory {
-					rv.showMemoryDoctor()
-					return nil
-				}
-			case "F":
-				if rv.currentView == viewKeys {
-					rv.showFlushDBConfirmation()
-					return nil
-				}
-			case "N":
-				if rv.currentView == viewKeys {
-					rv.showNewKeyForm()
-					return nil
-				}
-			case "S":
-				if rv.currentView == viewKeys {
-					rv.showDBSelector()
-					return nil
-				}
-			case "E":
-				if rv.currentView == viewKeys {
-					rv.showSelectedKeyContent()
-					return nil
-				}
-			case "Enter":
-				if rv.currentView == viewKeys {
-					rv.showSelectedKeyContent()
-					return nil
-				}
 			}
 		}
 	case "navigate_back":
 		if view, ok := payload["current_view"].(string); ok {
 			if view == viewRoot {
-				// Stay on keys when reaching root breadcrumb.
 				rv.switchView(viewKeys)
 				return nil
 			}

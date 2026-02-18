@@ -233,6 +233,116 @@ func (dv *DockerView) refresh() {
 	}
 }
 
+func (dv *DockerView) handleContainerKeys(key string) bool {
+	switch key {
+	case "S":
+		dv.startSelectedContainer()
+	case "X":
+		dv.stopSelectedContainer()
+	case "D":
+		dv.removeSelectedContainer()
+	case "L":
+		dv.viewSelectedContainerLogs()
+	case "E":
+		dv.execInSelectedContainer()
+	case "R":
+		dv.restartSelectedContainer()
+	case "P":
+		dv.pauseSelectedContainer()
+	case "U":
+		dv.unpauseSelectedContainer()
+	case "K":
+		dv.killSelectedContainer()
+	default:
+		return false
+	}
+	return true
+}
+
+func (dv *DockerView) handleImageKeys(key string) bool {
+	switch key {
+	case "D":
+		dv.removeSelectedImage()
+	case "P":
+		dv.pullImage()
+	case "H":
+		dv.showImageHistory()
+	default:
+		return false
+	}
+	return true
+}
+
+func (dv *DockerView) handleNetworkKeys(key string) bool {
+	switch key {
+	case "D":
+		dv.removeSelectedNetwork()
+	case "A":
+		dv.createNetwork()
+	default:
+		return false
+	}
+	return true
+}
+
+func (dv *DockerView) handleVolumeKeys(key string) bool {
+	switch key {
+	case "D":
+		dv.removeSelectedVolume()
+	case "A":
+		dv.createVolume()
+	case "P":
+		dv.pruneVolumes()
+	default:
+		return false
+	}
+	return true
+}
+
+func (dv *DockerView) handleComposeKeys(key string) bool {
+	switch key {
+	case "U":
+		dv.composeUp()
+	case "D":
+		dv.composeDown()
+	case "S":
+		dv.composeStop()
+	case "R":
+		dv.composeRestart()
+	case "L":
+		dv.composeLogs()
+	default:
+		return false
+	}
+	return true
+}
+
+func (dv *DockerView) handleNavKeys(key string) bool {
+	switch key {
+	case "C":
+		dv.showContainers()
+	case "I":
+		dv.showImages()
+	case "N":
+		dv.showNetworks()
+	case "V":
+		dv.showVolumes()
+	case "T":
+		dv.showStats()
+	case "O":
+		dv.showCompose()
+	case "Y":
+		dv.showSystem()
+	case "?":
+		dv.showHelp()
+	case "R":
+		dv.refresh()
+	default:
+		return false
+	}
+	return true
+}
+
 // handleAction handles actions triggered by the UI
 func (dv *DockerView) handleAction(action string, payload map[string]interface{}) error {
 	switch action {
@@ -241,132 +351,23 @@ func (dv *DockerView) handleAction(action string, payload map[string]interface{}
 		return nil
 	case "keypress":
 		if key, ok := payload["key"].(string); ok {
-			// View-specific actions first (before global keys)
-			
-			// Container actions (only in containers view)
-			if dv.currentViewName == viewContainers {
-				switch key {
-				case "S":
-					dv.startSelectedContainer()
-					return nil
-				case "X":
-					dv.stopSelectedContainer()
-					return nil
-				case "D":
-					dv.removeSelectedContainer()
-					return nil
-				case "L":
-					dv.viewSelectedContainerLogs()
-					return nil
-				case "E":
-					dv.execInSelectedContainer()
-					return nil
-				case "R":
-					dv.restartSelectedContainer()
-					return nil
-				case "P":
-					dv.pauseSelectedContainer()
-					return nil
-				case "U":
-					dv.unpauseSelectedContainer()
-					return nil
-				case "K":
-					dv.killSelectedContainer()
-					return nil
-				}
+			handled := false
+			switch dv.currentViewName {
+			case viewContainers:
+				handled = dv.handleContainerKeys(key)
+			case viewImages:
+				handled = dv.handleImageKeys(key)
+			case viewNetworks:
+				handled = dv.handleNetworkKeys(key)
+			case viewVolumes:
+				handled = dv.handleVolumeKeys(key)
+			case viewCompose:
+				handled = dv.handleComposeKeys(key)
 			}
-
-			// Image actions (only in images view)
-			if dv.currentViewName == viewImages {
-				switch key {
-				case "D":
-					dv.removeSelectedImage()
-					return nil
-				case "P":
-					dv.pullImage()
-					return nil
-				case "H":
-					dv.showImageHistory()
-					return nil
-				}
+			if !handled {
+				handled = dv.handleNavKeys(key)
 			}
-
-			// Network actions (only in networks view)
-			if dv.currentViewName == viewNetworks {
-				switch key {
-				case "D":
-					dv.removeSelectedNetwork()
-					return nil
-				case "A":
-					dv.createNetwork()
-					return nil
-				}
-			}
-
-			// Volume actions (only in volumes view)
-			if dv.currentViewName == viewVolumes {
-				switch key {
-				case "D":
-					dv.removeSelectedVolume()
-					return nil
-				case "A":
-					dv.createVolume()
-					return nil
-				case "P":
-					dv.pruneVolumes()
-					return nil
-				}
-			}
-
-			// Compose actions (only in compose view)
-			if dv.currentViewName == viewCompose {
-				switch key {
-				case "U":
-					dv.composeUp()
-					return nil
-				case "D":
-					dv.composeDown()
-					return nil
-				case "S":
-					dv.composeStop()
-					return nil
-				case "R":
-					dv.composeRestart()
-					return nil
-				case "L":
-					dv.composeLogs()
-					return nil
-				}
-			}
-
-			// Navigation keys (available in all views)
-			switch key {
-			case "C":
-				dv.showContainers()
-				return nil
-			case "I":
-				dv.showImages()
-				return nil
-			case "N":
-				dv.showNetworks()
-				return nil
-			case "V":
-				dv.showVolumes()
-				return nil
-			case "T":
-				dv.showStats()
-				return nil
-			case "O":
-				dv.showCompose()
-				return nil
-			case "Y":
-				dv.showSystem()
-				return nil
-			case "?":
-				dv.showHelp()
-				return nil
-			case "R":
-				dv.refresh()
+			if handled {
 				return nil
 			}
 		}

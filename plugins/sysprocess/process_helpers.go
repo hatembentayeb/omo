@@ -112,12 +112,31 @@ func getProcessAncestry(proc *process.Process) []AncestorProcess {
 	return chain
 }
 
+type sourceRule struct {
+	match    func(name string) bool
+	source   string
+	fallback bool
+}
+
+var sourceRules = []sourceRule{
+	{match: func(n string) bool { return strings.Contains(n, "docker") || strings.Contains(n, "containerd-shim") }, source: "docker"},
+	{match: func(n string) bool { return strings.Contains(n, "podman") }, source: "podman"},
+	{match: func(n string) bool { return strings.HasPrefix(n, "pm2") }, source: "pm2"},
+	{match: func(n string) bool { return n == "supervisord" || n == "supervisor" }, source: "supervisord"},
+	{match: func(n string) bool { return n == "crond" || n == "cron" || n == "anacron" || n == "atd" }, source: "cron"},
+	{match: func(n string) bool { return n == "sshd" }, source: "ssh"},
+	{match: func(n string) bool { return strings.HasPrefix(n, "tmux") }, source: "tmux"},
+	{match: func(n string) bool { return n == "screen" }, source: "screen"},
+	{match: func(n string) bool { return n == "code" || strings.Contains(n, "cursor") || strings.Contains(n, "electron") }, source: "IDE"},
+	{match: func(n string) bool { return n == "bash" || n == "zsh" || n == "fish" || n == "sh" || n == "dash" }, source: "shell", fallback: true},
+	{match: func(n string) bool { return n == "systemd" || n == "init" }, source: "systemd", fallback: true},
+}
+
 // detectSource determines the primary supervisor/source that started a process
 // by walking its ancestry chain. The target process (last element) is excluded.
 func detectSource(ancestry []AncestorProcess) string {
 	source := "unknown"
 
-	// Exclude the target process itself (last in chain)
 	limit := len(ancestry) - 1
 	if limit <= 0 {
 		return source
@@ -126,34 +145,20 @@ func detectSource(ancestry []AncestorProcess) string {
 	for i := 0; i < limit; i++ {
 		nameLower := strings.ToLower(ancestry[i].Name)
 
-		switch {
-		case strings.Contains(nameLower, "docker") || strings.Contains(nameLower, "containerd-shim"):
-			source = "docker"
-		case strings.Contains(nameLower, "podman"):
-			source = "podman"
-		case nameLower == "pm2" || strings.HasPrefix(nameLower, "pm2"):
-			source = "pm2"
-		case nameLower == "supervisord" || nameLower == "supervisor":
-			source = "supervisord"
-		case nameLower == "crond" || nameLower == "cron" || nameLower == "anacron" || nameLower == "atd":
-			source = "cron"
-		case nameLower == "sshd":
-			source = "ssh"
-		case strings.HasPrefix(nameLower, "tmux"):
-			source = "tmux"
-		case nameLower == "screen":
-			source = "screen"
-		case nameLower == "code" || strings.Contains(nameLower, "cursor") || strings.Contains(nameLower, "electron"):
-			source = "IDE"
-		case nameLower == "bash" || nameLower == "zsh" || nameLower == "fish" || nameLower == "sh" || nameLower == "dash":
-			// Shell is only the source if nothing more specific was found
-			if source == "unknown" || source == "systemd" {
-				source = "shell (" + ancestry[i].Name + ")"
+		for _, rule := range sourceRules {
+			if !rule.match(nameLower) {
+				continue
 			}
-		case nameLower == "systemd" || nameLower == "init":
-			if source == "unknown" {
-				source = "systemd"
+			if rule.fallback {
+				if rule.source == "shell" && (source == "unknown" || source == "systemd") {
+					source = "shell (" + ancestry[i].Name + ")"
+				} else if rule.source == "systemd" && source == "unknown" {
+					source = "systemd"
+				}
+			} else {
+				source = rule.source
 			}
+			break
 		}
 	}
 
