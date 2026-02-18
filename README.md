@@ -26,9 +26,9 @@
 ## Demo
 
 <p align="center">
-  <a href="https://youtu.be/uTpyVshDUEo">
-    <img src="https://img.youtube.com/vi/uTpyVshDUEo/maxresdefault.jpg" alt="omo demo" width="800">
-  </a>
+  <img src="assets/demo.gif" alt="omo demo" width="800">
+  <br>
+  <a href="https://youtu.be/uTpyVshDUEo">Watch full demo on YouTube</a>
 </p>
 
 ---
