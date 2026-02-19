@@ -1,0 +1,81 @@
+defaults:
+  author: ohmyops
+  license: MIT
+  url: https://github.com/hatembentayeb/omo
+  arch:
+    - amd64
+    - arm64
+
+plugins:
+  redis:
+    description: Manage Redis instances and monitor performance
+    tags:
+      - database
+      - cache
+      - monitoring
+  docker:
+    description: Manage Docker containers, images, networks, and volumes
+    tags:
+      - containers
+      - devops
+      - infrastructure
+  git:
+    description: Manage Git repositories, branches, and commits
+    tags:
+      - vcs
+      - developer-tools
+  argocd:
+    description: Manage ArgoCD applications, projects, and accounts
+    tags:
+      - gitops
+      - kubernetes
+      - cd
+  kafka:
+    description: Monitor Kafka brokers, topics, and consumer groups
+    tags:
+      - streaming
+      - messaging
+      - monitoring
+  s3:
+    description: Browse and manage AWS S3 buckets and objects
+    tags:
+      - aws
+      - storage
+      - cloud
+  k8suser:
+    description: Manage Kubernetes users with certificate-based authentication
+    tags:
+      - kubernetes
+      - security
+      - rbac
+  sysprocess:
+    description: Monitor and analyze system processes
+    tags:
+      - system
+      - monitoring
+      - processes
+  awsCosts:
+    description: Monitor AWS costs, forecasts, and budgets
+    tags:
+      - aws
+      - finops
+      - cloud
+  rabbitmq:
+    description: Manage RabbitMQ queues, exchanges, bindings, and connections
+    tags:
+      - messaging
+      - broker
+      - amqp
+  ssh:
+    description: Manage SSH connections, remote execution, and server monitoring
+    tags:
+      - ssh
+      - remote
+      - server
+      - devops
+  postgres:
+    description: Manage PostgreSQL databases, schemas, and queries
+    tags:
+      - database
+      - sql
+      - monitoring
