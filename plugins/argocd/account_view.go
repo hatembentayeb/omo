@@ -123,7 +123,7 @@ func (v *AccountView) showAccountDetailsModal() {
 		tokenList := []string{}
 		for _, token := range account.Tokens {
 			tokenInfo := fmt.Sprintf("- ID: %s\n  Issued: %s\n  Expires: %s",
-				token.ID, token.IssuedAt, token.ExpiresAt)
+				token.ID, token.FormatIssuedAt(), token.FormatExpiresAt())
 			tokenList = append(tokenList, tokenInfo)
 		}
 		tokensText = strings.Join(tokenList, "\n\n")
@@ -372,8 +372,8 @@ func (v *AccountView) showCreateTokenModal() {
 `,
 					accountName,
 					token.Token,
-					token.IssuedAt,
-					token.ExpiresAt,
+					token.FormatIssuedAt(),
+					token.FormatExpiresAt(),
 				)
 
 				ui.ShowInfoModal(

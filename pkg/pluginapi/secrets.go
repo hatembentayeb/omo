@@ -13,6 +13,7 @@ type SecretsProvider interface {
 	Put(path string, entry *SecretEntry) error
 	Delete(path string) error
 	List(prefix string) ([]string, error)
+	Reload() error
 	Close() error
 }
 

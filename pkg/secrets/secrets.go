@@ -57,6 +57,9 @@ type Provider interface {
 	// List returns all entry paths under a prefix (e.g. "redis" or "redis/production").
 	List(prefix string) ([]string, error)
 
+	// Reload re-reads the backing store from disk, picking up external changes.
+	Reload() error
+
 	// Close flushes any pending changes and releases resources.
 	Close() error
 }
@@ -249,6 +252,15 @@ func (kp *KeePassProvider) Close() error {
 		return kp.flush()
 	}
 	return nil
+}
+
+// Reload re-reads the .kdbx file from disk, picking up any external changes
+// (e.g. edits made in KeePassXC). Unsaved in-memory changes are discarded.
+func (kp *KeePassProvider) Reload() error {
+	kp.mu.Lock()
+	defer kp.mu.Unlock()
+
+	return kp.openDatabase()
 }
 
 // ──────────────────────────────────────────────────────────────────────

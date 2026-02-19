@@ -40,14 +40,16 @@ func NewRabbitMQView(app *tview.Application, pages *tview.Pages) *RabbitMQView {
 
 	rv.rmqClient = NewRabbitMQClient()
 
-	// Load config
-	config, err := LoadRabbitMQConfig("")
+	// Load UI config
+	uiConfig, err := GetRabbitMQUIConfig()
 	if err == nil {
-		rv.instances = config.Instances
-		if config.UI.RefreshInterval > 0 {
-			rv.refreshInterval = time.Duration(config.UI.RefreshInterval) * time.Second
+		if uiConfig.RefreshInterval > 0 {
+			rv.refreshInterval = time.Duration(uiConfig.RefreshInterval) * time.Second
 		}
 	}
+
+	// Discover instances from KeePass
+	rv.instances, _ = DiscoverInstances()
 
 	// Create all sub-views
 	rv.overviewView = rv.newOverviewView()
@@ -152,22 +154,24 @@ func (rv *RabbitMQView) refresh() {
 func (rv *RabbitMQView) ShowInstanceSelector() {
 	rv.cores.Log("[blue]Opening instance selector...")
 
-	instances, err := GetAvailableRabbitMQInstances()
+	instances, err := DiscoverInstances()
 	if err != nil {
-		rv.cores.Log(fmt.Sprintf("[red]Failed to load RabbitMQ instances: %v", err))
+		rv.cores.Log(fmt.Sprintf("[red]Failed to discover RabbitMQ instances: %v", err))
 		return
 	}
 
 	if len(instances) == 0 {
-		rv.cores.Log("[yellow]No RabbitMQ instances configured in ~/.omo/configs/rabbitmq/rabbitmq.yaml")
+		rv.cores.Log("[yellow]No RabbitMQ entries in KeePass (create under rabbitmq/<env>/<name>)")
 		return
 	}
+
+	rv.instances = instances
 
 	items := make([][]string, len(instances))
 	for i, inst := range instances {
 		items[i] = []string{
 			inst.Name,
-			fmt.Sprintf("%s:%d - %s", inst.Host, inst.AMQPPort, inst.Description),
+			fmt.Sprintf("%s:%d [%s] %s", inst.Host, inst.MgmtPort, inst.Environment, inst.Description),
 		}
 	}
 
@@ -189,7 +193,7 @@ func (rv *RabbitMQView) ShowInstanceSelector() {
 
 // connectToInstance connects to a RabbitMQ instance
 func (rv *RabbitMQView) connectToInstance(instance RabbitMQInstance) {
-	rv.cores.Log(fmt.Sprintf("[blue]Connecting to RabbitMQ: %s (%s:%d)...", instance.Name, instance.Host, instance.AMQPPort))
+	rv.cores.Log(fmt.Sprintf("[blue]Connecting to RabbitMQ: %s (%s:%d)...", instance.Name, instance.Host, instance.MgmtPort))
 
 	err := rv.rmqClient.Connect(instance)
 	if err != nil {

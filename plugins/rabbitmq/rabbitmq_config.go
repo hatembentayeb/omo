@@ -4,48 +4,55 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
 
 	"omo/pkg/pluginapi"
 
 	"gopkg.in/yaml.v3"
 )
 
-// rabbitmqConfigHeader is prepended to the auto-generated config YAML.
 const rabbitmqConfigHeader = `# RabbitMQ Plugin Configuration
 # Path: ~/.omo/configs/rabbitmq/rabbitmq.yaml
 #
-# KeePass Secret Schema (secret path: rabbitmq/<environment>/<name>):
-#   Title    → instance name
-#   URL      → host (e.g. "localhost")
+# All connection details are stored in KeePass under rabbitmq/<environment>/<name>.
+# This file only controls which environments are enabled and UI settings.
+#
+# KeePass Entry Schema (unified attribute names):
+#   Title    → instance display name
+#   URL      → hostname or IP address
 #   UserName → RabbitMQ username
 #   Password → RabbitMQ password
-#   Custom Attributes:
-#     vhost       → virtual host (default "/")
-#     amqp_port   → AMQP port (default "5672")
-#     mgmt_port   → Management API port (default "15672")
+#   Notes    → description / notes
 #
-# When "secret" is set, connection fields are resolved from KeePass.
-# YAML values take precedence over KeePass values (override only blanks).
+#   Custom Attributes (set in KeePass "Advanced" tab):
+#     amqp_port   → AMQP port (default: 5672)
+#     mgmt_port   → Management API port (default: 15672)
+#     vhost       → virtual host (default: "/")
+#     use_tls     → "true" or "false" (default: false)
+#     tags        → comma-separated tags (e.g. "prod,cluster-a")
+#
+# Example KeePass structure:
+#   rabbitmq/
+#     development/
+#       local-rabbit   (Title=local-rabbit, URL=localhost, UserName=guest ...)
+#     production/
+#       rabbit-cluster (Title=rabbit-cluster, URL=10.0.1.50, UserName=admin ...)
+#     staging/
+#       staging-rabbit (...)
 `
 
-// RabbitMQConfig represents the configuration for the RabbitMQ plugin
+// RabbitMQConfig is the YAML config. It only controls enable/disable and UI.
 type RabbitMQConfig struct {
-	Instances []RabbitMQInstance `yaml:"instances"`
-	UI        RabbitMQUIConfig   `yaml:"ui"`
+	Environments []RabbitMQEnvToggle `yaml:"environments"`
+	UI           RabbitMQUIConfig    `yaml:"ui"`
 }
 
-// RabbitMQInstance represents a configured RabbitMQ server.
-type RabbitMQInstance struct {
-	Name        string `yaml:"name"`
-	Description string `yaml:"description"`
-	Secret      string `yaml:"secret,omitempty"`
-	Host        string `yaml:"host"`
-	AMQPPort    int    `yaml:"amqp_port"`
-	MgmtPort    int    `yaml:"mgmt_port"`
-	Username    string `yaml:"username"`
-	Password    string `yaml:"password"`
-	VHost       string `yaml:"vhost"`
-	UseTLS      bool   `yaml:"use_tls"`
+// RabbitMQEnvToggle enables or disables a KeePass environment group.
+type RabbitMQEnvToggle struct {
+	Name    string `yaml:"name"`
+	Enabled bool   `yaml:"enabled"`
 }
 
 // RabbitMQUIConfig represents UI configuration options
@@ -57,10 +64,29 @@ type RabbitMQUIConfig struct {
 	DefaultView       string `yaml:"default_view"`
 }
 
-// DefaultRabbitMQConfig returns the default configuration
+// RabbitMQInstance is built entirely from a KeePass entry at runtime.
+type RabbitMQInstance struct {
+	Name        string
+	Description string
+	Environment string
+	Host        string
+	AMQPPort    int
+	MgmtPort    int
+	Username    string
+	Password    string
+	VHost       string
+	UseTLS      bool
+	Tags        []string
+}
+
 func DefaultRabbitMQConfig() *RabbitMQConfig {
 	return &RabbitMQConfig{
-		Instances: []RabbitMQInstance{},
+		Environments: []RabbitMQEnvToggle{
+			{Name: "development", Enabled: true},
+			{Name: "production", Enabled: true},
+			{Name: "staging", Enabled: true},
+			{Name: "sandbox", Enabled: true},
+		},
 		UI: RabbitMQUIConfig{
 			RefreshInterval:   10,
 			MaxQueuesDisplay:  200,
@@ -71,14 +97,23 @@ func DefaultRabbitMQConfig() *RabbitMQConfig {
 	}
 }
 
-// LoadRabbitMQConfig loads the RabbitMQ configuration from the specified file.
 func LoadRabbitMQConfig(configPath string) (*RabbitMQConfig, error) {
 	if configPath == "" {
 		configPath = pluginapi.PluginConfigPath("rabbitmq")
 	}
 
-	// Auto-create default config if missing
+	needsWrite := false
+
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		needsWrite = true
+	} else {
+		data, err := os.ReadFile(configPath)
+		if err == nil && isOldRabbitMQConfig(data) {
+			needsWrite = true
+		}
+	}
+
+	if needsWrite {
 		_ = writeDefaultRabbitMQConfig(configPath, rabbitmqConfigHeader, DefaultRabbitMQConfig())
 	}
 
@@ -88,89 +123,180 @@ func LoadRabbitMQConfig(configPath string) (*RabbitMQConfig, error) {
 	}
 
 	config := DefaultRabbitMQConfig()
-	err = yaml.Unmarshal(data, config)
-	if err != nil {
+	if err := yaml.Unmarshal(data, config); err != nil {
 		return nil, fmt.Errorf("error parsing config file: %v", err)
-	}
-
-	initRabbitMQKeePass()
-
-	if err := resolveRabbitMQSecrets(config); err != nil {
-		return nil, fmt.Errorf("error resolving secrets: %v", err)
 	}
 
 	return config, nil
 }
 
-// initRabbitMQKeePass seeds placeholder KeePass entries if none exist.
-func initRabbitMQKeePass() {
-	if !pluginapi.HasSecrets() {
-		return
+// isOldRabbitMQConfig detects the legacy format that had instances defined in YAML.
+func isOldRabbitMQConfig(data []byte) bool {
+	var probe struct {
+		Instances    interface{} `yaml:"instances"`
+		Environments interface{} `yaml:"environments"`
 	}
-	entries, err := pluginapi.Secrets().List("rabbitmq")
-	if err != nil || len(entries) > 0 {
-		return
+	if err := yaml.Unmarshal(data, &probe); err != nil {
+		return false
 	}
-	_ = pluginapi.Secrets().Put("rabbitmq/default/example", &pluginapi.SecretEntry{
-		Title:    "example",
-		UserName: "guest",
-		Password: "guest",
-		URL:      "localhost",
-		Notes:    "RabbitMQ placeholder. Set URL (host), UserName, Password.",
-		CustomAttributes: map[string]string{
-			"vhost":     "/",
-			"amqp_port": "5672",
-			"mgmt_port": "15672",
-		},
-	})
+	return probe.Instances != nil && probe.Environments == nil
 }
 
-// resolveRabbitMQSecrets iterates over instances and populates connection
-// fields from the secrets provider when a secret path is defined.
-func resolveRabbitMQSecrets(config *RabbitMQConfig) error {
+// DiscoverInstances reads KeePass groups under "rabbitmq/" and builds
+// RabbitMQInstance objects from the entries. Only enabled environments
+// from the YAML config are included.
+func DiscoverInstances() ([]RabbitMQInstance, error) {
 	if !pluginapi.HasSecrets() {
-		return nil
+		return nil, fmt.Errorf("secrets provider not available")
 	}
 
-	for i := range config.Instances {
-		inst := &config.Instances[i]
-		if inst.Secret == "" {
-			continue
-		}
-
-		entry, err := pluginapi.ResolveSecret(inst.Secret)
-		if err != nil {
-			return fmt.Errorf("instance %q: %w", inst.Name, err)
-		}
-
-		if inst.Host == "" && entry.URL != "" {
-			inst.Host = entry.URL
-		}
-		if inst.Username == "" && entry.UserName != "" {
-			inst.Username = entry.UserName
-		}
-		if inst.Password == "" && entry.Password != "" {
-			inst.Password = entry.Password
-		}
-		if inst.Name == "" && entry.Title != "" {
-			inst.Name = entry.Title
-		}
-		if inst.VHost == "" {
-			if v, ok := entry.CustomAttributes["vhost"]; ok && v != "" {
-				inst.VHost = v
-			}
-		}
+	if err := pluginapi.Secrets().Reload(); err != nil {
+		return nil, fmt.Errorf("reload secrets: %w", err)
 	}
-	return nil
-}
 
-// GetAvailableRabbitMQInstances returns the list of configured instances
-func GetAvailableRabbitMQInstances() ([]RabbitMQInstance, error) {
 	config, err := LoadRabbitMQConfig("")
 	if err != nil {
 		return nil, err
 	}
-	return config.Instances, nil
+
+	enabled := buildRabbitMQEnabledSet(config)
+
+	ensureRabbitMQKeePassGroups(config)
+
+	paths, err := pluginapi.Secrets().List("rabbitmq")
+	if err != nil {
+		return nil, fmt.Errorf("list rabbitmq secrets: %w", err)
+	}
+
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("no RabbitMQ entries in KeePass (create entries under rabbitmq/<environment>/<name>)")
+	}
+
+	var instances []RabbitMQInstance
+	for _, path := range paths {
+		env := extractRabbitMQEnvironment(path)
+		if env == "" {
+			continue
+		}
+		if _, ok := enabled[env]; !ok {
+			continue
+		}
+
+		entry, err := pluginapi.Secrets().Get(path)
+		if err != nil {
+			continue
+		}
+
+		inst := entryToRabbitMQInstance(entry, env)
+		instances = append(instances, inst)
+	}
+
+	sort.Slice(instances, func(i, j int) bool {
+		if instances[i].Environment != instances[j].Environment {
+			return instances[i].Environment < instances[j].Environment
+		}
+		return instances[i].Name < instances[j].Name
+	})
+
+	return instances, nil
+}
+
+func buildRabbitMQEnabledSet(config *RabbitMQConfig) map[string]struct{} {
+	m := make(map[string]struct{})
+	for _, e := range config.Environments {
+		if e.Enabled {
+			m[e.Name] = struct{}{}
+		}
+	}
+	return m
+}
+
+func extractRabbitMQEnvironment(path string) string {
+	parts := strings.SplitN(path, "/", 3)
+	if len(parts) < 3 {
+		return ""
+	}
+	return parts[1]
+}
+
+func entryToRabbitMQInstance(entry *pluginapi.SecretEntry, env string) RabbitMQInstance {
+	inst := RabbitMQInstance{
+		Name:        entry.Title,
+		Description: entry.Notes,
+		Environment: env,
+		Host:        entry.URL,
+		Username:    entry.UserName,
+		Password:    entry.Password,
+		AMQPPort:    5672,
+		MgmtPort:    15672,
+		VHost:       "/",
+	}
+
+	if entry.CustomAttributes == nil {
+		return inst
+	}
+
+	ca := entry.CustomAttributes
+
+	if v, ok := ca["amqp_port"]; ok {
+		if p, err := strconv.Atoi(v); err == nil {
+			inst.AMQPPort = p
+		}
+	}
+	if v, ok := ca["mgmt_port"]; ok {
+		if p, err := strconv.Atoi(v); err == nil {
+			inst.MgmtPort = p
+		}
+	}
+	if v, ok := ca["vhost"]; ok && v != "" {
+		inst.VHost = v
+	}
+	if v, ok := ca["use_tls"]; ok {
+		inst.UseTLS = v == "true" || v == "1" || v == "yes"
+	}
+	if v, ok := ca["tags"]; ok {
+		for _, t := range strings.Split(v, ",") {
+			t = strings.TrimSpace(t)
+			if t != "" {
+				inst.Tags = append(inst.Tags, t)
+			}
+		}
+	}
+
+	return inst
+}
+
+// ensureRabbitMQKeePassGroups creates environment groups in KeePass
+// for each enabled environment. It puts a placeholder entry in each
+// group that doesn't already have any entries, so the folder structure
+// is visible in KeePassXC.
+func ensureRabbitMQKeePassGroups(config *RabbitMQConfig) {
+	if !pluginapi.HasSecrets() {
+		return
+	}
+	for _, env := range config.Environments {
+		if !env.Enabled {
+			continue
+		}
+		prefix := fmt.Sprintf("rabbitmq/%s", env.Name)
+		existing, err := pluginapi.Secrets().List(prefix)
+		if err == nil && len(existing) > 0 {
+			continue
+		}
+		path := fmt.Sprintf("rabbitmq/%s/example", env.Name)
+		_ = pluginapi.Secrets().Put(path, &pluginapi.SecretEntry{
+			Title:    "example",
+			UserName: "guest",
+			Password: "guest",
+			URL:      "localhost",
+			Notes:    fmt.Sprintf("Placeholder for %s. Replace with real RabbitMQ details.", env.Name),
+			CustomAttributes: map[string]string{
+				"vhost":     "/",
+				"amqp_port": "5672",
+				"mgmt_port": "15672",
+			},
+		})
+	}
 }
 
 // GetRabbitMQUIConfig returns the UI configuration

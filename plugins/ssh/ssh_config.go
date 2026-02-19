@@ -140,6 +140,10 @@ func DiscoverServers() ([]SSHServer, error) {
 		return nil, fmt.Errorf("secrets provider not available")
 	}
 
+	if err := pluginapi.Secrets().Reload(); err != nil {
+		return nil, fmt.Errorf("reload secrets: %w", err)
+	}
+
 	config, err := LoadSSHConfig("")
 	if err != nil {
 		return nil, err
@@ -147,23 +151,21 @@ func DiscoverServers() ([]SSHServer, error) {
 
 	enabled := buildEnabledSet(config)
 
+	ensureSSHKeePassGroups(config)
+
 	paths, err := pluginapi.Secrets().List("ssh")
 	if err != nil {
 		return nil, fmt.Errorf("list ssh secrets: %w", err)
 	}
 
 	if len(paths) == 0 {
-		initSSHKeePassPlaceholders()
-		paths, err = pluginapi.Secrets().List("ssh")
-		if err != nil || len(paths) == 0 {
-			return nil, fmt.Errorf("no SSH entries in KeePass (create entries under ssh/<environment>/<name>)")
-		}
+		return nil, fmt.Errorf("no SSH entries in KeePass (create entries under ssh/<environment>/<name>)")
 	}
 
 	var servers []SSHServer
 	for _, path := range paths {
 		env := extractEnvironment(path)
-		if env == "" || env == "default" {
+		if env == "" {
 			continue
 		}
 		if _, ok := enabled[env]; !ok {
@@ -288,22 +290,37 @@ func entryToServer(entry *pluginapi.SecretEntry, env string) SSHServer {
 	return srv
 }
 
-func initSSHKeePassPlaceholders() {
+// ensureSSHKeePassGroups creates environment groups in KeePass
+// for each enabled environment. It puts a placeholder entry in each
+// group that doesn't already have any entries, so the folder structure
+// is visible in KeePassXC.
+func ensureSSHKeePassGroups(config *SSHConfig) {
 	if !pluginapi.HasSecrets() {
 		return
 	}
-	_ = pluginapi.Secrets().Put("ssh/default/example", &pluginapi.SecretEntry{
-		Title:    "example-server",
-		UserName: "root",
-		Password: "",
-		URL:      "192.168.1.100",
-		Notes:    "Placeholder. Create real entries under ssh/<environment>/<name>.",
-		CustomAttributes: map[string]string{
-			"port":        "22",
-			"auth_method": "auto",
-			"tags":        "example",
-		},
-	})
+	for _, env := range config.Environments {
+		if !env.Enabled {
+			continue
+		}
+		prefix := fmt.Sprintf("ssh/%s", env.Name)
+		existing, err := pluginapi.Secrets().List(prefix)
+		if err == nil && len(existing) > 0 {
+			continue
+		}
+		path := fmt.Sprintf("ssh/%s/example-server", env.Name)
+		_ = pluginapi.Secrets().Put(path, &pluginapi.SecretEntry{
+			Title:    "example-server",
+			UserName: "root",
+			Password: "",
+			URL:      "192.168.1.100",
+			Notes:    fmt.Sprintf("Placeholder for %s. Replace with real server details.", env.Name),
+			CustomAttributes: map[string]string{
+				"port":        "22",
+				"auth_method": "auto",
+				"tags":        env.Name,
+			},
+		})
+	}
 }
 
 func writeSSHDefaultConfig(configPath, header string, cfg interface{}) error {

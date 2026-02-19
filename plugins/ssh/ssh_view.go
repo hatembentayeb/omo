@@ -95,6 +95,13 @@ func (sv *SSHView) createServersView() *ui.CoreView {
 	core.AddKeyBinding("S", "Quick SSH (shell)", nil)
 	core.AddKeyBinding("C", "Connect (background)", nil)
 	core.AddKeyBinding("I", "Server Info", nil)
+	core.AddKeyBinding("O", "Overview", nil)
+	core.AddKeyBinding("P", "Processes", nil)
+	core.AddKeyBinding("D", "Disk", nil)
+	core.AddKeyBinding("N", "Network", nil)
+	core.AddKeyBinding("K", "Docker", nil)
+	core.AddKeyBinding("V", "Services", nil)
+	core.AddKeyBinding("E", "Execute", nil)
 	core.AddKeyBinding("R", "Refresh", nil)
 	core.AddKeyBinding("?", "Help", nil)
 
@@ -415,6 +422,11 @@ func (sv *SSHView) handleAction(action string, payload map[string]interface{}) e
 				return nil
 			}
 		}
+	case "rowSelected":
+		if sv.currentView == viewServers {
+			sv.openInteractiveSSHForSelected()
+			return nil
+		}
 	case "navigate_back":
 		if sv.currentView != viewServers {
 			sv.showServers()
@@ -442,10 +454,8 @@ func (sv *SSHView) handleGlobalKeys(key string) bool {
 func (sv *SSHView) handleNavKeys(key string) bool {
 	switch key {
 	case "O":
-		if sv.currentView != viewServers {
-			sv.showOverview()
-			return true
-		}
+		sv.showOverview()
+		return true
 	case "P":
 		sv.showProcesses()
 		return true
@@ -525,6 +535,8 @@ func (sv *SSHView) openInteractiveSSH() {
 }
 
 // launchSSHSession suspends the TUI and runs a real ssh command.
+// When the server has a password (and no key auth), it uses SSH_ASKPASS
+// to feed the password automatically so the user isn't prompted.
 func (sv *SSHView) launchSSHSession(srv SSHServer) {
 	args := buildSSHArgs(srv)
 	current := sv.currentCores()
@@ -546,6 +558,20 @@ func (sv *SSHView) launchSSHSession(srv SSHServer) {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 
+		if srv.Password != "" && srv.PrivateKey == "" && srv.KeyPath == "" {
+			askpassScript, cleanup := writeAskpassHelper(srv.Password)
+			if cleanup != nil {
+				defer cleanup()
+			}
+			if askpassScript != "" {
+				cmd.Env = append(os.Environ(),
+					"SSH_ASKPASS="+askpassScript,
+					"SSH_ASKPASS_REQUIRE=force",
+					"DISPLAY=:0",
+				)
+			}
+		}
+
 		if err := cmd.Run(); err != nil {
 			fmt.Printf("\nSSH exited: %v\n", err)
 			fmt.Println("Press Enter to return to omo...")
@@ -557,6 +583,29 @@ func (sv *SSHView) launchSSHSession(srv SSHServer) {
 		sv.app.SetFocus(current.GetTable())
 	}
 	sv.serversView.RefreshData()
+}
+
+// writeAskpassHelper creates a temporary script that echoes the password.
+// Returns the script path and a cleanup function. The script is chmod 0700
+// and deleted on cleanup.
+func writeAskpassHelper(password string) (string, func()) {
+	f, err := os.CreateTemp("", "omo-askpass-*.sh")
+	if err != nil {
+		return "", nil
+	}
+	escaped := strings.ReplaceAll(password, "'", "'\\''")
+	script := fmt.Sprintf("#!/bin/sh\necho '%s'\n", escaped)
+	if _, err := f.WriteString(script); err != nil {
+		f.Close()
+		os.Remove(f.Name())
+		return "", nil
+	}
+	f.Close()
+	if err := os.Chmod(f.Name(), 0700); err != nil {
+		os.Remove(f.Name())
+		return "", nil
+	}
+	return f.Name(), func() { os.Remove(f.Name()) }
 }
 
 // buildSSHArgs constructs the ssh command arguments from server config.
