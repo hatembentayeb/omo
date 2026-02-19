@@ -3,116 +3,124 @@
 # The omo package manager fetches this index to discover available plugins.
 #
 # To add a new plugin:
-#   1. Create a new repo under github.com/ohmyops/
-#   2. Build the .so for each supported platform
-#   3. Create a GitHub release with the .so as an asset
-#   4. Add an entry below
+#   1. Build the .so for each supported platform
+#   2. Create a GitHub release with the .so.tar.gz as assets
+#   3. Add or update the entry below
 
 api_version: v1
 
 # URL template for downloading plugin binaries.
 # {{name}}    → plugin name (e.g. "redis")
-# {{version}} → semver (e.g. "0.1.0")
+# {{version}} → release tag without 'v' prefix (e.g. "2026.02.18-c2617ee")
 # {{os}}      → runtime.GOOS (e.g. "linux")
 # {{arch}}    → runtime.GOARCH (e.g. "amd64")
-download_url_template: "https://github.com/ohmyops/omo-{{name}}/releases/download/v{{version}}/{{name}}-{{os}}-{{arch}}.so"
+download_url_template: "https://github.com/hatembentayeb/omo/releases/download/v{{version}}/{{name}}-v{{version}}-{{os}}-{{arch}}.so.tar.gz"
 
 plugins:
   - name: redis
-    version: "0.1.0"
+    version: "2026.02.18-c2617ee"
     description: "Manage Redis instances and monitor performance"
     author: "ohmyops"
     license: "MIT"
-    url: "https://github.com/ohmyops/omo-redis"
+    url: "https://github.com/hatembentayeb/omo"
     tags: ["database", "cache", "monitoring"]
     arch: ["amd64", "arm64"]
 
   - name: docker
-    version: "0.1.0"
+    version: "2026.02.18-c2617ee"
     description: "Manage Docker containers, images, networks, and volumes"
     author: "ohmyops"
     license: "MIT"
-    url: "https://github.com/ohmyops/omo-docker"
+    url: "https://github.com/hatembentayeb/omo"
     tags: ["containers", "devops", "infrastructure"]
     arch: ["amd64", "arm64"]
 
   - name: git
-    version: "0.1.0"
+    version: "2026.02.18-c2617ee"
     description: "Manage Git repositories, branches, and commits"
     author: "ohmyops"
     license: "MIT"
-    url: "https://github.com/ohmyops/omo-git"
+    url: "https://github.com/hatembentayeb/omo"
     tags: ["vcs", "developer-tools"]
     arch: ["amd64", "arm64"]
 
   - name: argocd
-    version: "0.1.0"
+    version: "2026.02.18-c2617ee"
     description: "Manage ArgoCD applications, projects, and accounts"
     author: "ohmyops"
     license: "MIT"
-    url: "https://github.com/ohmyops/omo-argocd"
+    url: "https://github.com/hatembentayeb/omo"
     tags: ["gitops", "kubernetes", "cd"]
     arch: ["amd64", "arm64"]
 
   - name: kafka
-    version: "0.1.0"
+    version: "2026.02.18-c2617ee"
     description: "Monitor Kafka brokers, topics, and consumer groups"
     author: "ohmyops"
     license: "MIT"
-    url: "https://github.com/ohmyops/omo-kafka"
+    url: "https://github.com/hatembentayeb/omo"
     tags: ["streaming", "messaging", "monitoring"]
     arch: ["amd64", "arm64"]
 
   - name: s3
-    version: "0.1.0"
+    version: "2026.02.18-c2617ee"
     description: "Browse and manage AWS S3 buckets and objects"
     author: "ohmyops"
     license: "MIT"
-    url: "https://github.com/ohmyops/omo-s3"
+    url: "https://github.com/hatembentayeb/omo"
     tags: ["aws", "storage", "cloud"]
     arch: ["amd64", "arm64"]
 
   - name: k8suser
-    version: "0.1.0"
+    version: "2026.02.18-c2617ee"
     description: "Manage Kubernetes users with certificate-based authentication"
     author: "ohmyops"
     license: "MIT"
-    url: "https://github.com/ohmyops/omo-k8suser"
+    url: "https://github.com/hatembentayeb/omo"
     tags: ["kubernetes", "security", "rbac"]
     arch: ["amd64", "arm64"]
 
   - name: sysprocess
-    version: "0.1.0"
+    version: "2026.02.18-c2617ee"
     description: "Monitor and analyze system processes"
     author: "ohmyops"
     license: "MIT"
-    url: "https://github.com/ohmyops/omo-sysprocess"
+    url: "https://github.com/hatembentayeb/omo"
     tags: ["system", "monitoring", "processes"]
     arch: ["amd64", "arm64"]
 
   - name: awsCosts
-    version: "0.1.0"
+    version: "2026.02.18-c2617ee"
     description: "Monitor AWS costs, forecasts, and budgets"
     author: "ohmyops"
     license: "MIT"
-    url: "https://github.com/ohmyops/omo-awscosts"
+    url: "https://github.com/hatembentayeb/omo"
     tags: ["aws", "finops", "cloud"]
     arch: ["amd64", "arm64"]
 
   - name: rabbitmq
-    version: "1.0.0"
+    version: "2026.02.18-c2617ee"
     description: "Manage RabbitMQ queues, exchanges, bindings, and connections"
     author: "ohmyops"
     license: "MIT"
-    url: "https://github.com/ohmyops/omo-rabbitmq"
+    url: "https://github.com/hatembentayeb/omo"
     tags: ["messaging", "broker", "amqp"]
     arch: ["amd64", "arm64"]
 
   - name: ssh
-    version: "1.0.0"
+    version: "2026.02.18-c2617ee"
     description: "Manage SSH connections, remote execution, and server monitoring"
     author: "ohmyops"
     license: "MIT"
-    url: "https://github.com/ohmyops/omo-ssh"
+    url: "https://github.com/hatembentayeb/omo"
     tags: ["ssh", "remote", "server", "devops"]
+    arch: ["amd64", "arm64"]
+
+  - name: postgres
+    version: "2026.02.18-c2617ee"
+    description: "Manage PostgreSQL databases, schemas, and queries"
+    author: "ohmyops"
+    license: "MIT"
+    url: "https://github.com/hatembentayeb/omo"
+    tags: ["database", "sql", "monitoring"]
     arch: ["amd64", "arm64"]
