@@ -14,18 +14,25 @@ import (
 )
 
 // DefaultIndexURL is the URL to the official OhMyOps plugin index.
-const DefaultIndexURL = "https://raw.githubusercontent.com/ohmyops/omo/main/index.yaml"
+const DefaultIndexURL = "https://raw.githubusercontent.com/hatembentayeb/omo/main/index.yaml"
 
 // IndexEntry represents a single plugin in the index.
 type IndexEntry struct {
-	Name        string   `yaml:"name"`
-	Version     string   `yaml:"version"`
-	Description string   `yaml:"description"`
-	Author      string   `yaml:"author"`
-	License     string   `yaml:"license"`
-	URL         string   `yaml:"url"`
-	Tags        []string `yaml:"tags"`
-	Arch        []string `yaml:"arch"`
+	Name        string            `yaml:"name"`
+	Version     string            `yaml:"version"`
+	Description string            `yaml:"description"`
+	Author      string            `yaml:"author"`
+	License     string            `yaml:"license"`
+	URL         string            `yaml:"url"`
+	Tags        []string          `yaml:"tags"`
+	Arch        []string          `yaml:"arch"`
+	Checksums   map[string]string `yaml:"checksums,omitempty"`
+}
+
+// Checksum returns the expected SHA256 for the current OS/arch, or empty string if absent.
+func (e *IndexEntry) Checksum() string {
+	key := runtime.GOOS + "-" + runtime.GOARCH
+	return e.Checksums[key]
 }
 
 // PluginIndex represents the full index file.
