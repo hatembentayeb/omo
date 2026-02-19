@@ -36,6 +36,10 @@ func (a *Adapter) List(prefix string) ([]string, error) {
 	return a.inner.List(prefix)
 }
 
+func (a *Adapter) Reload() error {
+	return a.inner.Reload()
+}
+
 func (a *Adapter) Close() error {
 	return a.inner.Close()
 }

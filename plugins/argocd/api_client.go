@@ -36,15 +36,47 @@ type Account struct {
 // Token represents an ArgoCD auth token
 type Token struct {
 	ID        string `json:"id"`
-	IssuedAt  string `json:"issuedAt"`
-	ExpiresAt string `json:"expiresAt"`
+	IssuedAt  int64  `json:"issuedAt"`
+	ExpiresAt int64  `json:"expiresAt"`
+}
+
+// FormatIssuedAt returns a human-readable issued time.
+func (t Token) FormatIssuedAt() string {
+	if t.IssuedAt == 0 {
+		return "N/A"
+	}
+	return time.Unix(t.IssuedAt, 0).Format("2006-01-02 15:04:05")
+}
+
+// FormatExpiresAt returns a human-readable expiry time.
+func (t Token) FormatExpiresAt() string {
+	if t.ExpiresAt == 0 {
+		return "Never"
+	}
+	return time.Unix(t.ExpiresAt, 0).Format("2006-01-02 15:04:05")
 }
 
 // CreateTokenResponse is the response from creating a token
 type CreateTokenResponse struct {
 	Token     string `json:"token"`
-	ExpiresAt string `json:"expiresAt"`
-	IssuedAt  string `json:"issuedAt"`
+	ExpiresAt int64  `json:"expiresAt"`
+	IssuedAt  int64  `json:"issuedAt"`
+}
+
+// FormatIssuedAt returns a human-readable issued time.
+func (r CreateTokenResponse) FormatIssuedAt() string {
+	if r.IssuedAt == 0 {
+		return "N/A"
+	}
+	return time.Unix(r.IssuedAt, 0).Format("2006-01-02 15:04:05")
+}
+
+// FormatExpiresAt returns a human-readable expiry time.
+func (r CreateTokenResponse) FormatExpiresAt() string {
+	if r.ExpiresAt == 0 {
+		return "Never"
+	}
+	return time.Unix(r.ExpiresAt, 0).Format("2006-01-02 15:04:05")
 }
 
 // Project represents an ArgoCD project
@@ -955,6 +987,32 @@ func (c *ArgoAPIClient) DeleteAccount(name string) error {
 		return fmt.Errorf("failed to delete account with status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
+	return nil
+}
+
+// UpdatePassword sets a new password for an account.
+// The admin authenticates with their own current password.
+func (c *ArgoAPIClient) UpdatePassword(accountName, newPassword, currentAdminPassword string) error {
+	payload := map[string]string{
+		"name":            accountName,
+		"currentPassword": currentAdminPassword,
+		"newPassword":     newPassword,
+	}
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	resp, err := c.makeRequest("PUT", "api/v1/account/password", strings.NewReader(string(payloadBytes)))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to set password with status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
 	return nil
 }
 

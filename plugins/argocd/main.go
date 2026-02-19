@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
@@ -24,10 +25,14 @@ type ArgocdPlugin struct {
 	accountView     *AccountView
 	projectView     *ProjectView
 	applicationView *ApplicationView
+	rbacView        *RBACView
 	apiClient       *ArgoAPIClient
+	k8sClient       *K8sClient
 	serverURL       string
 	credentials     CredentialInfo
 	config          *ArgocdConfig
+	instances       []ArgocdInstance
+	connectedInst   *ArgocdInstance
 }
 
 // CredentialInfo holds connection credentials
@@ -55,13 +60,16 @@ func (p *ArgocdPlugin) Start(app *tview.Application) tview.Primitive {
 	// Load ArgoCD config
 	config, err := LoadArgocdConfig()
 	if err != nil {
-		// If no config found, we'll create it on first connection
 		p.config = nil
 		Debug("No ArgoCD config found: %v", err)
 	} else {
 		p.config = config
-		Debug("Loaded ArgoCD config with %d instances", len(config.Instances))
+		Debug("Loaded ArgoCD config")
 	}
+
+	// Discover instances from KeePass
+	p.instances, _ = DiscoverArgoInstances()
+	Debug("Discovered %d ArgoCD instances from KeePass", len(p.instances))
 
 	// Initialize API client with config
 	p.apiClient = NewArgoAPIClient(p.config)
@@ -105,74 +113,18 @@ func (p *ArgocdPlugin) Start(app *tview.Application) tview.Primitive {
 	// Show connection message
 	p.cores.Log("[blue]Please select an ArgoCD instance to connect to...")
 
-	// Use a single post-initialization task
+	// Auto-connect or show selector after UI init
 	safeGo(func() {
-		// Wait for UI to initialize
 		time.Sleep(300 * time.Millisecond)
 
-		// Show the instance selector
-		p.app.QueueUpdateDraw(func() {
-			Debug("Showing instance selector after initialization")
-			p.showInstanceSelector()
-		})
-
-		// If we have a default instance configured, connect to it
-		if p.config != nil && p.config.DefaultInstance != "" {
-			Debug("Auto-connecting to default instance: %s", p.config.DefaultInstance)
-
-			// Find the default instance
-			var defaultInstance *ArgocdInstance
-			for _, inst := range p.config.Instances {
-				if inst.Name == p.config.DefaultInstance {
-					defaultInstance = &inst
-					break
-				}
-			}
-
-			if defaultInstance != nil {
-				// Wait a moment for UI to show
-				time.Sleep(500 * time.Millisecond)
-
-				// Connect to the default instance
-				p.app.QueueUpdateDraw(func() {
-					Debug("Connecting to default instance: %s (%s)",
-						defaultInstance.Name, defaultInstance.URL)
-
-					// Show connecting message
-					p.cores.Log(fmt.Sprintf("[blue]Auto-connecting to default instance: %s (%s)...",
-						defaultInstance.Name, defaultInstance.URL))
-
-					// Connect in background to avoid blocking UI
-					safeGo(func() {
-						err := p.apiClient.Connect(defaultInstance.URL,
-							defaultInstance.Username, defaultInstance.Password)
-
-						if err != nil {
-							p.app.QueueUpdateDraw(func() {
-								p.cores.Log(fmt.Sprintf("[red]Failed to connect to default instance: %v", err))
-							})
-							return
-						}
-
-						// Store credentials
-						p.serverURL = defaultInstance.URL
-						p.credentials.Username = defaultInstance.Username
-						p.credentials.Password = defaultInstance.Password
-
-						p.app.QueueUpdateDraw(func() {
-							p.cores.Log(fmt.Sprintf("[green]Connected to ArgoCD instance: %s",
-								defaultInstance.Name))
-
-							// Update UI with connection info
-							p.cores.SetInfoText(fmt.Sprintf("ArgoCD Manager | Server: %s | User: %s | Instance: %s",
-								defaultInstance.URL, defaultInstance.Username, defaultInstance.Name))
-
-							// Refresh data to show applications
-							p.cores.RefreshData()
-						})
-					})
-				})
-			}
+		if len(p.instances) == 1 {
+			p.app.QueueUpdateDraw(func() {
+				p.connectToArgoInstance(p.instances[0])
+			})
+		} else {
+			p.app.QueueUpdateDraw(func() {
+				p.showInstanceSelector()
+			})
 		}
 	})
 
@@ -207,6 +159,8 @@ func (p *ArgocdPlugin) Stop() {
 			"progress-modal",
 			"sort-modal",
 			"compact-modal",
+			"rbac-create-modal",
+			"rbac-password-modal",
 		}
 		for _, pageID := range pageIDs {
 			if p.pages.HasPage(pageID) {
@@ -218,7 +172,10 @@ func (p *ArgocdPlugin) Stop() {
 	p.accountView = nil
 	p.projectView = nil
 	p.applicationView = nil
+	p.rbacView = nil
 	p.apiClient = nil
+	p.k8sClient = nil
+	p.connectedInst = nil
 	p.cores = nil
 	p.pages = nil
 	p.app = nil
@@ -255,6 +212,7 @@ func (p *ArgocdPlugin) initializeMainView() {
 	p.cores.AddKeyBinding("F", "Refresh Status", nil)
 	p.cores.AddKeyBinding("A", "Accounts", nil)
 	p.cores.AddKeyBinding("P", "Projects", nil)
+	p.cores.AddKeyBinding("G", "RBAC", nil)
 	p.cores.AddKeyBinding("^T", "Select Instance", nil)
 	p.cores.AddKeyBinding("^D", "Debug Logs", nil)
 	p.cores.AddKeyBinding("^B", "Back", nil)
@@ -286,6 +244,8 @@ func (p *ArgocdPlugin) handleApplicationKeys(key string) bool {
 		p.switchToAccountsView()
 	case "P":
 		p.switchToProjectsView()
+	case "G":
+		p.switchToRBACView()
 	case "?":
 		p.showHelpModal()
 	case "^B":
@@ -314,6 +274,8 @@ func (p *ArgocdPlugin) handleProjectKeys(key string) bool {
 		p.switchToApplicationsView()
 	case "U":
 		p.switchToAccountsView()
+	case "G":
+		p.switchToRBACView()
 	case "?":
 		p.showHelpModal()
 	case "^B":
@@ -342,6 +304,8 @@ func (p *ArgocdPlugin) handleAccountKeys(key string) bool {
 		p.switchToApplicationsView()
 	case "P":
 		p.switchToProjectsView()
+	case "G":
+		p.switchToRBACView()
 	case "?":
 		p.showHelpModal()
 	case "^B":
@@ -354,19 +318,38 @@ func (p *ArgocdPlugin) handleAccountKeys(key string) bool {
 	return true
 }
 
+func (p *ArgocdPlugin) handleRBACKeys(key string) bool {
+	if p.rbacView == nil {
+		return false
+	}
+	switch key {
+	case "?":
+		p.showHelpModal()
+	case "^B":
+		p.returnToPreviousView()
+	case "^D":
+		p.showDebugLogsModal()
+	default:
+		return p.rbacView.HandleKey(key)
+	}
+	return true
+}
+
 // setupActionHandler configures the action handler for the plugin
 func (p *ArgocdPlugin) setupActionHandler() {
 	p.cores.SetActionCallback(func(action string, payload map[string]interface{}) error {
 		if action == "keypress" {
 			if key, ok := payload["key"].(string); ok {
-				switch p.currentView {
-				case "applications":
-					p.handleApplicationKeys(key)
-				case "projects":
-					p.handleProjectKeys(key)
-				case "accounts":
-					p.handleAccountKeys(key)
-				}
+			switch p.currentView {
+			case "applications":
+				p.handleApplicationKeys(key)
+			case "projects":
+				p.handleProjectKeys(key)
+			case "accounts":
+				p.handleAccountKeys(key)
+			case "rbac":
+				p.handleRBACKeys(key)
+			}
 			}
 		} else if action == "enter_pressed" {
 			switch p.currentView {
@@ -376,6 +359,10 @@ func (p *ArgocdPlugin) setupActionHandler() {
 				p.projectView.showProjectDetailsModal()
 			case "accounts":
 				p.accountView.showAccountDetailsModal()
+			case "rbac":
+				if p.rbacView != nil {
+					p.rbacView.viewDetails()
+				}
 			}
 			return nil
 		} else if action == "navigate_back" {
@@ -459,6 +446,21 @@ func (p *ArgocdPlugin) fetchAccounts() ([][]string, error) {
 	return p.accountView.fetchAccounts()
 }
 
+// fetchRBACData retrieves RBAC data from Kubernetes ConfigMaps
+func (p *ArgocdPlugin) fetchRBACData() ([][]string, error) {
+	if p.rbacView == nil {
+		return [][]string{{"RBAC view not initialized", "", ""}}, nil
+	}
+	return p.rbacView.fetchRBACData()
+}
+
+// refreshRBAC refreshes the RBAC data
+func (p *ArgocdPlugin) refreshRBAC() {
+	Debug("Manual refresh of RBAC data requested")
+	p.cores.RefreshData()
+	Debug("RBAC refresh complete")
+}
+
 // refreshApplications refreshes the application list
 func (p *ArgocdPlugin) refreshApplications() {
 	Debug("Manual refresh of applications requested")
@@ -482,25 +484,32 @@ func (p *ArgocdPlugin) refreshAccounts() {
 
 // showInstanceSelector displays a modal to select an ArgoCD instance
 func (p *ArgocdPlugin) showInstanceSelector() {
-	// Remove any existing instance selector modal first
 	p.pages.RemovePage("list-selector-modal")
 
-	// Check if we have instances configured
-	if p.config == nil || len(p.config.Instances) == 0 {
-		// No config file or no instances, show error message
-		p.cores.Log("[red]No ArgoCD instances configured. Please add instances to ~/.omo/configs/argocd/argocd.yaml")
+	instances, err := DiscoverArgoInstances()
+	if err != nil {
+		p.cores.Log(fmt.Sprintf("[red]Failed to discover ArgoCD instances: %v", err))
 		return
 	}
 
-	// Format instances for the modal
-	items := make([][]string, len(p.config.Instances))
-	for i, instance := range p.config.Instances {
-		// Highlight the current instance if there is one
-		displayName := instance.Name
-		if p.serverURL == instance.URL {
+	if len(instances) == 0 {
+		p.cores.Log("[yellow]No ArgoCD entries in KeePass (create under argocd/<env>/<name>)")
+		return
+	}
+
+	p.instances = instances
+
+	items := make([][]string, len(instances))
+	for i, inst := range instances {
+		displayName := inst.Name
+		if p.serverURL == inst.URL {
 			displayName += " (current)"
 		}
-		items[i] = []string{displayName, instance.URL}
+		authType := "user/pass"
+		if inst.AuthToken != "" {
+			authType = "token"
+		}
+		items[i] = []string{displayName, fmt.Sprintf("%s [%s] (%s)", inst.URL, inst.Environment, authType)}
 	}
 
 	ui.ShowStandardListSelectorModal(
@@ -509,72 +518,94 @@ func (p *ArgocdPlugin) showInstanceSelector() {
 		"Select ArgoCD Instance",
 		items,
 		func(index int, text string, cancelled bool) {
-			if cancelled || index < 0 {
-				// If no instance is selected, show a message
-				p.cores.Log("[yellow]No instance selected. Please select an instance to continue.")
+			if cancelled || index < 0 || index >= len(instances) {
+				p.cores.Log("[yellow]No instance selected.")
 				return
 			}
 
-			// Get the selected instance
-			instance := p.config.Instances[index]
+			inst := instances[index]
 
-			// Skip if same instance
-			if p.serverURL == instance.URL && p.credentials.Username == instance.Username {
+			if p.serverURL == inst.URL && p.credentials.Username == inst.Username {
 				p.app.SetFocus(p.cores.GetTable())
 				return
 			}
 
-			// Show connecting message
-			p.cores.Log(fmt.Sprintf("[blue]Connecting to %s (%s)...", instance.Name, instance.URL))
-
-			// Show progress modal
-			pm := ui.ShowProgressModal(
-				p.pages, p.app, "Connecting to ArgoCD", 100, true,
-				nil, true,
-			)
-
-			// Connect to the selected instance
-			safeGo(func() {
-				err := p.apiClient.Connect(instance.URL, instance.Username, instance.Password)
-				if err != nil {
-					p.app.QueueUpdateDraw(func() {
-						pm.Close()
-						p.cores.Log(fmt.Sprintf("[red]Failed to connect: %v", err))
-					})
-					return
-				}
-
-				// Store credentials
-				p.serverURL = instance.URL
-				p.credentials.Username = instance.Username
-				p.credentials.Password = instance.Password
-
-				p.app.QueueUpdateDraw(func() {
-					pm.Close()
-					p.cores.Log(fmt.Sprintf("[green]Connected to ArgoCD instance: %s", instance.Name))
-
-					// Update UI with connection info
-					p.cores.SetInfoText(fmt.Sprintf("ArgoCD Manager | Server: %s | User: %s | Instance: %s",
-						instance.URL, instance.Username, instance.Name))
-
-					// Refresh data to show applications
-					p.cores.RefreshData()
-
-					// Set focus back to the table
-					p.app.SetFocus(p.cores.GetTable())
-
-					// Queue a second refresh after a short delay to ensure all data is loaded
-					go func() {
-						time.Sleep(500 * time.Millisecond)
-						p.app.QueueUpdateDraw(func() {
-							Debug("Performing second refresh after connection")
-							p.refreshApplications()
-						})
-					}()
-				})
-			})
+			p.connectToArgoInstance(inst)
 		},
 	)
+}
+
+// connectToArgoInstance connects to an ArgoCD instance from KeePass.
+func (p *ArgocdPlugin) connectToArgoInstance(inst ArgocdInstance) {
+	p.cores.Log(fmt.Sprintf("[blue]Connecting to %s (%s)...", inst.Name, inst.URL))
+
+	pm := ui.ShowProgressModal(
+		p.pages, p.app, "Connecting to ArgoCD", 100, true,
+		nil, true,
+	)
+
+	safeGo(func() {
+		var connectErr error
+
+		if inst.AuthToken != "" {
+			// Token-based auth: set token directly, skip login
+			p.apiClient.BaseURL = inst.URL
+			if !strings.HasSuffix(p.apiClient.BaseURL, "/") {
+				p.apiClient.BaseURL += "/"
+			}
+			p.apiClient.Token = inst.AuthToken
+			p.apiClient.Username = inst.Username
+			p.apiClient.IsConnected = true
+		} else {
+			connectErr = p.apiClient.Connect(inst.URL, inst.Username, inst.Password)
+		}
+
+		if connectErr != nil {
+			p.app.QueueUpdateDraw(func() {
+				pm.Close()
+				p.cores.Log(fmt.Sprintf("[red]Failed to connect: %v", connectErr))
+			})
+			return
+		}
+
+		p.serverURL = inst.URL
+		p.credentials.Username = inst.Username
+		p.credentials.Password = inst.Password
+		p.credentials.Token = inst.AuthToken
+		instCopy := inst
+		p.connectedInst = &instCopy
+
+		// Initialize K8s client if kubeconfig is available
+		if HasKubeconfig(inst) {
+			k8s, k8sErr := NewK8sClient(inst)
+			if k8sErr != nil {
+				Debug("K8s client init failed (RBAC will be unavailable): %v", k8sErr)
+				p.k8sClient = nil
+			} else {
+				p.k8sClient = k8s
+				Debug("K8s client initialized for RBAC management")
+			}
+		} else {
+			p.k8sClient = nil
+			Debug("No kubeconfig available; RBAC management disabled")
+		}
+
+		p.app.QueueUpdateDraw(func() {
+			pm.Close()
+			p.cores.Log(fmt.Sprintf("[green]Connected to ArgoCD: %s", inst.Name))
+			p.cores.SetInfoText(fmt.Sprintf("ArgoCD Manager | Server: %s | User: %s | Instance: %s",
+				inst.URL, inst.Username, inst.Name))
+			p.cores.RefreshData()
+			p.app.SetFocus(p.cores.GetTable())
+
+			go func() {
+				time.Sleep(500 * time.Millisecond)
+				p.app.QueueUpdateDraw(func() {
+					p.refreshApplications()
+				})
+			}()
+		})
+	})
 }
 
 // showHelpModal displays the help information
@@ -618,9 +649,21 @@ func (p *ArgocdPlugin) showHelpModal() {
   [aqua]A[white] - Switch to applications view
   [aqua]P[white] - Switch to projects view
 
+[green]RBAC Management (G)[white]
+  [aqua]1[white] - Accounts sub-view
+  [aqua]2[white] - Policies sub-view
+  [aqua]3[white] - Groups sub-view
+  [aqua]C[white] - Create account/policy/group
+  [aqua]D[white] - Delete selected item
+  [aqua]E[white] - Edit capabilities (accounts)
+  [aqua]T[white] - Toggle enabled (accounts)
+  [aqua]W[white] - Set password (accounts)
+  [aqua]V[white] - View details
+  Requires kubeconfig in KeePass entry
+
 [green]Configuration[white]
-  ArgoCD instances are configured in ~/.omo/configs/argocd/argocd.yaml
-  To add new instances, edit this file directly
+  ArgoCD instances are stored in KeePass under argocd/<environment>/<name>
+  Set URL, UserName, Password (or auth_token custom attribute)
 
 [green]Troubleshooting[white]
   Debug logs are saved in logs/argocd-debug-*.log
@@ -659,6 +702,7 @@ func (p *ArgocdPlugin) switchToView(viewName string) {
 		p.cores.AddKeyBinding("F", "Refresh Status", nil)
 		p.cores.AddKeyBinding("A", "Accounts", nil)
 		p.cores.AddKeyBinding("P", "Projects", nil)
+		p.cores.AddKeyBinding("G", "RBAC", nil)
 		p.cores.AddKeyBinding("^T", "Instance", nil)
 		p.cores.AddKeyBinding("?", "Help", nil)
 		p.cores.AddKeyBinding("ESC", "Back", nil)
@@ -678,6 +722,7 @@ func (p *ArgocdPlugin) switchToView(viewName string) {
 		p.cores.AddKeyBinding("O", "View Roles", nil)
 		p.cores.AddKeyBinding("A", "Applications", nil)
 		p.cores.AddKeyBinding("U", "Accounts", nil)
+		p.cores.AddKeyBinding("G", "RBAC", nil)
 		p.cores.AddKeyBinding("^T", "Instance", nil)
 		p.cores.AddKeyBinding("?", "Help", nil)
 		p.cores.AddKeyBinding("ESC", "Back", nil)
@@ -697,6 +742,29 @@ func (p *ArgocdPlugin) switchToView(viewName string) {
 		p.cores.AddKeyBinding("T", "Create Token", nil)
 		p.cores.AddKeyBinding("A", "Applications", nil)
 		p.cores.AddKeyBinding("P", "Projects", nil)
+		p.cores.AddKeyBinding("G", "RBAC", nil)
+		p.cores.AddKeyBinding("^T", "Instance", nil)
+		p.cores.AddKeyBinding("?", "Help", nil)
+		p.cores.AddKeyBinding("ESC", "Back", nil)
+
+	case "RBAC":
+		p.currentView = "rbac"
+		p.cores.SetTableHeaders([]string{"Name", "Capabilities", "Enabled"})
+		p.cores.SetRefreshCallback(p.fetchRBACData)
+		p.cores.SetInfoText(fmt.Sprintf("ArgoCD RBAC Manager | Server: %s | Namespace: %s",
+			p.serverURL, p.getRBACNamespace()))
+
+		p.cores.ClearKeyBindings()
+		p.cores.AddKeyBinding("1", "Accounts", nil)
+		p.cores.AddKeyBinding("2", "Policies", nil)
+		p.cores.AddKeyBinding("3", "Groups", nil)
+		p.cores.AddKeyBinding("R", "Refresh", nil)
+		p.cores.AddKeyBinding("C", "Create", nil)
+		p.cores.AddKeyBinding("D", "Delete", nil)
+		p.cores.AddKeyBinding("V", "View Details", nil)
+		p.cores.AddKeyBinding("E", "Edit", nil)
+		p.cores.AddKeyBinding("T", "Toggle", nil)
+		p.cores.AddKeyBinding("W", "Set Password", nil)
 		p.cores.AddKeyBinding("^T", "Instance", nil)
 		p.cores.AddKeyBinding("?", "Help", nil)
 		p.cores.AddKeyBinding("ESC", "Back", nil)
@@ -718,6 +786,7 @@ func (p *ArgocdPlugin) switchToView(viewName string) {
 		p.cores.AddKeyBinding("F", "Refresh Status", nil)
 		p.cores.AddKeyBinding("A", "Accounts", nil)
 		p.cores.AddKeyBinding("P", "Projects", nil)
+		p.cores.AddKeyBinding("G", "RBAC", nil)
 		p.cores.AddKeyBinding("^T", "Instance", nil)
 		p.cores.AddKeyBinding("?", "Help", nil)
 		p.cores.AddKeyBinding("ESC", "Back", nil)
@@ -909,6 +978,43 @@ func (p *ArgocdPlugin) switchToAccountsView() {
 
 			// Log completion
 			Debug("Accounts view refresh complete")
+		})
+	}()
+}
+
+func (p *ArgocdPlugin) getRBACNamespace() string {
+	if p.connectedInst != nil && p.connectedInst.Namespace != "" {
+		return p.connectedInst.Namespace
+	}
+	return "argocd"
+}
+
+// switchToRBACView switches to the RBAC management view
+func (p *ArgocdPlugin) switchToRBACView() {
+	Debug("Switching to RBAC view")
+
+	if p.k8sClient == nil {
+		p.cores.Log("[red]No kubeconfig configured. Add kubeconfig or kubeconfig_path to KeePass entry.")
+		return
+	}
+
+	p.currentView = "rbac"
+	p.cores.PushView("RBAC")
+
+	p.rbacView = NewRBACView(p.app, p.pages, p.cores, p.k8sClient, p.apiClient, p.credentials.Password)
+
+	p.switchToView("RBAC")
+
+	p.cores.SetTableData([][]string{
+		{"Loading RBAC data...", "", ""},
+	})
+
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		p.app.QueueUpdateDraw(func() {
+			Debug("Performing explicit RBAC data refresh")
+			p.cores.RefreshData()
+			Debug("RBAC view refresh complete")
 		})
 	}()
 }

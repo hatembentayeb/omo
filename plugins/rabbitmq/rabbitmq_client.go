@@ -231,22 +231,41 @@ func (c *RabbitMQClient) Connect(instance RabbitMQInstance) error {
 	}
 
 	c.mgmtURL = fmt.Sprintf("%s://%s:%d/api", scheme, instance.Host, instance.MgmtPort)
-	c.amqpURL = fmt.Sprintf("%s://%s:%s@%s:%d/%s",
-		amqpScheme,
-		url.QueryEscape(instance.Username),
-		url.QueryEscape(instance.Password),
-		instance.Host, instance.AMQPPort,
-		url.QueryEscape(instance.VHost))
 	c.username = instance.Username
 	c.password = instance.Password
 	c.vhost = instance.VHost
 	c.clusterName = instance.Name
 
-	// Test management API connection
-	_, err := c.GetOverview()
-	if err != nil {
-		return fmt.Errorf("management API connection failed: %v", err)
+	// Test credentials with /whoami (works for any authenticated user,
+	// unlike /overview which requires vhost-level permissions).
+	if _, err := c.apiGet("/whoami"); err != nil {
+		return fmt.Errorf("authentication failed: %v", err)
 	}
+
+	// If vhost is the default "/", try to auto-detect: the user may only
+	// have access to a specific vhost. /api/vhosts returns only the ones
+	// the current user can see.
+	if c.vhost == "/" {
+		if vhosts, err := c.GetVHosts(); err == nil && len(vhosts) > 0 {
+			hasRoot := false
+			for _, vh := range vhosts {
+				if vh.Name == "/" {
+					hasRoot = true
+					break
+				}
+			}
+			if !hasRoot {
+				c.vhost = vhosts[0].Name
+			}
+		}
+	}
+
+	c.amqpURL = fmt.Sprintf("%s://%s:%s@%s:%d/%s",
+		amqpScheme,
+		url.QueryEscape(c.username),
+		url.QueryEscape(c.password),
+		instance.Host, instance.AMQPPort,
+		url.QueryEscape(c.vhost))
 
 	c.connected = true
 	c.lastRefresh = time.Now()
