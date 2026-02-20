@@ -1,6 +1,9 @@
 package pluginapi
 
 import (
+	"context"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
@@ -74,6 +77,23 @@ func PluginConfigPath(pluginName string) string {
 // e.g. PluginSOPath("redis") → ~/.omo/plugins/redis/redis.so
 func PluginSOPath(pluginName string) string {
 	return filepath.Join(PluginsDir(), pluginName, pluginName+".so")
+}
+
+// NewHTTPClient returns an http.Client that forces IPv4 connections.
+// Some environments (notably Termux on Android) advertise IPv6 but fail
+// to route it, causing "dial tcp [::1]:443: connect: connection refused"
+// errors when contacting GitHub. Forcing "tcp4" avoids this.
+func NewHTTPClient(timeout time.Duration) *http.Client {
+	dialer := &net.Dialer{Timeout: 10 * time.Second}
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			return dialer.DialContext(ctx, "tcp4", addr)
+		},
+	}
+	return &http.Client{
+		Timeout:   timeout,
+		Transport: transport,
+	}
 }
 
 // EnsurePluginDirs creates the plugin and config directories for a given plugin.

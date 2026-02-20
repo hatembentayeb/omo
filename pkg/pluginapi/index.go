@@ -61,7 +61,7 @@ func FetchIndex(url string) (*PluginIndex, error) {
 		url = DefaultIndexURL
 	}
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := NewHTTPClient(15 * time.Second)
 	resp, err := client.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch index: %w", err)

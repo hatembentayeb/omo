@@ -614,7 +614,7 @@ func downloadPlugin(entry *pluginapi.IndexEntry, urlTemplate string, onProgress 
 	tmpPath := destPath + ".tmp"
 	archivePath := destPath + ".download"
 
-	client := &http.Client{Timeout: 300 * time.Second}
+	client := pluginapi.NewHTTPClient(300 * time.Second)
 	resp, err := client.Get(url)
 	if err != nil {
 		return fmt.Errorf("download: %w", err)
