@@ -94,7 +94,15 @@ omo → Package Manager → Install / Update / Remove plugins
 
 ## Installation
 
-### From source (recommended)
+### One-line install (recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/hatembentayeb/omo/main/install.sh | bash
+```
+
+This downloads the latest release for your platform, installs the `omo` binary to `/usr/local/bin`, and creates the `~/.omo` directory structure. Then launch `omo`, open the **Package Manager** (`p`), press `S` to sync the plugin index, and `A` to install all plugins.
+
+### From source
 
 ```bash
 git clone https://github.com/hatembentayeb/omo.git
@@ -102,40 +110,34 @@ cd omo
 make all
 ```
 
-This builds the `omo` binary and all plugins, then installs everything to `~/.omo/`.
+This builds the `omo` binary and all plugins locally, then installs everything to `~/.omo/`.
 
-### From releases
-
-Download the latest binary and plugin `.so` files from [Releases](https://github.com/hatembentayeb/omo/releases).
+### Custom install directory
 
 ```bash
-# Linux amd64
-curl -LO https://github.com/hatembentayeb/omo/releases/latest/download/omo-linux-amd64.tar.gz
-tar xzf omo-linux-amd64.tar.gz
-chmod +x omo
-./omo
+OMO_INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/hatembentayeb/omo/main/install.sh | bash
 ```
 
 ### Requirements
 
-- **Go 1.24+** (build from source)
+- **Linux** (required for plugin `.so` support; macOS/Windows run the core binary only)
+- **KeePass KDBX4** database at `~/.omo/secrets.kdbx` (omo prompts for the password on startup)
+- **Go 1.24+** (only if building from source)
 - **OpenSSL** (required by k8suser plugin for certificate generation)
 - **Docker** (required by docker plugin, and for dev environments)
-- A **KeePass KDBX4** database at `~/.omo/secrets.kdbx` (omo prompts for the password on startup)
 
 ---
 
 ## Quick Start
 
 ```bash
-# 1. Build everything
-make all
+# Install omo
+curl -fsSL https://raw.githubusercontent.com/hatembentayeb/omo/main/install.sh | bash
 
-# 2. Set up development environments (starts Docker containers, seeds KeePass)
-make dev-setup
-
-# 3. Launch
+# Launch
 omo
+
+# Inside omo: open Package Manager (p) → Sync index (S) → Install all (A)
 ```
 
 Once inside:
