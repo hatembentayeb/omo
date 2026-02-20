@@ -129,7 +129,7 @@ func (h *Host) HelpList() *tview.List {
 		case 0:
 			h.MainUI.RemoveItem(h.PluginsList)
 			h.PluginsList = h.LoadPlugins()
-			h.MainUI.AddItem(h.PluginsList, 1, 0, 1, 1, 0, 100, true)
+			h.MainUI.AddItem(h.PluginsList, 1, 0, 1, 1, 0, 0, true)
 			h.UpdateHeader("")
 		case 1:
 			var editor *femto.View
@@ -160,12 +160,12 @@ func (h *Host) HelpList() *tview.List {
 				if s2 != "" {
 					settingsGrid.RemoveItem(editor)
 					editor = newEditor(h.App, h.Pages, s2)
-					settingsGrid.AddItem(editor, 0, 1, 3, 2, 0, 100, true)
+					settingsGrid.AddItem(editor, 0, 1, 3, 2, 0, 0, true)
 				}
 			})
 
-			settingsGrid.AddItem(configList, 0, 0, 3, 1, 1, 100, true)
-			settingsGrid.AddItem(editor, 0, 1, 3, 2, 0, 100, true)
+			settingsGrid.AddItem(configList, 0, 0, 3, 1, 1, 0, true)
+			settingsGrid.AddItem(editor, 0, 1, 3, 2, 0, 0, true)
 			h.MainFrame.SetPrimitive(settingsGrid)
 		case 2:
 			packageManager := packagemanager.NewPackageManager(h.App, h.Pages, h.PluginsDir)

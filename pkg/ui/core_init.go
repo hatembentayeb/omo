@@ -128,7 +128,7 @@ func (c *CoreView) initUI() {
 	c.mainLayout.SetDirection(tview.FlexRow)
 	c.mainLayout.SetBackgroundColor(tcell.ColorDefault)
 	c.mainLayout.SetBorder(false)
-	c.mainLayout.AddItem(headerRow, 6, 0, false).
+	c.mainLayout.AddItem(headerRow, 5, 0, false).
 		AddItem(separator, 1, 0, false).
 		AddItem(c.table, 0, 1, true).
 		AddItem(c.breadcrumbs, 1, 0, false)

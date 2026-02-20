@@ -36,7 +36,7 @@ func main() {
 
 	// Adjust grid layout for better space utilization
 	// Column alignment: fixed left column width to align with Redis separator
-	omoHost.MainUI.SetRows(12, 0, 3).SetColumns(25, 0)
+	omoHost.MainUI.SetRows(8, 0, 3).SetColumns(20, 0)
 
 	// Set less obtrusive borders
 	omoHost.MainUI.SetBorders(true).SetBordersColor(tcell.ColorAqua)
@@ -48,10 +48,11 @@ func main() {
 	// Set the welcome screen as the initial view
 	omoHost.MainFrame.SetPrimitive(host.Cover(app))
 
-	omoHost.MainUI.AddItem(omoHost.HeaderView, 0, 0, 1, 1, 0, 100, false).
-		AddItem(pluginsList, 1, 0, 1, 1, 0, 100, true).
-		AddItem(omoHost.MainFrame, 0, 1, 3, 1, 0, 100, false).
-		AddItem(helpListView, 2, 0, 1, 1, 0, 100, false)
+	// minWidth=0 so the grid renders on small terminals (e.g. Termux)
+	omoHost.MainUI.AddItem(omoHost.HeaderView, 0, 0, 1, 1, 0, 0, false).
+		AddItem(pluginsList, 1, 0, 1, 1, 0, 0, true).
+		AddItem(omoHost.MainFrame, 0, 1, 3, 1, 0, 0, false).
+		AddItem(helpListView, 2, 0, 1, 1, 0, 0, false)
 
 	// Set up pages with main UI as base page
 	pages.AddPage("main", omoHost.MainUI, true, true)
