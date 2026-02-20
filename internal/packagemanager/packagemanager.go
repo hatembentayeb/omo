@@ -304,25 +304,28 @@ func handleInstallPlugin(core *ui.CoreView, app *tview.Application, pages *tview
 
 		err := downloadPlugin(entry, index.DownloadURLTemplate, onProgress)
 
-		app.QueueUpdateDraw(func() {
-			if err != nil {
-				pm.UpdateProgress(100, fmt.Sprintf("[red]✗ Failed: %v", err))
-				time.AfterFunc(2*time.Second, func() {
-					app.QueueUpdateDraw(func() { pm.Close() })
-				})
+		if err != nil {
+			pm.UpdateProgress(100, fmt.Sprintf("[red]✗ Failed: %v", err))
+			app.QueueUpdateDraw(func() {
 				core.Log(fmt.Sprintf("[red]✗ Install failed for %s: %v", name, err))
-				return
-			}
-			pm.UpdateProgress(95, fmt.Sprintf("Verifying %s...", name))
-			pluginapi.RecordInstalledVersion(name, entry.Version)
-			pm.UpdateProgress(100, fmt.Sprintf("[green]✓ %s installed!", name))
-			time.AfterFunc(time.Second, func() {
-				app.QueueUpdateDraw(func() {
-					pm.Close()
-					core.RefreshData()
-				})
 			})
+			time.AfterFunc(2*time.Second, func() {
+				app.QueueUpdateDraw(func() { pm.Close() })
+			})
+			return
+		}
+
+		pm.UpdateProgress(95, fmt.Sprintf("Verifying %s...", name))
+		pluginapi.RecordInstalledVersion(name, entry.Version)
+		pm.UpdateProgress(100, fmt.Sprintf("[green]✓ %s installed!", name))
+		app.QueueUpdateDraw(func() {
 			core.Log(fmt.Sprintf("[green]✓ %s v%s installed successfully", name, entry.Version))
+		})
+		time.AfterFunc(time.Second, func() {
+			app.QueueUpdateDraw(func() {
+				pm.Close()
+				core.RefreshData()
+			})
 		})
 	}()
 }
@@ -372,25 +375,28 @@ func handleUpdatePlugin(core *ui.CoreView, app *tview.Application, pages *tview.
 
 		err := downloadPlugin(entry, index.DownloadURLTemplate, onProgress)
 
-		app.QueueUpdateDraw(func() {
-			if err != nil {
-				pm.UpdateProgress(100, fmt.Sprintf("[red]✗ Failed: %v", err))
-				time.AfterFunc(2*time.Second, func() {
-					app.QueueUpdateDraw(func() { pm.Close() })
-				})
+		if err != nil {
+			pm.UpdateProgress(100, fmt.Sprintf("[red]✗ Failed: %v", err))
+			app.QueueUpdateDraw(func() {
 				core.Log(fmt.Sprintf("[red]✗ Update failed for %s: %v", name, err))
-				return
-			}
-			pm.UpdateProgress(95, fmt.Sprintf("Verifying %s...", name))
-			pluginapi.RecordInstalledVersion(name, entry.Version)
-			pm.UpdateProgress(100, fmt.Sprintf("[green]✓ %s updated!", name))
-			time.AfterFunc(time.Second, func() {
-				app.QueueUpdateDraw(func() {
-					pm.Close()
-					core.RefreshData()
-				})
 			})
+			time.AfterFunc(2*time.Second, func() {
+				app.QueueUpdateDraw(func() { pm.Close() })
+			})
+			return
+		}
+
+		pm.UpdateProgress(95, fmt.Sprintf("Verifying %s...", name))
+		pluginapi.RecordInstalledVersion(name, entry.Version)
+		pm.UpdateProgress(100, fmt.Sprintf("[green]✓ %s updated!", name))
+		app.QueueUpdateDraw(func() {
 			core.Log(fmt.Sprintf("[green]✓ %s updated to v%s", name, entry.Version))
+		})
+		time.AfterFunc(time.Second, func() {
+			app.QueueUpdateDraw(func() {
+				pm.Close()
+				core.RefreshData()
+			})
 		})
 	}()
 }
@@ -486,9 +492,7 @@ func handleInstallAll(core *ui.CoreView, app *tview.Application, pages *tview.Pa
 						sem <- struct{}{}
 						defer func() { <-sem }()
 
-						app.QueueUpdateDraw(func() {
-							pm.UpdateProgress(idx, fmt.Sprintf("Downloading %s (%d/%d)...", e.Name, idx+1, total))
-						})
+					pm.UpdateProgress(idx, fmt.Sprintf("Downloading %s (%d/%d)...", e.Name, idx+1, total))
 
 						if err := downloadPlugin(&e, index.DownloadURLTemplate, nil); err != nil {
 							mu.Lock()
@@ -511,19 +515,19 @@ func handleInstallAll(core *ui.CoreView, app *tview.Application, pages *tview.Pa
 
 				wg.Wait()
 
+				if failed == 0 {
+					pm.UpdateProgress(total, fmt.Sprintf("[green]✓ All %d plugins installed!", installed))
+				} else {
+					pm.UpdateProgress(total, fmt.Sprintf("[yellow]Done: %d installed, %d failed", installed, failed))
+				}
 				app.QueueUpdateDraw(func() {
-					if failed == 0 {
-						pm.UpdateProgress(total, fmt.Sprintf("[green]✓ All %d plugins installed!", installed))
-					} else {
-						pm.UpdateProgress(total, fmt.Sprintf("[yellow]Done: %d installed, %d failed", installed, failed))
-					}
-					time.AfterFunc(2*time.Second, func() {
-						app.QueueUpdateDraw(func() {
-							pm.Close()
-							core.RefreshData()
-						})
-					})
 					core.Log(fmt.Sprintf("[green]✓ Bulk install complete: %d installed, %d failed", installed, failed))
+				})
+				time.AfterFunc(2*time.Second, func() {
+					app.QueueUpdateDraw(func() {
+						pm.Close()
+						core.RefreshData()
+					})
 				})
 			}()
 		},
@@ -563,9 +567,7 @@ func handleUpdateAll(core *ui.CoreView, app *tview.Application, pages *tview.Pag
 		updated := 0
 		failed := 0
 		for i, entry := range toUpdate {
-			app.QueueUpdateDraw(func() {
-				pm.UpdateProgress(i, fmt.Sprintf("Updating %s (%d/%d)...", entry.Name, i+1, total))
-			})
+			pm.UpdateProgress(i, fmt.Sprintf("Updating %s (%d/%d)...", entry.Name, i+1, total))
 			if err := downloadPlugin(&entry, index.DownloadURLTemplate, nil); err != nil {
 				failed++
 				app.QueueUpdateDraw(func() {
@@ -580,19 +582,19 @@ func handleUpdateAll(core *ui.CoreView, app *tview.Application, pages *tview.Pag
 			})
 		}
 
+		if failed == 0 {
+			pm.UpdateProgress(total, fmt.Sprintf("[green]✓ All %d plugins updated!", updated))
+		} else {
+			pm.UpdateProgress(total, fmt.Sprintf("[yellow]Done: %d updated, %d failed", updated, failed))
+		}
 		app.QueueUpdateDraw(func() {
-			if failed == 0 {
-				pm.UpdateProgress(total, fmt.Sprintf("[green]✓ All %d plugins updated!", updated))
-			} else {
-				pm.UpdateProgress(total, fmt.Sprintf("[yellow]Done: %d updated, %d failed", updated, failed))
-			}
-			time.AfterFunc(2*time.Second, func() {
-				app.QueueUpdateDraw(func() {
-					pm.Close()
-					core.RefreshData()
-				})
-			})
 			core.Log(fmt.Sprintf("[green]✓ Bulk update complete: %d updated, %d failed", updated, failed))
+		})
+		time.AfterFunc(2*time.Second, func() {
+			app.QueueUpdateDraw(func() {
+				pm.Close()
+				core.RefreshData()
+			})
 		})
 	}()
 }
