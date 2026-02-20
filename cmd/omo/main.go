@@ -57,38 +57,32 @@ func main() {
 	// Set up pages with main UI as base page
 	pages.AddPage("main", omoHost.MainUI, true, true)
 
-	// Setup navigation between panels with SHIFT+TAB
-	// Store this as a named function so plugins can chain to it
-	shiftTabHandler := func(event *tcell.EventKey) *tcell.EventKey {
-		// Handle SHIFT+TAB to cycle between panels
-		if event.Key() == tcell.KeyBacktab {
-			// Get the current focus
-			currentFocus := app.GetFocus()
-
-			// Determine which panel has focus and cycle to the next
-			switch currentFocus {
-			case omoHost.PluginsList:
-				// Move focus from plugins list to settings list
-				app.SetFocus(helpListView)
-			case helpListView:
-				// Move focus from settings list to main frame content
-				mainContent := omoHost.MainFrame.GetPrimitive()
-				// Try to focus the main content if possible
-				if mainContent != nil {
-					app.SetFocus(mainContent)
-				} else {
-					// If not possible, cycle back to plugins list
-					app.SetFocus(omoHost.PluginsList)
-				}
-			default:
-				// Move focus back to plugins list from any other panel
+	// Panel cycling: Shift+Tab or Ctrl+Down to cycle between panels.
+	// Ctrl+Down is needed because Shift+Tab doesn't work on many mobile terminals (Termux).
+	cyclePanels := func() {
+		currentFocus := app.GetFocus()
+		switch currentFocus {
+		case omoHost.PluginsList:
+			app.SetFocus(helpListView)
+		case helpListView:
+			mainContent := omoHost.MainFrame.GetPrimitive()
+			if mainContent != nil {
+				app.SetFocus(mainContent)
+			} else {
 				app.SetFocus(omoHost.PluginsList)
 			}
+		default:
+			app.SetFocus(omoHost.PluginsList)
+		}
+	}
+	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyBacktab ||
+			(event.Key() == tcell.KeyDown && event.Modifiers()&tcell.ModCtrl != 0) {
+			cyclePanels()
 			return nil
 		}
 		return event
-	}
-	app.SetInputCapture(shiftTabHandler)
+	})
 
 	// Use pages as the root primitive
 	if err := app.SetRoot(pages, true).Run(); err != nil {
