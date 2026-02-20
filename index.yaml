@@ -13,15 +13,8 @@ plugins:
     author: "ohmyops"
     license: "MIT"
     url: "https://github.com/hatembentayeb/omo"
-    tags: [
-  "database",
-  "cache",
-  "monitoring"
-]
-    arch: [
-  "amd64",
-  "arm64"
-]
+    tags: ["database","cache","monitoring"]
+    arch: ["amd64","arm64"]
     checksums:
       linux-amd64: "73d30c3d937f27c844fb5154f9272f18beb5a003722667df2cb3c71a13896d10"
       linux-arm64: "fff23adc0f89d14a19e3b31dbf09413444071e77d89869efd83a9c520b4e9d6e"
@@ -32,15 +25,8 @@ plugins:
     author: "ohmyops"
     license: "MIT"
     url: "https://github.com/hatembentayeb/omo"
-    tags: [
-  "containers",
-  "devops",
-  "infrastructure"
-]
-    arch: [
-  "amd64",
-  "arm64"
-]
+    tags: ["containers","devops","infrastructure"]
+    arch: ["amd64","arm64"]
     checksums:
       linux-amd64: "7d41c2486593027ecfc5c1979856ddeca194109bffc962e77cedb822eaf2b32d"
       linux-arm64: "84492ab89b9a7b5f51caaa6a15c9e3ea1367617ff4e32a23930838b0175ee6f2"
@@ -51,14 +37,8 @@ plugins:
     author: "ohmyops"
     license: "MIT"
     url: "https://github.com/hatembentayeb/omo"
-    tags: [
-  "vcs",
-  "developer-tools"
-]
-    arch: [
-  "amd64",
-  "arm64"
-]
+    tags: ["vcs","developer-tools"]
+    arch: ["amd64","arm64"]
     checksums:
       linux-amd64: "f2fd3a87440b1a3ddf6f6cbbec528d6ab2b1f161044aa59ceb0742e90c6f49dc"
       linux-arm64: "12965f5634e7a51aca280fec82d0e9a1b37ab92daf19d3e9f602429aeee24be1"
@@ -69,15 +49,8 @@ plugins:
     author: "ohmyops"
     license: "MIT"
     url: "https://github.com/hatembentayeb/omo"
-    tags: [
-  "gitops",
-  "kubernetes",
-  "cd"
-]
-    arch: [
-  "amd64",
-  "arm64"
-]
+    tags: ["gitops","kubernetes","cd"]
+    arch: ["amd64","arm64"]
     checksums:
       linux-amd64: "e5be6d0f669f04add137f2293fd52494e3e70a5dbfe9c41b83b9bb3c2f28023c"
       linux-arm64: "3fe93fc37857cc9dba240e20fbf4fbed4c9ead115d2c499bce6a6fafdb1d6ed5"
@@ -88,15 +61,8 @@ plugins:
     author: "ohmyops"
     license: "MIT"
     url: "https://github.com/hatembentayeb/omo"
-    tags: [
-  "streaming",
-  "messaging",
-  "monitoring"
-]
-    arch: [
-  "amd64",
-  "arm64"
-]
+    tags: ["streaming","messaging","monitoring"]
+    arch: ["amd64","arm64"]
     checksums:
       linux-amd64: "1eea0090c21da1a443998306a173f7e107f29988f329bc8cb036028467630740"
       linux-arm64: "eca03e0be6e34a2fd2812e44d8eacc25c65c24caec08e0602c855dbab5db8d47"
@@ -107,15 +73,8 @@ plugins:
     author: "ohmyops"
     license: "MIT"
     url: "https://github.com/hatembentayeb/omo"
-    tags: [
-  "aws",
-  "storage",
-  "cloud"
-]
-    arch: [
-  "amd64",
-  "arm64"
-]
+    tags: ["aws","storage","cloud"]
+    arch: ["amd64","arm64"]
     checksums:
       linux-amd64: "2def8da04f4cd61bda2bc3a5572f79cfc43c29e572a7b121b6573c25f3a3de29"
       linux-arm64: "cf243d9dbce9351e0ff1c0dc36a9356e11e5a822c52bb6eed87c81c22f18c41c"
@@ -126,15 +85,8 @@ plugins:
     author: "ohmyops"
     license: "MIT"
     url: "https://github.com/hatembentayeb/omo"
-    tags: [
-  "kubernetes",
-  "security",
-  "rbac"
-]
-    arch: [
-  "amd64",
-  "arm64"
-]
+    tags: ["kubernetes","security","rbac"]
+    arch: ["amd64","arm64"]
     checksums:
       linux-amd64: "10f28461b2902caccae3795724cbcd2188739f2e85e464d45e530895b35c00fb"
       linux-arm64: "eafe49b50c1b3f271039133eb48e833b2b3a650886973209aff5929add8ae492"
@@ -145,15 +97,8 @@ plugins:
     author: "ohmyops"
     license: "MIT"
     url: "https://github.com/hatembentayeb/omo"
-    tags: [
-  "system",
-  "monitoring",
-  "processes"
-]
-    arch: [
-  "amd64",
-  "arm64"
-]
+    tags: ["system","monitoring","processes"]
+    arch: ["amd64","arm64"]
     checksums:
       linux-amd64: "ba40fdc1d7c8382c696d72267f4fbabdc1f1c76f1a694770bcd2c96bab760e0b"
       linux-arm64: "51839e86e32ca72025e68c97cdd85fbad44c205fb80eea3e36aa04fbf80d4f04"
@@ -164,15 +109,8 @@ plugins:
     author: "ohmyops"
     license: "MIT"
     url: "https://github.com/hatembentayeb/omo"
-    tags: [
-  "aws",
-  "finops",
-  "cloud"
-]
-    arch: [
-  "amd64",
-  "arm64"
-]
+    tags: ["aws","finops","cloud"]
+    arch: ["amd64","arm64"]
     checksums:
       linux-amd64: "748e375d40a3ee2083de2204be9cbe94eeff14889caf356a103699dcf1951ade"
       linux-arm64: "a2bf104de55a4f0cfb40a31d50829ff0f3bfe15494786a603bca4189a38444fb"
@@ -183,15 +121,8 @@ plugins:
     author: "ohmyops"
     license: "MIT"
     url: "https://github.com/hatembentayeb/omo"
-    tags: [
-  "messaging",
-  "broker",
-  "amqp"
-]
-    arch: [
-  "amd64",
-  "arm64"
-]
+    tags: ["messaging","broker","amqp"]
+    arch: ["amd64","arm64"]
     checksums:
       linux-amd64: "998b9c022da6ffdb9c4620fe219b5dd3752ba8324ee01f30c1324ddd53033a9e"
       linux-arm64: "7ebf1fd68e48e04ceaf2173a499a3a87c7a440caff3584c484a9120e4d014ea7"
@@ -202,16 +133,8 @@ plugins:
     author: "ohmyops"
     license: "MIT"
     url: "https://github.com/hatembentayeb/omo"
-    tags: [
-  "ssh",
-  "remote",
-  "server",
-  "devops"
-]
-    arch: [
-  "amd64",
-  "arm64"
-]
+    tags: ["ssh","remote","server","devops"]
+    arch: ["amd64","arm64"]
     checksums:
       linux-amd64: "4da4c865fd33b2c55998340dc35f8157e1799fcaab0f61d90d5f4b419b745479"
       linux-arm64: "14842a3635736abb6c1e9647f74c5d14e410a4661bb0939dcc29ad7a7ad76560"
@@ -222,16 +145,8 @@ plugins:
     author: "ohmyops"
     license: "MIT"
     url: "https://github.com/hatembentayeb/omo"
-    tags: [
-  "database",
-  "sql",
-  "monitoring"
-]
-    arch: [
-  "amd64",
-  "arm64"
-]
+    tags: ["database","sql","monitoring"]
+    arch: ["amd64","arm64"]
     checksums:
       linux-amd64: "a4839607612448f30bc7341cea2d678eebdd4363bc2ca8c925c62123ea6b8e4b"
       linux-arm64: "1ad51c2761e92389a7c2e2438d2cb4ced6d2790119f77c692c779e04d888f09b"
-

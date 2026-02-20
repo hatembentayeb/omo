@@ -52,8 +52,8 @@ PLUGIN_NAMES=$(yq '.plugins | keys | .[]' "$META_FILE")
 
 for name in $PLUGIN_NAMES; do
   DESC=$(yq ".plugins.\"$name\".description" "$META_FILE")
-  TAGS_JSON=$(yq -o=json ".plugins.\"$name\".tags" "$META_FILE")
-  ARCH_JSON=$(yq -o=json '.defaults.arch' "$META_FILE")
+  TAGS=$(yq -o=json -I=0 ".plugins.\"$name\".tags" "$META_FILE")
+  ARCH=$(yq -o=json -I=0 '.defaults.arch' "$META_FILE")
 
   # Compute SHA256 for each arch
   SHA_AMD64=""
@@ -82,8 +82,8 @@ for name in $PLUGIN_NAMES; do
     author: "$AUTHOR"
     license: "$LICENSE"
     url: "$URL"
-    tags: $TAGS_JSON
-    arch: $ARCH_JSON
+    tags: $TAGS
+    arch: $ARCH
 ENTRY
 
   # Add checksums block only if we have at least one
