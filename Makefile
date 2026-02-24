@@ -2,15 +2,17 @@ PLUGINS_DIR := ./plugins
 OMO_HOME := $(HOME)/.omo
 PLUGINS_INSTALL_DIR := $(OMO_HOME)/plugins
 BUILD_MODE := -buildmode=plugin
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+LDFLAGS := -ldflags "-X main.Version=$(VERSION)"
 
 .PHONY: all clean install dirs
 
 # Build the host binary and all plugins, then install to ~/.omo
 all: dirs
-	@echo "Building omo"
+	@echo "Building omo $(VERSION)"
 	@go mod tidy
-	@go build -o omo ./cmd/omo
-	@go install ./cmd/omo
+	@go build $(LDFLAGS) -o omo ./cmd/omo
+	@go install $(LDFLAGS) ./cmd/omo
 	@echo "Building and installing plugins to $(PLUGINS_INSTALL_DIR)"
 	@for plugin in $(wildcard $(PLUGINS_DIR)/*); do \
 		name=$$(basename $$plugin); \

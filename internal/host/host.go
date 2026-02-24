@@ -25,9 +25,10 @@ type Host struct {
 	activePluginIdx int
 	PluginsDir      string
 	logger          *pluginapi.Logger
+	version         string
 }
 
-func New(app *tview.Application, pages *tview.Pages, logger *pluginapi.Logger) *Host {
+func New(app *tview.Application, pages *tview.Pages, logger *pluginapi.Logger, version string) *Host {
 	mainFrame := tview.NewFrame(nil)
 	mainFrame.SetBackgroundColor(tcell.ColorDefault)
 
@@ -43,6 +44,7 @@ func New(app *tview.Application, pages *tview.Pages, logger *pluginapi.Logger) *
 		activePluginIdx: -1,
 		PluginsDir:      pluginapi.PluginsDir(),
 		logger:          logger,
+		version:         version,
 	}
 }
 
@@ -122,13 +124,13 @@ func (h *Host) LoadPlugins() *tview.List {
 	return list
 }
 
-// LogoView returns a compact OMO logo for the top-left corner.
+// LogoView returns a compact OMO logo with version for the top-left corner.
 func (h *Host) LogoView() tview.Primitive {
 	tv := tview.NewTextView()
 	tv.SetDynamicColors(true)
 	tv.SetTextAlign(tview.AlignCenter)
 	tv.SetBackgroundColor(tcell.ColorDefault)
-	tv.SetText("[#FF6B00::b]█▀█ █▀▄▀█ █▀█\n█▄█ █ ▀ █ █▄█")
+	tv.SetText(fmt.Sprintf("[#FF6B00::b]█▀█ █▀▄▀█ █▀█\n█▄█ █ ▀ █ █▄█\n[#666666]%s", h.version))
 	return tv
 }
 

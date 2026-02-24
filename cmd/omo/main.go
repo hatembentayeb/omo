@@ -12,6 +12,9 @@ import (
 	"github.com/rivo/tview"
 )
 
+// Version is injected at build time via -ldflags.
+var Version = "dev"
+
 func main() {
 	// App logger: ~/.omo/logs/omo.log
 	logger, err := pluginapi.NewLogger("omo")
@@ -39,15 +42,15 @@ func main() {
 
 	app := tview.NewApplication()
 	pages := tview.NewPages()
-	omoHost := host.New(app, pages, logger)
+	omoHost := host.New(app, pages, logger, Version)
 
 	pluginsList := omoHost.LoadPlugins()
 	logoView := omoHost.LogoView()
 	actionsView := omoHost.ActionsView()
 
-	// Three rows: logo (4) + plugins list (flex) + actions (4)
+	// Three rows: logo+version (5) + plugins list (flex) + actions (4)
 	// Two columns: sidebar (20 wide) + main content (flex)
-	omoHost.MainUI.SetRows(4, 0, 4).SetColumns(20, 0)
+	omoHost.MainUI.SetRows(5, 0, 4).SetColumns(20, 0)
 
 	omoHost.MainUI.SetBorders(true).SetBordersColor(tcell.ColorAqua)
 	omoHost.MainUI.SetBackgroundColor(tcell.ColorDefault)
