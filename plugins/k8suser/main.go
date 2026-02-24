@@ -30,6 +30,7 @@ type K8sUserPlugin struct {
 
 // Start initializes the plugin
 func (p *K8sUserPlugin) Start(app *tview.Application) tview.Primitive {
+	pluginapi.Log().Info("starting plugin")
 	p.app = app
 	p.pages = tview.NewPages()
 	p.currentView = "main"
@@ -538,14 +539,11 @@ func (p *K8sUserPlugin) returnToPreviousView() {
 	}
 }
 
-// safeGo runs a function in a goroutine with panic recovery
 func safeGo(f func()) {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				// Don't use fmt.Printf as it causes UI issues
-				// This could be logged to a file or handled differently if needed
-				// If using in a UI context, ideally would use UI.cores.Log
+				pluginapi.Log().Error("recovered from panic: %v", r)
 			}
 		}()
 		f()

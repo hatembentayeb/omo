@@ -81,7 +81,7 @@ func NewBucketsView(app *tview.Application, pages *tview.Pages) *BucketsView {
 	bv.setViewStack(bv.cores, s3ViewBuckets)
 	bv.setViewStack(bv.objectsView, s3ViewObjects)
 
-	// Get available profiles (from YAML config + ~/.aws/credentials + ~/.aws/config)
+	// Get available profiles (from KeePass + ~/.aws/credentials + ~/.aws/config)
 	profileInfos := bv.getAWSProfiles()
 
 	// If we have profiles, use the first one

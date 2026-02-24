@@ -2,220 +2,220 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
+	"sort"
+	"strings"
 
 	"omo/pkg/pluginapi"
-
-	"gopkg.in/yaml.v3"
 )
 
-// s3ConfigHeader is prepended to the auto-generated config YAML.
-const s3ConfigHeader = `# S3 Plugin Configuration
-# Path: ~/.omo/configs/s3/s3.yaml
-#
-# Profiles are loaded from two sources:
-#   1. This config file (with optional KeePass secret resolution)
-#   2. Host machine's ~/.aws/credentials and ~/.aws/config
-#
-# KeePass Secret Schema (secret path: s3/<environment>/<name>):
-#   Title    → profile name
-#   URL      → S3-compatible endpoint (e.g. "https://s3.amazonaws.com")
-#   UserName → AWS access key ID
-#   Password → AWS secret access key
-#   Custom Attributes:
-#     region   → AWS region (e.g. "us-east-1")
-#     role_arn → IAM role ARN for assume-role
-#
-# When "secret" is set, credential fields are resolved from KeePass.
-# YAML values take precedence over KeePass values (override only blanks).
-`
-
-// S3Config represents the configuration for the S3 plugin
-type S3Config struct {
-	Profiles []S3Profile `yaml:"profiles"`
-	UI       S3UIConfig  `yaml:"ui"`
+var defaultS3Environments = []string{
+	"development",
+	"production",
+	"staging",
+	"sandbox",
+	"local",
+	"test",
 }
 
-// S3Profile represents a configured AWS profile for S3.
-// When the Secret field is set (e.g. "s3/production/storage"),
-// it references a KeePass entry whose fields override AccessKey,
-// SecretKey, etc. at load time.
-type S3Profile struct {
-	Name        string `yaml:"name"`
-	Description string `yaml:"description"`
-	Secret      string `yaml:"secret,omitempty"` // KeePass path: pluginName/env/entryName
-	Region      string `yaml:"region"`
-	AccessKey   string `yaml:"access_key,omitempty"`
-	SecretKey   string `yaml:"secret_key,omitempty"`
-	Endpoint    string `yaml:"endpoint,omitempty"` // Custom S3-compatible endpoint
-	RoleARN     string `yaml:"role_arn,omitempty"`
-}
-
-// S3UIConfig represents UI configuration options
-type S3UIConfig struct {
-	RefreshInterval     int    `yaml:"refresh_interval"`
-	DefaultRegion       string `yaml:"default_region"`
-	MaxBucketsDisplay   int    `yaml:"max_buckets_display"`
-	MaxObjectsDisplay   int    `yaml:"max_objects_display"`
-	EnableMetrics       bool   `yaml:"enable_metrics"`
-	EnableObjectBrowser bool   `yaml:"enable_object_browser"`
-	EnablePolicies      bool   `yaml:"enable_policies_viewer"`
-	PageSize            int    `yaml:"page_size"`
-}
-
-// DefaultS3Config returns the default configuration
-func DefaultS3Config() *S3Config {
-	return &S3Config{
-		Profiles: []S3Profile{},
-		UI: S3UIConfig{
-			RefreshInterval:     30,
-			DefaultRegion:       "us-east-1",
-			MaxBucketsDisplay:   100,
-			MaxObjectsDisplay:   1000,
-			EnableMetrics:       true,
-			EnableObjectBrowser: true,
-			EnablePolicies:      true,
-			PageSize:            50,
-		},
-	}
-}
-
-// LoadS3Config loads the S3 configuration from the specified file.
-// Default path: ~/.omo/configs/s3/s3.yaml
+// S3Profile is built entirely from a KeePass entry at runtime.
 //
-// After unmarshalling, any profile with a non-empty Secret field will
-// have its credential fields resolved from the KeePass secrets provider.
-func LoadS3Config(configPath string) (*S3Config, error) {
-	if configPath == "" {
-		configPath = pluginapi.PluginConfigPath("s3")
-	}
-
-	// Auto-create default config if missing
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		_ = writeDefaultConfig(configPath, s3ConfigHeader, DefaultS3Config())
-	}
-
-	// Read the configuration file
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("error reading config file: %v", err)
-	}
-
-	// Unmarshal the configuration
-	config := DefaultS3Config()
-	err = yaml.Unmarshal(data, config)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing config file: %v", err)
-	}
-
-	// Init KeePass placeholder if no entries exist yet
-	initS3KeePass()
-
-	// Resolve secrets for profiles that reference KeePass entries.
-	if err := resolveS3Secrets(config); err != nil {
-		return nil, fmt.Errorf("error resolving secrets: %v", err)
-	}
-
-	return config, nil
+// KeePass Entry Schema (path: s3/<environment>/<name>):
+//
+//	Title    → profile display name
+//	URL      → S3-compatible endpoint (e.g. "https://s3.amazonaws.com")
+//	UserName → AWS access key ID
+//	Password → AWS secret access key
+//	Notes    → description / notes
+//
+//	Custom Attributes:
+//	  region   → AWS region (e.g. "us-east-1")
+//	  role_arn → IAM role ARN for assume-role
+//	  tags     → comma-separated tags
+type S3Profile struct {
+	Name        string
+	Description string
+	Environment string
+	Region      string
+	AccessKey   string
+	SecretKey   string
+	Endpoint    string
+	RoleARN     string
+	Tags        []string
 }
 
-// initS3KeePass seeds placeholder KeePass entries for S3 if none exist.
-func initS3KeePass() {
+// S3UIConfig holds hardcoded UI defaults for the S3 plugin.
+type S3UIConfig struct {
+	RefreshInterval     int
+	DefaultRegion       string
+	MaxBucketsDisplay   int
+	MaxObjectsDisplay   int
+	EnableMetrics       bool
+	EnableObjectBrowser bool
+	EnablePolicies      bool
+	PageSize            int
+}
+
+func DefaultS3UIConfig() S3UIConfig {
+	return S3UIConfig{
+		RefreshInterval:     30,
+		DefaultRegion:       "us-east-1",
+		MaxBucketsDisplay:   100,
+		MaxObjectsDisplay:   1000,
+		EnableMetrics:       true,
+		EnableObjectBrowser: true,
+		EnablePolicies:      true,
+		PageSize:            50,
+	}
+}
+
+// DiscoverProfiles reads KeePass groups under "s3/" and builds
+// S3Profile objects from the entries.
+func DiscoverProfiles() ([]S3Profile, error) {
 	if !pluginapi.HasSecrets() {
-		return
-	}
-	entries, err := pluginapi.Secrets().List("s3")
-	if err != nil || len(entries) > 0 {
-		return
-	}
-	_ = pluginapi.Secrets().Put("s3/default/example", &pluginapi.SecretEntry{
-		Title:    "example",
-		UserName: "",
-		Password: "",
-		URL:      "",
-		Notes:    "S3 placeholder. Set UserName (Access Key ID), Password (Secret Key), URL (endpoint).",
-		CustomAttributes: map[string]string{
-			"region":   "us-east-1",
-			"role_arn": "",
-		},
-	})
-}
-
-func resolveS3ProfileSecret(prof *S3Profile, entry *pluginapi.SecretEntry) {
-	if prof.AccessKey == "" && entry.UserName != "" {
-		prof.AccessKey = entry.UserName
-	}
-	if prof.SecretKey == "" && entry.Password != "" {
-		prof.SecretKey = entry.Password
-	}
-	if prof.Name == "" && entry.Title != "" {
-		prof.Name = entry.Title
-	}
-	if prof.Endpoint == "" && entry.URL != "" {
-		prof.Endpoint = entry.URL
-	}
-	for attr, field := range map[string]*string{
-		"region":   &prof.Region,
-		"role_arn": &prof.RoleARN,
-	} {
-		if *field == "" {
-			if v, ok := entry.CustomAttributes[attr]; ok {
-				*field = v
-			}
-		}
-	}
-}
-
-// resolveS3Secrets iterates over profiles and populates credential
-// fields from the secrets provider when a secret path is defined.
-func resolveS3Secrets(config *S3Config) error {
-	if !pluginapi.HasSecrets() {
-		return nil
+		return nil, fmt.Errorf("secrets provider not available")
 	}
 
-	for i := range config.Profiles {
-		prof := &config.Profiles[i]
-		if prof.Secret == "" {
+	if err := pluginapi.Secrets().Reload(); err != nil {
+		return nil, fmt.Errorf("reload secrets: %w", err)
+	}
+
+	ensureS3KeePassGroups()
+
+	paths, err := pluginapi.Secrets().List("s3")
+	if err != nil {
+		return nil, fmt.Errorf("list s3 secrets: %w", err)
+	}
+
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("no S3 entries in KeePass (create entries under s3/<environment>/<name>)")
+	}
+
+	var profiles []S3Profile
+	for _, path := range paths {
+		env := extractEnvironment(path)
+		if env == "" {
 			continue
 		}
 
-		entry, err := pluginapi.ResolveSecret(prof.Secret)
+		entry, err := pluginapi.Secrets().Get(path)
 		if err != nil {
-			return fmt.Errorf("profile %q: %w", prof.Name, err)
+			continue
 		}
 
-		resolveS3ProfileSecret(prof, entry)
+		prof := entryToS3Profile(entry, env)
+		profiles = append(profiles, prof)
 	}
-	return nil
+
+	sort.Slice(profiles, func(i, j int) bool {
+		if profiles[i].Environment != profiles[j].Environment {
+			return profiles[i].Environment < profiles[j].Environment
+		}
+		return profiles[i].Name < profiles[j].Name
+	})
+
+	return profiles, nil
 }
 
-// GetAvailableS3Profiles returns the list of configured S3 profiles
+func extractEnvironment(path string) string {
+	parts := strings.SplitN(path, "/", 3)
+	if len(parts) < 3 {
+		return ""
+	}
+	return parts[1]
+}
+
+func entryToS3Profile(entry *pluginapi.SecretEntry, env string) S3Profile {
+	prof := S3Profile{
+		Name:        entry.Title,
+		Description: entry.Notes,
+		Environment: env,
+		AccessKey:   entry.UserName,
+		SecretKey:   entry.Password,
+		Endpoint:    entry.URL,
+	}
+
+	if entry.CustomAttributes == nil {
+		return prof
+	}
+
+	ca := entry.CustomAttributes
+
+	if v, ok := ca["region"]; ok && v != "" {
+		prof.Region = v
+	}
+	if v, ok := ca["role_arn"]; ok {
+		prof.RoleARN = v
+	}
+	if v, ok := ca["tags"]; ok {
+		for _, t := range strings.Split(v, ",") {
+			t = strings.TrimSpace(t)
+			if t != "" {
+				prof.Tags = append(prof.Tags, t)
+			}
+		}
+	}
+
+	return prof
+}
+
+func ensureS3KeePassGroups() {
+	if !pluginapi.HasSecrets() {
+		return
+	}
+
+	requiredAttrs := map[string]string{
+		"region":   "us-east-1",
+		"role_arn": "",
+		"tags":     "",
+	}
+
+	for _, env := range defaultS3Environments {
+		prefix := fmt.Sprintf("s3/%s", env)
+		existing, err := pluginapi.Secrets().List(prefix)
+		if err == nil && len(existing) > 0 {
+			backfillAttributes(existing, requiredAttrs)
+			continue
+		}
+		path := fmt.Sprintf("s3/%s/example", env)
+		_ = pluginapi.Secrets().Put(path, &pluginapi.SecretEntry{
+			Title:            "example",
+			UserName:         "",
+			Password:         "",
+			URL:              "",
+			Notes:            fmt.Sprintf("S3 %s placeholder. Set UserName (Access Key ID), Password (Secret Key), URL (endpoint).", env),
+			CustomAttributes: requiredAttrs,
+		})
+	}
+}
+
+func backfillAttributes(entryPaths []string, required map[string]string) {
+	for _, entryPath := range entryPaths {
+		entry, err := pluginapi.Secrets().Get(entryPath)
+		if err != nil || entry == nil {
+			continue
+		}
+		if entry.CustomAttributes == nil {
+			entry.CustomAttributes = make(map[string]string)
+		}
+		updated := false
+		for attr, defaultVal := range required {
+			if _, exists := entry.CustomAttributes[attr]; !exists {
+				entry.CustomAttributes[attr] = defaultVal
+				updated = true
+			}
+		}
+		if updated {
+			_ = pluginapi.Secrets().Put(entryPath, entry)
+		}
+	}
+}
+
+// GetAvailableS3Profiles returns all discovered S3 profiles.
 func GetAvailableS3Profiles() ([]S3Profile, error) {
-	config, err := LoadS3Config("")
-	if err != nil {
-		return nil, err
-	}
-	return config.Profiles, nil
+	return DiscoverProfiles()
 }
 
-// GetS3UIConfig returns the UI configuration
+// GetS3UIConfig returns the hardcoded UI configuration.
 func GetS3UIConfig() (S3UIConfig, error) {
-	config, err := LoadS3Config("")
-	if err != nil {
-		return S3UIConfig{}, err
-	}
-	return config.UI, nil
-}
-
-// writeDefaultConfig marshals the default config struct to YAML and writes it to disk.
-func writeDefaultConfig(configPath, header string, cfg interface{}) error {
-	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
-		return err
-	}
-	data, err := yaml.Marshal(cfg)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(configPath, []byte(header+"\n"+string(data)), 0644)
+	return DefaultS3UIConfig(), nil
 }

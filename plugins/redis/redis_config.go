@@ -2,188 +2,221 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
 
 	"omo/pkg/pluginapi"
-
-	"gopkg.in/yaml.v3"
 )
 
-// redisConfigHeader is prepended to the auto-generated config YAML.
-const redisConfigHeader = `# Redis Plugin Configuration
-# Path: ~/.omo/configs/redis/redis.yaml
-#
-# KeePass Secret Schema (secret path: redis/<environment>/<name>):
-#   Title    → instance name
-#   URL      → host (e.g. "localhost", "redis.example.com")
-#   UserName → Redis ACL username (Redis 6+)
-#   Password → Redis password
-#
-# When "secret" is set, connection fields are resolved from KeePass.
-# YAML values take precedence over KeePass values (override only blanks).
-`
-
-// RedisConfig represents the configuration for the Redis plugin
-type RedisConfig struct {
-	Instances []RedisInstance `yaml:"instances"`
-	UI        UIConfig        `yaml:"ui"`
+var defaultRedisEnvironments = []string{
+	"development",
+	"production",
+	"staging",
+	"sandbox",
+	"local",
+	"test",
 }
 
-// RedisInstance represents a configured Redis server instance.
-// When the Secret field is set (e.g. "redis/production/main-cache"),
-// it references a KeePass entry whose fields override Host, Username,
-// Password, etc. at load time.
-type RedisInstance struct {
-	Name        string `yaml:"name"`
-	Description string `yaml:"description"`
-	Secret      string `yaml:"secret,omitempty"` // KeePass path: pluginName/env/entryName
-	Host        string `yaml:"host"`
-	Port        int    `yaml:"port"`
-	Username    string `yaml:"username"` // Redis ACL username (Redis 6+)
-	Password    string `yaml:"password"`
-	Database    int    `yaml:"database"`
-}
-
-// UIConfig represents UI configuration options
-type UIConfig struct {
-	RefreshInterval  int  `yaml:"refresh_interval"`
-	MaxKeysDisplay   int  `yaml:"max_keys_display"`
-	EnableSlowLog    bool `yaml:"enable_slowlog"`
-	EnableServerInfo bool `yaml:"enable_server_info"`
-}
-
-// DefaultConfig returns the default configuration
-func DefaultConfig() *RedisConfig {
-	return &RedisConfig{
-		Instances: []RedisInstance{},
-		UI: UIConfig{
-			RefreshInterval:  5,
-			MaxKeysDisplay:   1000,
-			EnableSlowLog:    true,
-			EnableServerInfo: true,
-		},
-	}
-}
-
-// LoadConfig loads the Redis configuration from the specified file.
-// Default path: ~/.omo/configs/redis/redis.yaml
+// RedisInstance is built entirely from a KeePass entry at runtime.
 //
-// After unmarshalling, any instance with a non-empty Secret field will
-// have its connection fields resolved from the KeePass secrets provider.
-func LoadConfig(configPath string) (*RedisConfig, error) {
-	if configPath == "" {
-		configPath = pluginapi.PluginConfigPath("redis")
-	}
-
-	// Auto-create default config if missing
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		_ = writeDefaultConfig(configPath, redisConfigHeader, DefaultConfig())
-	}
-
-	// Read the configuration file
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("error reading config file: %v", err)
-	}
-
-	// Unmarshal the configuration
-	config := DefaultConfig()
-	err = yaml.Unmarshal(data, config)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing config file: %v", err)
-	}
-
-	// Init KeePass placeholder if no entries exist yet
-	initRedisKeePass()
-
-	// Resolve secrets for instances that reference KeePass entries.
-	if err := resolveRedisSecrets(config); err != nil {
-		return nil, fmt.Errorf("error resolving secrets: %v", err)
-	}
-
-	return config, nil
+// KeePass Entry Schema (path: redis/<environment>/<name>):
+//
+//	Title    → instance display name
+//	URL      → host (e.g. "localhost", "redis.example.com")
+//	UserName → Redis ACL username (Redis 6+)
+//	Password → Redis password
+//	Notes    → description / notes
+//
+//	Custom Attributes:
+//	  port     → Redis port (default: 6379)
+//	  database → Redis database index (default: 0)
+//	  tags     → comma-separated tags
+type RedisInstance struct {
+	Name        string
+	Description string
+	Environment string
+	Host        string
+	Port        int
+	Username    string
+	Password    string
+	Database    int
+	Tags        []string
 }
 
-// initRedisKeePass seeds placeholder KeePass entries for Redis if none exist.
-func initRedisKeePass() {
-	if !pluginapi.HasSecrets() {
-		return
-	}
-	entries, err := pluginapi.Secrets().List("redis")
-	if err != nil || len(entries) > 0 {
-		return
-	}
-	_ = pluginapi.Secrets().Put("redis/default/example", &pluginapi.SecretEntry{
-		Title:    "example",
-		UserName: "",
-		Password: "",
-		URL:      "localhost",
-		Notes:    "Redis placeholder. Set URL (host), UserName (ACL user), Password.",
-	})
+// UIConfig holds hardcoded UI defaults for the Redis plugin.
+type UIConfig struct {
+	RefreshInterval  int
+	MaxKeysDisplay   int
+	EnableSlowLog    bool
+	EnableServerInfo bool
 }
 
-// resolveRedisSecrets iterates over instances and populates connection
-// fields from the secrets provider when a secret path is defined.
-func resolveRedisSecrets(config *RedisConfig) error {
+func DefaultUIConfig() UIConfig {
+	return UIConfig{
+		RefreshInterval:  5,
+		MaxKeysDisplay:   1000,
+		EnableSlowLog:    true,
+		EnableServerInfo: true,
+	}
+}
+
+// DiscoverInstances reads KeePass groups under "redis/" and builds
+// RedisInstance objects from the entries.
+func DiscoverInstances() ([]RedisInstance, error) {
 	if !pluginapi.HasSecrets() {
-		return nil // no provider — skip silently
+		return nil, fmt.Errorf("secrets provider not available")
 	}
 
-	for i := range config.Instances {
-		inst := &config.Instances[i]
-		if inst.Secret == "" {
+	if err := pluginapi.Secrets().Reload(); err != nil {
+		return nil, fmt.Errorf("reload secrets: %w", err)
+	}
+
+	ensureRedisKeePassGroups()
+
+	paths, err := pluginapi.Secrets().List("redis")
+	if err != nil {
+		return nil, fmt.Errorf("list redis secrets: %w", err)
+	}
+
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("no Redis entries in KeePass (create entries under redis/<environment>/<name>)")
+	}
+
+	var instances []RedisInstance
+	for _, path := range paths {
+		env := extractEnvironment(path)
+		if env == "" {
 			continue
 		}
 
-		entry, err := pluginapi.ResolveSecret(inst.Secret)
+		entry, err := pluginapi.Secrets().Get(path)
 		if err != nil {
-			return fmt.Errorf("instance %q: %w", inst.Name, err)
+			continue
 		}
 
-		// Override only blank fields so YAML values take precedence.
-		if inst.Host == "" && entry.URL != "" {
-			inst.Host = entry.URL
-		}
-		if inst.Username == "" && entry.UserName != "" {
-			inst.Username = entry.UserName
-		}
-		if inst.Password == "" && entry.Password != "" {
-			inst.Password = entry.Password
-		}
-		if inst.Name == "" && entry.Title != "" {
-			inst.Name = entry.Title
-		}
+		inst := entryToRedisInstance(entry, env)
+		instances = append(instances, inst)
 	}
-	return nil
+
+	sort.Slice(instances, func(i, j int) bool {
+		if instances[i].Environment != instances[j].Environment {
+			return instances[i].Environment < instances[j].Environment
+		}
+		return instances[i].Name < instances[j].Name
+	})
+
+	return instances, nil
 }
 
-// GetAvailableInstances returns the list of configured Redis instances
+func extractEnvironment(path string) string {
+	parts := strings.SplitN(path, "/", 3)
+	if len(parts) < 3 {
+		return ""
+	}
+	return parts[1]
+}
+
+func entryToRedisInstance(entry *pluginapi.SecretEntry, env string) RedisInstance {
+	inst := RedisInstance{
+		Name:        entry.Title,
+		Description: entry.Notes,
+		Environment: env,
+		Host:        entry.URL,
+		Username:    entry.UserName,
+		Password:    entry.Password,
+		Port:        6379,
+		Database:    0,
+	}
+
+	if entry.CustomAttributes == nil {
+		return inst
+	}
+
+	ca := entry.CustomAttributes
+
+	if v, ok := ca["port"]; ok {
+		if p, err := strconv.Atoi(v); err == nil {
+			inst.Port = p
+		}
+	}
+	if v, ok := ca["database"]; ok {
+		if d, err := strconv.Atoi(v); err == nil {
+			inst.Database = d
+		}
+	}
+	if v, ok := ca["tags"]; ok {
+		for _, t := range strings.Split(v, ",") {
+			t = strings.TrimSpace(t)
+			if t != "" {
+				inst.Tags = append(inst.Tags, t)
+			}
+		}
+	}
+
+	return inst
+}
+
+// ensureRedisKeePassGroups creates environment groups in KeePass
+// with placeholder entries so the folder structure is visible in KeePassXC.
+func ensureRedisKeePassGroups() {
+	if !pluginapi.HasSecrets() {
+		return
+	}
+
+	requiredAttrs := map[string]string{
+		"port":     "6379",
+		"database": "0",
+		"tags":     "",
+	}
+
+	for _, env := range defaultRedisEnvironments {
+		prefix := fmt.Sprintf("redis/%s", env)
+		existing, err := pluginapi.Secrets().List(prefix)
+		if err == nil && len(existing) > 0 {
+			for _, entryPath := range existing {
+				backfillAttributes(entryPath, requiredAttrs)
+			}
+			continue
+		}
+		path := fmt.Sprintf("redis/%s/example", env)
+		_ = pluginapi.Secrets().Put(path, &pluginapi.SecretEntry{
+			Title:            "example",
+			UserName:         "",
+			Password:         "",
+			URL:              "localhost",
+			Notes:            fmt.Sprintf("Redis %s placeholder. Set URL (host), UserName (ACL user), Password.", env),
+			CustomAttributes: requiredAttrs,
+		})
+	}
+}
+
+func backfillAttributes(entryPath string, required map[string]string) {
+	entry, err := pluginapi.Secrets().Get(entryPath)
+	if err != nil || entry == nil {
+		return
+	}
+	if entry.CustomAttributes == nil {
+		entry.CustomAttributes = make(map[string]string)
+	}
+	updated := false
+	for attr, defaultVal := range required {
+		if _, exists := entry.CustomAttributes[attr]; !exists {
+			entry.CustomAttributes[attr] = defaultVal
+			updated = true
+		}
+	}
+	if updated {
+		_ = pluginapi.Secrets().Put(entryPath, entry)
+	}
+}
+
+// GetAvailableInstances returns all discovered Redis instances.
 func GetAvailableInstances() ([]RedisInstance, error) {
-	config, err := LoadConfig("")
-	if err != nil {
-		return nil, err
-	}
-	return config.Instances, nil
+	return DiscoverInstances()
 }
 
-// GetUIConfig returns the UI configuration
+// GetUIConfig returns the hardcoded UI configuration.
 func GetUIConfig() (UIConfig, error) {
-	config, err := LoadConfig("")
-	if err != nil {
-		return UIConfig{}, err
-	}
-	return config.UI, nil
-}
-
-// writeDefaultConfig marshals the default config struct to YAML and writes it to disk.
-func writeDefaultConfig(configPath, header string, cfg interface{}) error {
-	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
-		return err
-	}
-	data, err := yaml.Marshal(cfg)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(configPath, []byte(header+"\n"+string(data)), 0644)
+	return DefaultUIConfig(), nil
 }

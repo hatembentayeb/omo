@@ -13,79 +13,112 @@ import (
 )
 
 func main() {
-	// Bootstrap and open the KeePass secrets database.
+	// App logger: ~/.omo/logs/omo.log
+	logger, err := pluginapi.NewLogger("omo")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "omo: failed to initialise logger: %v\n", err)
+	}
+	if logger != nil {
+		defer logger.Close()
+	}
+
 	secretsProvider, err := secrets.New()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "omo: failed to initialise secrets: %v\n", err)
+		if logger != nil {
+			logger.Error("failed to initialise secrets: %v", err)
+		}
 		os.Exit(1)
 	}
 	defer secretsProvider.Close()
+	if logger != nil {
+		logger.Info("secrets provider initialised")
+	}
 
-	// Register the global provider so plugins can call pluginapi.Secrets().
 	pluginapi.SetSecretsProvider(secrets.NewAdapter(secretsProvider))
 
 	app := tview.NewApplication()
 	pages := tview.NewPages()
-	omoHost := host.New(app, pages)
-
-	// Setup default header content
-	omoHost.UpdateHeader("")
+	omoHost := host.New(app, pages, logger)
 
 	pluginsList := omoHost.LoadPlugins()
-	helpListView := omoHost.HelpList()
+	logoView := omoHost.LogoView()
+	actionsView := omoHost.ActionsView()
 
-	// Adjust grid layout for better space utilization
-	// Column alignment: fixed left column width to align with Redis separator
-	omoHost.MainUI.SetRows(8, 0, 3).SetColumns(20, 0)
+	// Three rows: logo (4) + plugins list (flex) + actions (4)
+	// Two columns: sidebar (20 wide) + main content (flex)
+	omoHost.MainUI.SetRows(4, 0, 4).SetColumns(20, 0)
 
-	// Set less obtrusive borders
 	omoHost.MainUI.SetBorders(true).SetBordersColor(tcell.ColorAqua)
 	omoHost.MainUI.SetBackgroundColor(tcell.ColorDefault)
 
-	// Configure mainFrame to take maximum space with no padding
 	omoHost.MainFrame.SetBorderPadding(0, 0, 0, 0)
-
-	// Set the welcome screen as the initial view
 	omoHost.MainFrame.SetPrimitive(host.Cover(app))
 
-	// minWidth=0 so the grid renders on small terminals (e.g. Termux)
-	omoHost.MainUI.AddItem(omoHost.HeaderView, 0, 0, 1, 1, 0, 0, false).
-		AddItem(pluginsList, 1, 0, 1, 1, 0, 0, true).
+	omoHost.MainUI.AddItem(logoView, 0, 0, 1, 1, 0, 0, false).
 		AddItem(omoHost.MainFrame, 0, 1, 3, 1, 0, 0, false).
-		AddItem(helpListView, 2, 0, 1, 1, 0, 0, false)
+		AddItem(pluginsList, 1, 0, 1, 1, 0, 0, true).
+		AddItem(actionsView, 2, 0, 1, 1, 0, 0, false)
 
-	// Set up pages with main UI as base page
 	pages.AddPage("main", omoHost.MainUI, true, true)
 
-	// Panel cycling: Shift+Tab or Ctrl+Down to cycle between panels.
-	// Ctrl+Down is needed because Shift+Tab doesn't work on many mobile terminals (Termux).
-	cyclePanels := func() {
-		currentFocus := app.GetFocus()
-		switch currentFocus {
-		case omoHost.PluginsList:
-			app.SetFocus(helpListView)
-		case helpListView:
-			mainContent := omoHost.MainFrame.GetPrimitive()
-			if mainContent != nil {
-				app.SetFocus(mainContent)
-			} else {
-				app.SetFocus(omoHost.PluginsList)
-			}
-		default:
-			app.SetFocus(omoHost.PluginsList)
-		}
-	}
+	// Global key bindings
+	// Tab cycles: plugins list → main content → actions → plugins list
+	// Shift+Tab cycles in reverse
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyBacktab ||
-			(event.Key() == tcell.KeyDown && event.Modifiers()&tcell.ModCtrl != 0) {
-			cyclePanels()
+		if event.Key() == tcell.KeyTab {
+			focus := app.GetFocus()
+			switch {
+			case focus == pluginsList:
+				if mc := omoHost.MainFrame.GetPrimitive(); mc != nil {
+					app.SetFocus(mc)
+				}
+			case focus == actionsView:
+				app.SetFocus(pluginsList)
+			default:
+				app.SetFocus(actionsView)
+			}
 			return nil
 		}
+
+		if event.Key() == tcell.KeyBacktab {
+			focus := app.GetFocus()
+			switch {
+			case focus == pluginsList:
+				app.SetFocus(actionsView)
+			case focus == actionsView:
+				if mc := omoHost.MainFrame.GetPrimitive(); mc != nil {
+					app.SetFocus(mc)
+				}
+			default:
+				app.SetFocus(pluginsList)
+			}
+			return nil
+		}
+
+		// 'r' when sidebar is focused: refresh plugins
+		if event.Rune() == 'r' && app.GetFocus() == pluginsList {
+			omoHost.RefreshPlugins()
+			return nil
+		}
+
+		// 'p' when sidebar is focused: open package manager
+		if event.Rune() == 'p' && app.GetFocus() == pluginsList {
+			omoHost.OpenPackageManager()
+			return nil
+		}
+
 		return event
 	})
 
-	// Use pages as the root primitive
+	if logger != nil {
+		logger.Info("omo started")
+	}
+
 	if err := app.SetRoot(pages, true).Run(); err != nil {
+		if logger != nil {
+			logger.Error("app crashed: %v", err)
+		}
 		panic(err)
 	}
 }

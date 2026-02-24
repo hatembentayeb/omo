@@ -41,13 +41,13 @@ func NewKafkaView(app *tview.Application, pages *tview.Pages) *KafkaView {
 	// Initialize Kafka client
 	kv.kafkaClient = NewKafkaClient()
 
-	// Load config
-	config, err := LoadKafkaConfig("")
+	// Discover instances from KeePass
+	instances, err := DiscoverInstances()
 	if err == nil {
-		kv.instances = config.Instances
-		if config.UI.RefreshInterval > 0 {
-			kv.refreshInterval = time.Duration(config.UI.RefreshInterval) * time.Second
-		}
+		kv.instances = instances
+	}
+	if uiCfg, uiErr := GetKafkaUIConfig(); uiErr == nil && uiCfg.RefreshInterval > 0 {
+		kv.refreshInterval = time.Duration(uiCfg.RefreshInterval) * time.Second
 	}
 
 	// Create all sub-views
@@ -150,7 +150,7 @@ func (kv *KafkaView) ShowClusterSelector() {
 	}
 
 	if len(instances) == 0 {
-		kv.cores.Log("[yellow]No Kafka instances configured in ~/.omo/configs/kafka/kafka.yaml")
+		kv.cores.Log("[yellow]No Kafka instances configured in KeePass (create entries under kafka/<environment>/<name>)")
 		return
 	}
 

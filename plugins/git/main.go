@@ -20,7 +20,7 @@ type GitPlugin struct {
 
 // Start initializes and starts the Git plugin UI
 func (g *GitPlugin) Start(app *tview.Application) tview.Primitive {
-	// Initialize the Git view
+	pluginapi.Log().Info("starting plugin")
 	pages := tview.NewPages()
 	gitView := NewGitView(app, pages)
 	g.gitView = gitView

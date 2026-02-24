@@ -18,7 +18,7 @@ type KafkaPlugin struct {
 
 // Start initializes the plugin and returns the main UI component
 func (p *KafkaPlugin) Start(app *tview.Application) tview.Primitive {
-	// Create pages component for modal dialogs
+	pluginapi.Log().Info("starting plugin")
 	pages := tview.NewPages()
 
 	// Initialize the Kafka view

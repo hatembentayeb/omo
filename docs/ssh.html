@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SSH Plugin — omo</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div class="header-inner">
+    <a href="index.html" class="header-brand">
+      <span class="header-title">omo</span>
+    </a>
+    <div class="header-links">
+      <a href="https://github.com/hatembentayeb/omo" class="github-link" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </div>
+</header>
+
+<!-- Sidebar -->
+<nav class="sidebar" id="sidebar">
+  <a href="index.html" class="back-link">Back to Manual</a>
+  <div class="sidebar-heading">SSH Plugin</div>
+  <a href="#overview">Overview</a>
+  <a href="#prerequisites">Prerequisites</a>
+  <a href="#configuration">Configuration</a>
+  <a href="#keepass-secrets">KeePass Secrets</a>
+  <a href="#keybindings">Keybindings</a>
+  <a href="#troubleshooting">Troubleshooting</a>
+</nav>
+
+<!-- Main -->
+<main class="main">
+  <div class="content">
+
+    <section class="section plugin-hero" id="overview">
+      <h1>SSH Plugin</h1>
+      <p class="lead">Manage SSH connections to remote servers. Execute commands remotely, monitor server health. Supports key-based, password, proxy command, and jump host authentication.</p>
+      <div class="plugin-tags">
+        <span class="tag">ssh</span>
+        <span class="tag">remote</span>
+        <span class="tag">server</span>
+        <span class="tag">devops</span>
+      </div>
+      <p><strong>SSH is a KeePass-first plugin.</strong> ALL connection details are stored in KeePass — the YAML config only controls which environments are enabled and UI settings.</p>
+    </section>
+
+    <hr class="section-divider">
+
+    <section class="section" id="prerequisites">
+      <h2>Prerequisites</h2>
+      <ul>
+        <li>Network access to SSH servers</li>
+        <li>SSH credentials (key or password)</li>
+        <li>For jump hosts: access to bastion server</li>
+      </ul>
+    </section>
+
+    <hr class="section-divider">
+
+    <section class="section" id="configuration">
+      <h2>Configuration</h2>
+      <p>Config: <code>~/.omo/configs/ssh/ssh.yaml</code></p>
+
+      <div class="code-header"><span>ssh.yaml</span></div>
+      <pre><code>environments:
+  - name: development
+    enabled: true
+  - name: production
+    enabled: true
+  - name: staging
+    enabled: true
+  - name: sandbox
+    enabled: true
+
+ui:
+  refresh_interval: 10</code></pre>
+    </section>
+
+    <hr class="section-divider">
+
+    <section class="section" id="keepass-secrets">
+      <h2>KeePass Secrets</h2>
+      <p>Path: <code>ssh/&lt;environment&gt;/&lt;name&gt;</code>, e.g. <code>ssh/production/web-01</code></p>
+      <p>This plugin uses KeePass as the SOLE source of connection details:</p>
+
+      <h3>Standard fields</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>KeePass Field</th><th>Maps To</th><th>Description</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Title</td><td>name</td><td>Server display name</td></tr>
+            <tr><td>URL</td><td>host</td><td>Hostname or IP address</td></tr>
+            <tr><td>UserName</td><td>user</td><td>SSH login username</td></tr>
+            <tr><td>Password</td><td>password</td><td>SSH password (fallback when no key)</td></tr>
+            <tr><td>Notes</td><td>description</td><td>Description / notes</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Custom attributes</h3>
+      <p>Set in KeePass "Advanced" tab:</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Attribute</th><th>Default</th><th>Description</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>port</td><td>22</td><td>SSH port</td></tr>
+            <tr><td>auth_method</td><td>auto</td><td>"key", "password", or "auto"</td></tr>
+            <tr><td>private_key</td><td>—</td><td>PEM-encoded private key content</td></tr>
+            <tr><td>key_path</td><td>—</td><td>Path to private key file (e.g. ~/.ssh/id_ed25519)</td></tr>
+            <tr><td>passphrase</td><td>—</td><td>Private key passphrase</td></tr>
+            <tr><td>proxy_command</td><td>—</td><td>ProxyCommand (e.g. "ssh -W %h:%p bastion")</td></tr>
+            <tr><td>jump_host</td><td>—</td><td>Jump/bastion host (user@host:port)</td></tr>
+            <tr><td>jump_key</td><td>—</td><td>PEM key for jump host</td></tr>
+            <tr><td>jump_key_path</td><td>—</td><td>Path to key file for jump host</td></tr>
+            <tr><td>fingerprint</td><td>—</td><td>Expected host key fingerprint</td></tr>
+            <tr><td>tags</td><td>—</td><td>Comma-separated tags (e.g. "web,nginx,prod")</td></tr>
+            <tr><td>env_*</td><td>—</td><td>Environment variables (e.g. env_TERM=xterm-256color)</td></tr>
+            <tr><td>startup_cmd</td><td>—</td><td>Command to run after connecting</td></tr>
+            <tr><td>keep_alive</td><td>30</td><td>Keepalive interval in seconds</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="code-header"><span>Example KeePass tree</span></div>
+      <pre><code>omo (root)
+  └── ssh
+       ├── development
+       │    └── local-vm        (URL=192.168.56.10, UserName=dev, key_path=~/.ssh/id_ed25519)
+       ├── staging
+       │    └── app-01          (URL=staging.example.com, UserName=deploy, auth_method=key)
+       └── production
+            ├── web-01          (URL=10.0.1.10, jump_host=bastion@10.0.0.1:22)
+            └── db-master       (URL=10.0.2.10, proxy_command=ssh -W %h:%p bastion)</code></pre>
+
+      <div class="callout callout-info">
+        <div class="callout-title">KeePass-first</div>
+        <p>SSH servers are fully managed through KeePass. To add a new server, create a new entry in KeePassXC under <code>ssh/&lt;environment&gt;/&lt;name&gt;</code>. omo auto-creates placeholder entries on first launch.</p>
+      </div>
+    </section>
+
+    <hr class="section-divider">
+
+    <section class="section" id="keybindings">
+      <h2>Keybindings</h2>
+      <div class="table-wrap key-table">
+        <table>
+          <thead><tr><th>Key</th><th>Action</th></tr></thead>
+          <tbody>
+            <tr><td><kbd>C</kbd></td><td>Connect to server</td></tr>
+            <tr><td><kbd>E</kbd></td><td>Execute command</td></tr>
+            <tr><td><kbd>I</kbd></td><td>Server info</td></tr>
+            <tr><td><kbd>D</kbd></td><td>Disconnect</td></tr>
+            <tr><td><kbd>Ctrl+T</kbd></td><td>Server selector</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Plus global keys (<kbd>j</kbd>/<kbd>k</kbd>, <kbd>Enter</kbd>, <kbd>/</kbd>, <kbd>R</kbd>, <kbd>?</kbd>, <kbd>Esc</kbd>, etc.).</p>
+    </section>
+
+    <hr class="section-divider">
+
+    <section class="section" id="troubleshooting">
+      <h2>Troubleshooting</h2>
+      <ul>
+        <li><strong>No servers found</strong> — Create KeePass entries under <code>ssh/&lt;env&gt;/&lt;name&gt;</code></li>
+        <li><strong>Connection refused</strong> — Check host and port</li>
+        <li><strong>Authentication failed</strong> — Verify credentials, key path, or passphrase</li>
+        <li><strong>Jump host timeout</strong> — Ensure bastion is accessible</li>
+      </ul>
+    </section>
+
+    <footer class="footer">
+      <p>Built by <a href="https://oh-myops.com">Hatem Ben Tayeb</a> &bull; <a href="https://github.com/hatembentayeb/omo">GitHub</a> &bull; Apache License 2.0</p>
+    </footer>
+
+  </div>
+</main>
+
+<script>
+// Sidebar active state on scroll
+const sections = document.querySelectorAll('.section[id], .plugin-hero[id]');
+const navLinks = document.querySelectorAll('.sidebar a[href^="#"]');
+
+function updateActiveNav() {
+  const scrollPos = window.scrollY + 100;
+  let current = '';
+
+  sections.forEach(section => {
+    if (section.offsetTop <= scrollPos) {
+      current = section.getAttribute('id');
+    }
+  });
+
+  navLinks.forEach(link => {
+    link.classList.remove('active');
+    if (link.getAttribute('href') === '#' + current) {
+      link.classList.add('active');
+    }
+  });
+}
+
+window.addEventListener('scroll', updateActiveNav);
+window.addEventListener('load', updateActiveNav);
+</script>
+
+</body>
+</html>

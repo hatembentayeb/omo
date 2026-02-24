@@ -4,214 +4,219 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"omo/pkg/pluginapi"
-
-	"gopkg.in/yaml.v3"
 )
 
-// gitConfigHeader is prepended to the auto-generated config YAML.
-const gitConfigHeader = `# Git Plugin Configuration
-# Path: ~/.omo/configs/git/git.yaml
-#
-# KeePass Secret Schema (secret path: git/<environment>/<name>):
-#   Title    → repository name
-#   URL      → remote URL (e.g. "https://github.com/org/repo.git")
-#   UserName → git username
-#   Password → auth token / personal access token
-#
-# When "secret" is set, auth fields are resolved from KeePass.
-# YAML values take precedence over KeePass values (override only blanks).
-# The plugin also discovers repositories from search_paths on the host.
-`
-
-// GitConfig represents the configuration for the Git plugin
-type GitConfig struct {
-	SearchPaths  []string        `yaml:"search_paths"`
-	Repositories []GitRepoConfig `yaml:"repositories"`
-	UI           UIConfig        `yaml:"ui"`
-	DefaultRepo  string          `yaml:"default_repo"`
+var defaultGitEnvironments = []string{
+	"development",
+	"production",
+	"staging",
+	"sandbox",
+	"local",
+	"test",
 }
 
-// GitRepoConfig represents a configured Git repository.
-// When the Secret field is set (e.g. "git/github/main-repo"),
-// it references a KeePass entry whose fields can provide auth tokens.
+// GitRepoConfig is built entirely from a KeePass entry at runtime.
+//
+// KeePass Entry Schema (path: git/<environment>/<name>):
+//
+//	Title    → repository display name
+//	URL      → remote URL (e.g. "https://github.com/org/repo.git")
+//	UserName → git username
+//	Password → auth token / personal access token
+//	Notes    → description / notes
+//
+//	Custom Attributes:
+//	  path → local path to the repository
+//	  tags → comma-separated tags
 type GitRepoConfig struct {
-	Name        string `yaml:"name"`
-	Description string `yaml:"description"`
-	Secret      string `yaml:"secret,omitempty"` // KeePass path: pluginName/env/entryName
-	Path        string `yaml:"path"`
-	RemoteURL   string `yaml:"remote_url,omitempty"`
-	Username    string `yaml:"username,omitempty"`
-	Token       string `yaml:"token,omitempty"`
+	Name        string
+	Description string
+	Environment string
+	Path        string
+	RemoteURL   string
+	Username    string
+	Token       string
+	Tags        []string
 }
 
-// UIConfig represents UI configuration options
+// UIConfig holds hardcoded UI defaults for the Git plugin.
 type UIConfig struct {
-	RefreshInterval    int  `yaml:"refresh_interval"`
-	MaxReposDisplay    int  `yaml:"max_repos_display"`
-	MaxCommitsDisplay  int  `yaml:"max_commits_display"`
-	MaxSearchDepth     int  `yaml:"max_search_depth"`
-	ShowRemoteBranches bool `yaml:"show_remote_branches"`
-	ShowStash          bool `yaml:"show_stash"`
-	ShowTags           bool `yaml:"show_tags"`
+	RefreshInterval    int
+	MaxReposDisplay    int
+	MaxCommitsDisplay  int
+	MaxSearchDepth     int
+	ShowRemoteBranches bool
+	ShowStash          bool
+	ShowTags           bool
 }
 
-// DefaultGitConfig returns the default configuration
-func DefaultGitConfig() *GitConfig {
-	homedir, _ := os.UserHomeDir()
-	return &GitConfig{
-		SearchPaths: []string{
-			filepath.Join(homedir, "projects"),
-			filepath.Join(homedir, "work"),
-			filepath.Join(homedir, "go/src"),
-		},
-		UI: UIConfig{
-			RefreshInterval:    30,
-			MaxReposDisplay:    100,
-			MaxCommitsDisplay:  50,
-			MaxSearchDepth:     3,
-			ShowRemoteBranches: true,
-			ShowStash:          true,
-			ShowTags:           true,
-		},
-		DefaultRepo: "",
+func DefaultGitUIConfig() UIConfig {
+	return UIConfig{
+		RefreshInterval:    30,
+		MaxReposDisplay:    100,
+		MaxCommitsDisplay:  50,
+		MaxSearchDepth:     3,
+		ShowRemoteBranches: true,
+		ShowStash:          true,
+		ShowTags:           true,
 	}
 }
 
-// LoadGitConfig loads the Git configuration from the specified file
-func LoadGitConfig(configPath string) (*GitConfig, error) {
-	// If no path is specified, use the default config path
-	if configPath == "" {
-		configPath = pluginapi.PluginConfigPath("git")
-	}
-
-	// Auto-create default config if missing
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		_ = writeDefaultConfig(configPath, gitConfigHeader, DefaultGitConfig())
-	}
-
-	// Read the configuration file
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("error reading config file: %v", err)
-	}
-
-	// Unmarshal the configuration
-	config := DefaultGitConfig()
-	err = yaml.Unmarshal(data, config)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing config file: %v", err)
-	}
-
-	// Expand home directory in paths
-	homedir, _ := os.UserHomeDir()
-	for i, path := range config.SearchPaths {
-		if strings.HasPrefix(path, "~") {
-			config.SearchPaths[i] = strings.Replace(path, "~", homedir, 1)
-		}
-	}
-
-	// Init KeePass placeholder if no entries exist yet
-	initGitKeePass()
-
-	// Resolve secrets for repositories that reference KeePass entries.
-	if err := resolveGitSecrets(config); err != nil {
-		return nil, fmt.Errorf("error resolving secrets: %v", err)
-	}
-
-	return config, nil
-}
-
-// initGitKeePass seeds placeholder KeePass entries for Git if none exist.
-func initGitKeePass() {
+// DiscoverRepositories reads KeePass groups under "git/" and builds
+// GitRepoConfig objects from the entries.
+func DiscoverRepositories() ([]GitRepoConfig, error) {
 	if !pluginapi.HasSecrets() {
-		return
-	}
-	entries, err := pluginapi.Secrets().List("git")
-	if err != nil || len(entries) > 0 {
-		return
-	}
-	_ = pluginapi.Secrets().Put("git/default/example", &pluginapi.SecretEntry{
-		Title:    "example",
-		UserName: "",
-		Password: "",
-		URL:      "",
-		Notes:    "Git placeholder. Set URL (remote URL), UserName (git user), Password (PAT/token).",
-	})
-}
-
-// resolveGitSecrets iterates over repositories and populates auth
-// fields from the secrets provider when a secret path is defined.
-func resolveGitSecrets(config *GitConfig) error {
-	if !pluginapi.HasSecrets() {
-		return nil // no provider — skip silently
+		return nil, fmt.Errorf("secrets provider not available")
 	}
 
-	for i := range config.Repositories {
-		repo := &config.Repositories[i]
-		if repo.Secret == "" {
+	if err := pluginapi.Secrets().Reload(); err != nil {
+		return nil, fmt.Errorf("reload secrets: %w", err)
+	}
+
+	ensureGitKeePassGroups()
+
+	paths, err := pluginapi.Secrets().List("git")
+	if err != nil {
+		return nil, fmt.Errorf("list git secrets: %w", err)
+	}
+
+	var repos []GitRepoConfig
+	for _, path := range paths {
+		env := extractEnvironment(path)
+		if env == "" {
 			continue
 		}
 
-		entry, err := pluginapi.ResolveSecret(repo.Secret)
+		entry, err := pluginapi.Secrets().Get(path)
 		if err != nil {
-			return fmt.Errorf("repository %q: %w", repo.Name, err)
+			continue
 		}
 
-		// Override only blank fields so YAML values take precedence.
-		if repo.Username == "" && entry.UserName != "" {
-			repo.Username = entry.UserName
-		}
-		if repo.Token == "" && entry.Password != "" {
-			repo.Token = entry.Password
-		}
-		if repo.RemoteURL == "" && entry.URL != "" {
-			repo.RemoteURL = entry.URL
-		}
-		if repo.Name == "" && entry.Title != "" {
-			repo.Name = entry.Title
-		}
+		repo := entryToGitRepo(entry, env)
+		repos = append(repos, repo)
 	}
-	return nil
+
+	sort.Slice(repos, func(i, j int) bool {
+		if repos[i].Environment != repos[j].Environment {
+			return repos[i].Environment < repos[j].Environment
+		}
+		return repos[i].Name < repos[j].Name
+	})
+
+	return repos, nil
 }
 
-// GetConfiguredRepositories returns the list of configured repositories
-func GetConfiguredRepositories() ([]GitRepoConfig, error) {
-	config, err := LoadGitConfig("")
-	if err != nil {
-		return nil, err
+func extractEnvironment(path string) string {
+	parts := strings.SplitN(path, "/", 3)
+	if len(parts) < 3 {
+		return ""
 	}
-	return config.Repositories, nil
+	return parts[1]
 }
 
-// GetSearchPaths returns the configured search paths
+func entryToGitRepo(entry *pluginapi.SecretEntry, env string) GitRepoConfig {
+	repo := GitRepoConfig{
+		Name:        entry.Title,
+		Description: entry.Notes,
+		Environment: env,
+		RemoteURL:   entry.URL,
+		Username:    entry.UserName,
+		Token:       entry.Password,
+	}
+
+	if entry.CustomAttributes == nil {
+		return repo
+	}
+
+	ca := entry.CustomAttributes
+
+	if v, ok := ca["path"]; ok {
+		repo.Path = v
+	}
+	if v, ok := ca["tags"]; ok {
+		for _, t := range strings.Split(v, ",") {
+			t = strings.TrimSpace(t)
+			if t != "" {
+				repo.Tags = append(repo.Tags, t)
+			}
+		}
+	}
+
+	return repo
+}
+
+func ensureGitKeePassGroups() {
+	if !pluginapi.HasSecrets() {
+		return
+	}
+
+	requiredAttrs := map[string]string{
+		"path": "",
+		"tags": "",
+	}
+
+	for _, env := range defaultGitEnvironments {
+		prefix := fmt.Sprintf("git/%s", env)
+		existing, err := pluginapi.Secrets().List(prefix)
+		if err == nil && len(existing) > 0 {
+			backfillAttributes(existing, requiredAttrs)
+			continue
+		}
+		path := fmt.Sprintf("git/%s/example", env)
+		_ = pluginapi.Secrets().Put(path, &pluginapi.SecretEntry{
+			Title:            "example",
+			UserName:         "",
+			Password:         "",
+			URL:              "",
+			Notes:            fmt.Sprintf("Git %s placeholder. Set URL (remote URL), UserName (git user), Password (PAT/token).", env),
+			CustomAttributes: requiredAttrs,
+		})
+	}
+}
+
+func backfillAttributes(entryPaths []string, required map[string]string) {
+	for _, entryPath := range entryPaths {
+		entry, err := pluginapi.Secrets().Get(entryPath)
+		if err != nil || entry == nil {
+			continue
+		}
+		if entry.CustomAttributes == nil {
+			entry.CustomAttributes = make(map[string]string)
+		}
+		updated := false
+		for attr, defaultVal := range required {
+			if _, exists := entry.CustomAttributes[attr]; !exists {
+				entry.CustomAttributes[attr] = defaultVal
+				updated = true
+			}
+		}
+		if updated {
+			_ = pluginapi.Secrets().Put(entryPath, entry)
+		}
+	}
+}
+
+// GetSearchPaths returns default search paths for auto-discovering
+// Git repositories on the local filesystem.
 func GetSearchPaths() ([]string, error) {
-	config, err := LoadGitConfig("")
-	if err != nil {
-		return nil, err
-	}
-	return config.SearchPaths, nil
+	homedir, _ := os.UserHomeDir()
+	return []string{
+		filepath.Join(homedir, "projects"),
+		filepath.Join(homedir, "work"),
+		filepath.Join(homedir, "go/src"),
+	}, nil
 }
 
-// GetGitUIConfig returns the UI configuration
+// GetConfiguredRepositories returns all discovered Git repositories from KeePass.
+func GetConfiguredRepositories() ([]GitRepoConfig, error) {
+	return DiscoverRepositories()
+}
+
+// GetGitUIConfig returns the hardcoded UI configuration.
 func GetGitUIConfig() (UIConfig, error) {
-	config, err := LoadGitConfig("")
-	if err != nil {
-		return UIConfig{}, err
-	}
-	return config.UI, nil
-}
-
-// writeDefaultConfig marshals the default config struct to YAML and writes it to disk.
-func writeDefaultConfig(configPath, header string, cfg interface{}) error {
-	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
-		return err
-	}
-	data, err := yaml.Marshal(cfg)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(configPath, []byte(header+"\n"+string(data)), 0644)
+	return DefaultGitUIConfig(), nil
 }

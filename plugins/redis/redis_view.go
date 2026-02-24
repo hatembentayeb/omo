@@ -955,7 +955,7 @@ func (rv *RedisView) AutoConnectToDefaultInstance() {
 
 	if len(instances) == 0 {
 		rv.app.QueueUpdateDraw(func() {
-			rv.cores.Log("[yellow]No Redis instances configured in ~/.omo/configs/redis/redis.yaml")
+			rv.cores.Log("[yellow]No Redis instances configured in KeePass (create entries under redis/<environment>/<name>)")
 		})
 		return
 	}

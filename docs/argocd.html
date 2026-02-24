@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ArgoCD Plugin — omo</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div class="header-inner">
+    <a href="index.html" class="header-brand">
+      <span class="header-title">omo</span>
+    </a>
+    <div class="header-links">
+      <a href="https://github.com/hatembentayeb/omo" class="github-link" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </div>
+</header>
+
+<!-- Sidebar -->
+<nav class="sidebar" id="sidebar">
+  <a href="index.html" class="back-link">Back to Manual</a>
+  <div class="sidebar-heading">ArgoCD Plugin</div>
+  <a href="#overview">Overview</a>
+  <a href="#prerequisites">Prerequisites</a>
+  <a href="#configuration">Configuration</a>
+  <a href="#keepass-secrets">KeePass Secrets</a>
+  <a href="#keybindings">Keybindings</a>
+  <a href="#troubleshooting">Troubleshooting</a>
+</nav>
+
+<!-- Main -->
+<main class="main">
+  <div class="content">
+
+    <section class="section plugin-hero" id="overview">
+      <h1>ArgoCD Plugin</h1>
+      <p class="lead">Manage ArgoCD applications, projects, accounts, and RBAC. Sync, refresh, rollback applications. View sync status, health checks.</p>
+      <div class="plugin-tags">
+        <span class="tag">gitops</span>
+        <span class="tag">kubernetes</span>
+        <span class="tag">cd</span>
+      </div>
+
+      <div class="callout callout-info" style="margin-top: 24px;">
+        <div class="callout-title">KeePass-first</div>
+        <p>ArgoCD is a KeePass-first plugin. ALL connection details are stored in KeePass — the YAML config only controls which environments are enabled and debug settings.</p>
+      </div>
+    </section>
+
+    <hr class="section-divider">
+
+    <section class="section" id="prerequisites">
+      <h2>Prerequisites</h2>
+      <ul>
+        <li>Running ArgoCD server</li>
+        <li>ArgoCD credentials (user/pass or auth token)</li>
+        <li>For RBAC management: kubeconfig with access to ArgoCD namespace</li>
+      </ul>
+    </section>
+
+    <hr class="section-divider">
+
+    <section class="section" id="configuration">
+      <h2>Configuration</h2>
+      <p>Config: <code>~/.omo/configs/argocd/argocd.yaml</code></p>
+
+      <div class="code-header"><span>argocd.yaml</span></div>
+      <pre><code>environments:
+  - name: development
+    enabled: true
+  - name: production
+    enabled: true
+  - name: staging
+    enabled: true
+  - name: sandbox
+    enabled: true
+
+debug:
+  enabled: false
+  log_api_calls: false
+  log_responses: false
+  request_timeout_seconds: 30</code></pre>
+    </section>
+
+    <hr class="section-divider">
+
+    <section class="section" id="keepass-secrets">
+      <h2>KeePass Secrets</h2>
+      <p>Path: <code>argocd/&lt;environment&gt;/&lt;name&gt;</code>, e.g. <code>argocd/production/prod-cluster</code></p>
+
+      <h3>Standard Fields</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>KeePass Field</th><th>Maps To</th><th>Description</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Title</td><td>name</td><td>Instance display name</td></tr>
+            <tr><td>URL</td><td>url</td><td>ArgoCD server URL (e.g. "https://argocd.example.com")</td></tr>
+            <tr><td>UserName</td><td>username</td><td>ArgoCD username (for user/pass auth)</td></tr>
+            <tr><td>Password</td><td>password</td><td>ArgoCD password (for user/pass auth)</td></tr>
+            <tr><td>Notes</td><td>description</td><td>Description / notes</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Custom Attributes</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Attribute</th><th>Default</th><th>Description</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>auth_token</td><td>—</td><td>Bearer token (alternative to user/pass)</td></tr>
+            <tr><td>insecure</td><td>false</td><td>"true" to skip TLS verification</td></tr>
+            <tr><td>kubeconfig</td><td>—</td><td>Inline kubeconfig YAML (for RBAC management)</td></tr>
+            <tr><td>kubeconfig_path</td><td>—</td><td>Path to kubeconfig file (alternative to inline)</td></tr>
+            <tr><td>namespace</td><td>argocd</td><td>ArgoCD namespace in Kubernetes</td></tr>
+            <tr><td>tags</td><td>—</td><td>Comma-separated tags</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Example Tree</h3>
+      <div class="code-header"><span>KeePass structure</span></div>
+      <pre><code>omo (root)
+  └── argocd
+       ├── development
+       │    └── local-argo      (URL=https://localhost:8080, UserName=admin, Password=..., insecure=true)
+       └── production
+            └── prod-cluster    (URL=https://argocd.prod.com, auth_token=eyJhbG..., namespace=argocd)</code></pre>
+
+      <div class="callout callout-tip">
+        <div class="callout-title">Auto-Management</div>
+        <p>ArgoCD instances are fully managed through KeePass. omo auto-creates placeholder entries with all known custom attributes on first launch, and backfills missing attributes on existing entries.</p>
+      </div>
+    </section>
+
+    <hr class="section-divider">
+
+    <section class="section" id="keybindings">
+      <h2>Keybindings</h2>
+
+      <h3>ArgoCD Actions</h3>
+      <div class="table-wrap key-table">
+        <table>
+          <thead><tr><th>Key</th><th>Action</th></tr></thead>
+          <tbody>
+            <tr><td><kbd>C</kbd></td><td>Create application</td></tr>
+            <tr><td><kbd>D</kbd></td><td>Delete application</td></tr>
+            <tr><td><kbd>S</kbd></td><td>Sync application</td></tr>
+            <tr><td><kbd>V</kbd></td><td>View details</td></tr>
+            <tr><td><kbd>F</kbd></td><td>Refresh status</td></tr>
+            <tr><td><kbd>A</kbd></td><td>Accounts</td></tr>
+            <tr><td><kbd>P</kbd></td><td>Projects</td></tr>
+            <tr><td><kbd>G</kbd></td><td>RBAC</td></tr>
+            <tr><td><kbd>Ctrl+T</kbd></td><td>Select instance</td></tr>
+            <tr><td><kbd>Ctrl+D</kbd></td><td>Debug logs</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Global Keys</h3>
+      <div class="table-wrap key-table">
+        <table>
+          <thead><tr><th>Key</th><th>Action</th></tr></thead>
+          <tbody>
+            <tr><td><kbd>j</kbd> / <kbd>k</kbd></td><td>Navigate down / up</td></tr>
+            <tr><td><kbd>Enter</kbd></td><td>Select</td></tr>
+            <tr><td><kbd>/</kbd></td><td>Filter</td></tr>
+            <tr><td><kbd>Shift+Tab</kbd></td><td>Cycle panels</td></tr>
+            <tr><td><kbd>R</kbd></td><td>Refresh</td></tr>
+            <tr><td><kbd>?</kbd></td><td>Help</td></tr>
+            <tr><td><kbd>Esc</kbd></td><td>Back</td></tr>
+            <tr><td><kbd>PgDn</kbd></td><td>Load more</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <hr class="section-divider">
+
+    <section class="section" id="troubleshooting">
+      <h2>Troubleshooting</h2>
+      <ul>
+        <li><strong>No instances found</strong> — Create KeePass entries under <code>argocd/&lt;env&gt;/&lt;name&gt;</code></li>
+        <li><strong>TLS certificate error</strong> — Set <code>insecure=true</code> or provide valid certs</li>
+        <li><strong>401 Unauthorized</strong> — Verify <code>auth_token</code> or username/password</li>
+        <li><strong>RBAC features unavailable</strong> — Provide <code>kubeconfig</code> or <code>kubeconfig_path</code></li>
+      </ul>
+    </section>
+
+    <footer class="footer">
+      <p>Built by <a href="https://oh-myops.com">Hatem Ben Tayeb</a> &bull; <a href="https://github.com/hatembentayeb/omo">GitHub</a> &bull; Apache License 2.0</p>
+    </footer>
+
+  </div>
+</main>
+
+<script>
+// Sidebar active state on scroll
+const sections = document.querySelectorAll('.section[id], .plugin-hero[id]');
+const navLinks = document.querySelectorAll('.sidebar a[href^="#"]');
+
+function updateActiveNav() {
+  const scrollPos = window.scrollY + 100;
+  let current = '';
+
+  sections.forEach(section => {
+    if (section.offsetTop <= scrollPos) {
+      current = section.getAttribute('id');
+    }
+  });
+
+  navLinks.forEach(link => {
+    link.classList.remove('active');
+    if (link.getAttribute('href') === '#' + current) {
+      link.classList.add('active');
+    }
+  });
+}
+
+window.addEventListener('scroll', updateActiveNav);
+window.addEventListener('load', updateActiveNav);
+</script>
+
+</body>
+</html>

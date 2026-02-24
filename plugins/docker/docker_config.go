@@ -2,202 +2,216 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
+	"sort"
+	"strings"
 
 	"omo/pkg/pluginapi"
-
-	"gopkg.in/yaml.v3"
 )
 
-// dockerConfigHeader is prepended to the auto-generated config YAML.
-const dockerConfigHeader = `# Docker Plugin Configuration
-# Path: ~/.omo/configs/docker/docker.yaml
-#
-# KeePass Secret Schema (secret path: docker/<environment>/<name>):
-#   Title    → host name
-#   URL      → docker host URL (e.g. "unix:///var/run/docker.sock", "tcp://host:2376")
-#   Custom Attributes:
-#     cert_path → path to TLS certificates directory
-#
-# When "secret" is set, connection fields are resolved from KeePass.
-# YAML values take precedence over KeePass values (override only blanks).
-`
-
-// DockerConfig represents the configuration for the Docker plugin
-type DockerConfig struct {
-	Hosts []DockerHost `yaml:"hosts"`
-	UI    UIConfig     `yaml:"ui"`
+var defaultDockerEnvironments = []string{
+	"development",
+	"production",
+	"staging",
+	"sandbox",
+	"local",
+	"test",
 }
 
-// DockerHost represents a configured Docker host.
-// When the Secret field is set (e.g. "docker/production/remote-server"),
-// it references a KeePass entry whose fields override Host, CertPath, etc.
-type DockerHost struct {
-	Name        string `yaml:"name"`
-	Description string `yaml:"description"`
-	Secret      string `yaml:"secret,omitempty"` // KeePass path: pluginName/env/entryName
-	Host        string `yaml:"host"`
-	TLS         bool   `yaml:"tls"`
-	TLSVerify   bool   `yaml:"tls_verify"`
-	CertPath    string `yaml:"cert_path"`
-}
-
-// UIConfig represents UI configuration options
-type UIConfig struct {
-	RefreshInterval      int  `yaml:"refresh_interval"`
-	MaxContainersDisplay int  `yaml:"max_containers_display"`
-	MaxImagesDisplay     int  `yaml:"max_images_display"`
-	ShowAllContainers    bool `yaml:"show_all_containers"`
-	LogTailLines         int  `yaml:"log_tail_lines"`
-	EnableStats          bool `yaml:"enable_stats"`
-	EnableCompose        bool `yaml:"enable_compose"`
-}
-
-// DefaultDockerConfig returns the default configuration
-func DefaultDockerConfig() *DockerConfig {
-	return &DockerConfig{
-		Hosts: []DockerHost{
-			{
-				Name:        "local",
-				Description: "Local Docker Daemon",
-				Host:        "unix:///var/run/docker.sock",
-				TLS:         false,
-				TLSVerify:   false,
-				CertPath:    "",
-			},
-		},
-		UI: UIConfig{
-			RefreshInterval:      5,
-			MaxContainersDisplay: 100,
-			MaxImagesDisplay:     100,
-			ShowAllContainers:    true,
-			LogTailLines:         500,
-			EnableStats:          true,
-			EnableCompose:        true,
-		},
-	}
-}
-
-// LoadDockerConfig loads the Docker configuration from the specified file.
+// DockerHost is built entirely from a KeePass entry at runtime.
 //
-// After unmarshalling, any host with a non-empty Secret field will have
-// its connection fields resolved from the KeePass secrets provider.
-func LoadDockerConfig(configPath string) (*DockerConfig, error) {
-	// If no path is specified, use the default config path
-	if configPath == "" {
-		configPath = pluginapi.PluginConfigPath("docker")
-	}
-
-	// Auto-create default config if missing
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		_ = writeDefaultConfig(configPath, dockerConfigHeader, DefaultDockerConfig())
-	}
-
-	// Read the configuration file
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("error reading config file: %v", err)
-	}
-
-	// Unmarshal the configuration
-	config := DefaultDockerConfig()
-	err = yaml.Unmarshal(data, config)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing config file: %v", err)
-	}
-
-	// Init KeePass placeholder if no entries exist yet
-	initDockerKeePass()
-
-	// Resolve secrets for hosts that reference KeePass entries.
-	if err := resolveDockerSecrets(config); err != nil {
-		return nil, fmt.Errorf("error resolving secrets: %v", err)
-	}
-
-	return config, nil
+// KeePass Entry Schema (path: docker/<environment>/<name>):
+//
+//	Title    → host display name
+//	URL      → docker host URL (e.g. "unix:///var/run/docker.sock", "tcp://host:2376")
+//	Notes    → description / notes
+//
+//	Custom Attributes:
+//	  cert_path  → path to TLS certificates directory
+//	  tls        → "true" to enable TLS (default: false)
+//	  tls_verify → "true" to enable TLS verification (default: false)
+//	  tags       → comma-separated tags
+type DockerHost struct {
+	Name        string
+	Description string
+	Environment string
+	Host        string
+	TLS         bool
+	TLSVerify   bool
+	CertPath    string
+	Tags        []string
 }
 
-// initDockerKeePass seeds placeholder KeePass entries for Docker if none exist.
-func initDockerKeePass() {
-	if !pluginapi.HasSecrets() {
-		return
-	}
-	entries, err := pluginapi.Secrets().List("docker")
-	if err != nil || len(entries) > 0 {
-		return
-	}
-	_ = pluginapi.Secrets().Put("docker/default/example", &pluginapi.SecretEntry{
-		Title: "example",
-		URL:   "unix:///var/run/docker.sock",
-		Notes: "Docker placeholder. Set URL (docker host), cert_path (TLS certs dir).",
-		CustomAttributes: map[string]string{
-			"cert_path": "",
-		},
-	})
+// UIConfig holds hardcoded UI defaults for the Docker plugin.
+type UIConfig struct {
+	RefreshInterval      int
+	MaxContainersDisplay int
+	MaxImagesDisplay     int
+	ShowAllContainers    bool
+	LogTailLines         int
+	EnableStats          bool
+	EnableCompose        bool
 }
 
-// resolveDockerSecrets iterates over hosts and populates connection
-// fields from the secrets provider when a secret path is defined.
-func resolveDockerSecrets(config *DockerConfig) error {
+func DefaultUIConfig() UIConfig {
+	return UIConfig{
+		RefreshInterval:      5,
+		MaxContainersDisplay: 100,
+		MaxImagesDisplay:     100,
+		ShowAllContainers:    true,
+		LogTailLines:         500,
+		EnableStats:          true,
+		EnableCompose:        true,
+	}
+}
+
+// DiscoverHosts reads KeePass groups under "docker/" and builds
+// DockerHost objects from the entries.
+func DiscoverHosts() ([]DockerHost, error) {
 	if !pluginapi.HasSecrets() {
-		return nil
+		return nil, fmt.Errorf("secrets provider not available")
 	}
 
-	for i := range config.Hosts {
-		h := &config.Hosts[i]
-		if h.Secret == "" {
+	if err := pluginapi.Secrets().Reload(); err != nil {
+		return nil, fmt.Errorf("reload secrets: %w", err)
+	}
+
+	ensureDockerKeePassGroups()
+
+	paths, err := pluginapi.Secrets().List("docker")
+	if err != nil {
+		return nil, fmt.Errorf("list docker secrets: %w", err)
+	}
+
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("no Docker entries in KeePass (create entries under docker/<environment>/<name>)")
+	}
+
+	var hosts []DockerHost
+	for _, path := range paths {
+		env := extractEnvironment(path)
+		if env == "" {
 			continue
 		}
 
-		entry, err := pluginapi.ResolveSecret(h.Secret)
+		entry, err := pluginapi.Secrets().Get(path)
 		if err != nil {
-			return fmt.Errorf("host %q: %w", h.Name, err)
+			continue
 		}
 
-		// Override only blank fields so YAML values take precedence.
-		if h.Host == "" && entry.URL != "" {
-			h.Host = entry.URL
+		host := entryToDockerHost(entry, env)
+		hosts = append(hosts, host)
+	}
+
+	sort.Slice(hosts, func(i, j int) bool {
+		if hosts[i].Environment != hosts[j].Environment {
+			return hosts[i].Environment < hosts[j].Environment
 		}
-		if h.Name == "" && entry.Title != "" {
-			h.Name = entry.Title
-		}
-		// Custom attributes: tls_cert_path
-		if h.CertPath == "" {
-			if cp, ok := entry.CustomAttributes["cert_path"]; ok {
-				h.CertPath = cp
+		return hosts[i].Name < hosts[j].Name
+	})
+
+	return hosts, nil
+}
+
+func extractEnvironment(path string) string {
+	parts := strings.SplitN(path, "/", 3)
+	if len(parts) < 3 {
+		return ""
+	}
+	return parts[1]
+}
+
+func entryToDockerHost(entry *pluginapi.SecretEntry, env string) DockerHost {
+	host := DockerHost{
+		Name:        entry.Title,
+		Description: entry.Notes,
+		Environment: env,
+		Host:        entry.URL,
+	}
+
+	if entry.CustomAttributes == nil {
+		return host
+	}
+
+	ca := entry.CustomAttributes
+
+	if v, ok := ca["cert_path"]; ok {
+		host.CertPath = v
+	}
+	if v, ok := ca["tls"]; ok {
+		host.TLS = v == "true" || v == "1" || v == "yes"
+	}
+	if v, ok := ca["tls_verify"]; ok {
+		host.TLSVerify = v == "true" || v == "1" || v == "yes"
+	}
+	if v, ok := ca["tags"]; ok {
+		for _, t := range strings.Split(v, ",") {
+			t = strings.TrimSpace(t)
+			if t != "" {
+				host.Tags = append(host.Tags, t)
 			}
 		}
 	}
-	return nil
+
+	return host
 }
 
-// GetAvailableHosts returns the list of configured Docker hosts
+func ensureDockerKeePassGroups() {
+	if !pluginapi.HasSecrets() {
+		return
+	}
+
+	requiredAttrs := map[string]string{
+		"cert_path":  "",
+		"tls":        "false",
+		"tls_verify": "false",
+		"tags":       "",
+	}
+
+	for _, env := range defaultDockerEnvironments {
+		prefix := fmt.Sprintf("docker/%s", env)
+		existing, err := pluginapi.Secrets().List(prefix)
+		if err == nil && len(existing) > 0 {
+			backfillAttributes(existing, requiredAttrs)
+			continue
+		}
+		path := fmt.Sprintf("docker/%s/example", env)
+		_ = pluginapi.Secrets().Put(path, &pluginapi.SecretEntry{
+			Title:            "example",
+			URL:              "unix:///var/run/docker.sock",
+			Notes:            fmt.Sprintf("Docker %s placeholder. Set URL (docker host), cert_path (TLS certs dir).", env),
+			CustomAttributes: requiredAttrs,
+		})
+	}
+}
+
+func backfillAttributes(entryPaths []string, required map[string]string) {
+	for _, entryPath := range entryPaths {
+		entry, err := pluginapi.Secrets().Get(entryPath)
+		if err != nil || entry == nil {
+			continue
+		}
+		if entry.CustomAttributes == nil {
+			entry.CustomAttributes = make(map[string]string)
+		}
+		updated := false
+		for attr, defaultVal := range required {
+			if _, exists := entry.CustomAttributes[attr]; !exists {
+				entry.CustomAttributes[attr] = defaultVal
+				updated = true
+			}
+		}
+		if updated {
+			_ = pluginapi.Secrets().Put(entryPath, entry)
+		}
+	}
+}
+
+// GetAvailableHosts returns all discovered Docker hosts.
 func GetAvailableHosts() ([]DockerHost, error) {
-	config, err := LoadDockerConfig("")
-	if err != nil {
-		return nil, err
-	}
-	return config.Hosts, nil
+	return DiscoverHosts()
 }
 
-// GetDockerUIConfig returns the UI configuration
+// GetDockerUIConfig returns the hardcoded UI configuration.
 func GetDockerUIConfig() (UIConfig, error) {
-	config, err := LoadDockerConfig("")
-	if err != nil {
-		return UIConfig{}, err
-	}
-	return config.UI, nil
-}
-
-// writeDefaultConfig marshals the default config struct to YAML and writes it to disk.
-func writeDefaultConfig(configPath, header string, cfg interface{}) error {
-	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
-		return err
-	}
-	data, err := yaml.Marshal(cfg)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(configPath, []byte(header+"\n"+string(data)), 0644)
+	return DefaultUIConfig(), nil
 }

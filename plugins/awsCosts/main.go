@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"time"
 
 	"omo/pkg/pluginapi"
@@ -38,7 +37,7 @@ func safeGo(f func()) {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				fmt.Printf("Recovered from panic: %v\n", r)
+				pluginapi.Log().Error("recovered from panic: %v", r)
 			}
 		}()
 		f()
@@ -74,6 +73,7 @@ func getCostTimeRange(timeRange string) struct{ Start, End time.Time } {
 
 // Start initializes the plugin
 func (p *AWSCostsPlugin) Start(app *tview.Application) tview.Primitive {
+	pluginapi.Log().Info("starting plugin")
 	pages := tview.NewPages()
 	costsView := NewAWSCostsView(app, pages)
 	p.costsView = costsView

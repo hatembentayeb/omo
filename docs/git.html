@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Git Plugin — omo</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div class="header-inner">
+    <a href="index.html" class="header-brand">
+      <span class="header-title">omo</span>
+    </a>
+    <div class="header-links">
+      <a href="https://github.com/hatembentayeb/omo" class="github-link" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </div>
+</header>
+
+<!-- Sidebar -->
+<nav class="sidebar" id="sidebar">
+  <a href="index.html" class="back-link">Back to Manual</a>
+  <div class="sidebar-heading">Git Plugin</div>
+  <a href="#overview">Overview</a>
+  <a href="#prerequisites">Prerequisites</a>
+  <a href="#configuration">Configuration</a>
+  <a href="#keepass-secrets">KeePass Secrets</a>
+  <a href="#keybindings">Keybindings</a>
+  <a href="#troubleshooting">Troubleshooting</a>
+</nav>
+
+<!-- Main -->
+<main class="main">
+  <div class="content">
+
+    <section class="section plugin-hero" id="overview">
+      <h1>Git Plugin</h1>
+      <p class="lead">Multi-repository management — track branches, commits, diffs, status, stash, tags, and remotes across multiple repos from a single view. Fetch, pull, compare branches.</p>
+      <div class="plugin-tags">
+        <span class="tag">vcs</span>
+        <span class="tag">developer-tools</span>
+      </div>
+    </section>
+
+    <hr class="section-divider">
+
+    <section class="section" id="prerequisites">
+      <h2>Prerequisites</h2>
+      <ul>
+        <li>Git installed</li>
+        <li>Git repositories on the local filesystem</li>
+        <li>For private repos: credentials (PAT or SSH key)</li>
+      </ul>
+    </section>
+
+    <hr class="section-divider">
+
+    <section class="section" id="configuration">
+      <h2>Configuration</h2>
+      <p>Config: <code>~/.omo/configs/git/git.yaml</code></p>
+      <p>This file only controls search paths, environment groups, and UI settings. All credentials for authenticated remote access are stored in KeePass.</p>
+
+      <div class="code-header"><span>~/.omo/configs/git/git.yaml</span></div>
+      <pre><code>search_paths:
+  - ~/projects
+  - ~/work
+  - ~/go/src
+
+environments:
+  - name: github
+    enabled: true
+  - name: gitlab
+    enabled: true
+
+ui:
+  refresh_interval: 30
+  max_repos_display: 100
+  max_commits_display: 50
+  max_search_depth: 3
+  show_remote_branches: true
+  show_stash: true
+  show_tags: true</code></pre>
+
+      <div class="callout callout-info">
+        <div class="callout-title">KeePass-first</div>
+        <p>All credentials (remote URL, username, personal access token) are stored exclusively in KeePass entries under <code>git/&lt;environment&gt;/&lt;name&gt;</code>. The YAML config only controls repository discovery paths, which environments are enabled, and UI behavior.</p>
+      </div>
+    </section>
+
+    <hr class="section-divider">
+
+    <section class="section" id="keepass-secrets">
+      <h2>KeePass Secrets</h2>
+      <p>Path: <code>git/&lt;environment&gt;/&lt;name&gt;</code>, e.g. <code>git/github/main-repo</code></p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>KeePass Field</th><th>Maps To</th><th>Description</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Title</td><td>name</td><td>Repository display name</td></tr>
+            <tr><td>URL</td><td>remote_url</td><td>Remote URL (e.g. "https://github.com/org/repo.git")</td></tr>
+            <tr><td>UserName</td><td>username</td><td>Git username</td></tr>
+            <tr><td>Password</td><td>token</td><td>Personal access token / auth token</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>No custom attributes — Git uses only standard KeePass fields.</p>
+
+      <div class="code-header"><span>Example tree</span></div>
+      <pre><code>omo (root)
+  └── git
+       ├── github
+       │    ├── omo          (URL=https://github.com/hatembentayeb/omo.git, UserName=hatembentayeb, Password=ghp_...)
+       │    └── my-app       (URL=https://github.com/org/my-app.git, ...)
+       └── gitlab
+            └── internal-api (URL=https://gitlab.internal/team/api.git, UserName=deploy, Password=glpat-...)</code></pre>
+
+      <div class="callout callout-tip">
+        <div class="callout-title">Tip</div>
+        <p>The plugin auto-discovers repositories from <code>search_paths</code>. You only need to add repos to the config if they are outside the search paths or need authenticated remote access.</p>
+      </div>
+    </section>
+
+    <hr class="section-divider">
+
+    <section class="section" id="keybindings">
+      <h2>Keybindings</h2>
+
+      <div class="table-wrap key-table">
+        <table>
+          <thead><tr><th>Key</th><th>Action</th></tr></thead>
+          <tbody>
+            <tr><td><kbd>D</kbd></td><td>Add repositories from directory</td></tr>
+            <tr><td><kbd>G</kbd></td><td>Select repository</td></tr>
+            <tr><td><kbd>F</kbd></td><td>Fetch updates</td></tr>
+            <tr><td><kbd>P</kbd></td><td>Pull changes</td></tr>
+            <tr><td><kbd>S</kbd></td><td>Show detailed status</td></tr>
+            <tr><td><kbd>L</kbd></td><td>Show commit log</td></tr>
+            <tr><td><kbd>B</kbd></td><td>Show branches</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>Plus global keys (j/k, Enter, /, R, ?, Esc, etc.).</p>
+    </section>
+
+    <hr class="section-divider">
+
+    <section class="section" id="troubleshooting">
+      <h2>Troubleshooting</h2>
+      <ul>
+        <li><strong>No repositories found</strong> — Add paths to <code>search_paths</code> or <code>repositories</code></li>
+        <li><strong>Authentication failed for remote</strong> — Set token in KeePass</li>
+        <li><strong>Fetch/pull failed</strong> — Verify network access and credentials</li>
+        <li><strong>Too many repos</strong> — Increase <code>max_repos_display</code> or narrow <code>search_paths</code></li>
+      </ul>
+    </section>
+
+    <footer class="footer">
+      <p>Built by <a href="https://oh-myops.com">Hatem Ben Tayeb</a> &bull; <a href="https://github.com/hatembentayeb/omo">GitHub</a> &bull; Apache License 2.0</p>
+    </footer>
+
+  </div>
+</main>
+
+<script>
+// Sidebar active state on scroll
+const sections = document.querySelectorAll('.section[id], .plugin-hero[id]');
+const navLinks = document.querySelectorAll('.sidebar a[href^="#"]');
+
+function updateActiveNav() {
+  const scrollPos = window.scrollY + 100;
+  let current = '';
+
+  sections.forEach(section => {
+    if (section.offsetTop <= scrollPos) {
+      current = section.getAttribute('id');
+    }
+  });
+
+  navLinks.forEach(link => {
+    link.classList.remove('active');
+    if (link.getAttribute('href') === '#' + current) {
+      link.classList.add('active');
+    }
+  });
+}
+
+window.addEventListener('scroll', updateActiveNav);
+window.addEventListener('load', updateActiveNav);
+</script>
+
+</body>
+</html>

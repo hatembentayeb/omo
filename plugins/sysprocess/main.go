@@ -18,6 +18,7 @@ type SysProcessPlugin struct {
 
 // Start initializes and starts the plugin UI
 func (s *SysProcessPlugin) Start(app *tview.Application) tview.Primitive {
+	pluginapi.Log().Info("starting plugin")
 	pages := tview.NewPages()
 	processView := NewProcessView(app, pages)
 	s.processView = processView

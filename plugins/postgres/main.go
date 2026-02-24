@@ -18,6 +18,7 @@ type PostgresPlugin struct {
 
 // Start initializes and starts the PostgreSQL plugin UI
 func (p *PostgresPlugin) Start(app *tview.Application) tview.Primitive {
+	pluginapi.Log().Info("starting plugin")
 	pages := tview.NewPages()
 	postgresView := NewPostgresView(app, pages)
 	p.postgresView = postgresView

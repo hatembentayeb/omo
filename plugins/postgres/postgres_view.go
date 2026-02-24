@@ -783,7 +783,7 @@ func (pv *PostgresView) AutoConnectToDefaultInstance() {
 	}
 
 	if len(instances) == 0 {
-		pv.usersView.Log("[yellow]No instances configured in ~/.omo/configs/postgres/postgres.yaml")
+		pv.usersView.Log("[yellow]No PostgreSQL instances configured in KeePass (create entries under postgres/<environment>/<name>)")
 		return
 	}
 

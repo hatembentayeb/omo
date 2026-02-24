@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Docker Plugin — omo</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div class="header-inner">
+    <a href="index.html" class="header-brand">
+      <span class="header-title">omo</span>
+    </a>
+    <div class="header-links">
+      <a href="https://github.com/hatembentayeb/omo" class="github-link" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </div>
+</header>
+
+<!-- Sidebar -->
+<nav class="sidebar" id="sidebar">
+  <a href="index.html" class="back-link">Back to Manual</a>
+  <div class="sidebar-heading">Docker Plugin</div>
+  <a href="#overview">Overview</a>
+  <a href="#prerequisites">Prerequisites</a>
+  <a href="#configuration">Configuration</a>
+  <a href="#keepass-secrets">KeePass Secrets</a>
+  <a href="#keybindings">Keybindings</a>
+  <a href="#views">Views</a>
+  <a href="#troubleshooting">Troubleshooting</a>
+</nav>
+
+<!-- Main -->
+<main class="main">
+  <div class="content">
+
+    <section class="section plugin-hero" id="overview">
+      <h1>Docker Plugin</h1>
+      <p class="lead">Manage Docker containers, images, networks, and volumes. Start, stop, restart, logs, exec, prune, and compose support.</p>
+      <div class="plugin-tags">
+        <span class="tag">containers</span>
+        <span class="tag">devops</span>
+        <span class="tag">infrastructure</span>
+      </div>
+    </section>
+
+    <hr class="section-divider">
+
+    <section class="section" id="prerequisites">
+      <h2>Prerequisites</h2>
+      <ul>
+        <li>Docker daemon running (local or remote)</li>
+        <li>User in <code>docker</code> group or sudo access</li>
+        <li>For remote: TCP access to Docker API port</li>
+      </ul>
+    </section>
+
+    <hr class="section-divider">
+
+    <section class="section" id="configuration">
+      <h2>Configuration</h2>
+      <p>Config file: <code>~/.omo/configs/docker/docker.yaml</code></p>
+      <p>This file only controls which environments are enabled and UI settings. All connection details are stored in KeePass.</p>
+
+      <div class="code-header"><span>~/.omo/configs/docker/docker.yaml</span></div>
+      <pre><code>environments:
+  - name: development
+    enabled: true
+  - name: production
+    enabled: true
+  - name: staging
+    enabled: true
+
+ui:
+  refresh_interval: 5
+  max_containers_display: 100
+  max_images_display: 100
+  show_all_containers: true
+  log_tail_lines: 500
+  enable_stats: true
+  enable_compose: true</code></pre>
+
+      <div class="callout callout-info">
+        <div class="callout-title">KeePass-first</div>
+        <p>All connection details (Docker host URL, TLS certificate path) are stored exclusively in KeePass entries under <code>docker/&lt;environment&gt;/&lt;name&gt;</code>. The YAML config only controls which environments are enabled and UI behavior.</p>
+      </div>
+    </section>
+
+    <hr class="section-divider">
+
+    <section class="section" id="keepass-secrets">
+      <h2>KeePass Secret Schema</h2>
+      <p>Path convention: <code>docker/&lt;environment&gt;/&lt;name&gt;</code></p>
+      <p>Example: <code>docker/production/remote-server</code></p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>KeePass Field</th><th>Maps To</th><th>Description</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Title</td><td>name</td><td>Host display name</td></tr>
+            <tr><td>URL</td><td>host</td><td>Docker host URL (unix:///var/run/docker.sock or tcp://host:2376)</td></tr>
+            <tr><td>Notes</td><td>—</td><td>Description</td></tr>
+            <tr><td>Custom: cert_path</td><td>cert_path</td><td>Path to TLS certificates directory</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="code-header"><span>Example KeePass structure</span></div>
+      <pre><code>omo (root)
+  └── docker
+       ├── development
+       │    └── local     (URL=unix:///var/run/docker.sock)
+       └── production
+            └── remote    (URL=tcp://10.0.1.50:2376, cert_path=/etc/docker/certs)</code></pre>
+    </section>
+
+    <hr class="section-divider">
+
+    <section class="section" id="keybindings">
+      <h2>Keybindings</h2>
+
+      <div class="table-wrap key-table">
+        <table>
+          <thead><tr><th>Key</th><th>Action</th></tr></thead>
+          <tbody>
+            <tr><td><kbd>C</kbd></td><td>Containers view</td></tr>
+            <tr><td><kbd>I</kbd></td><td>Images view</td></tr>
+            <tr><td><kbd>N</kbd></td><td>Networks view</td></tr>
+            <tr><td><kbd>V</kbd></td><td>Volumes view</td></tr>
+            <tr><td><kbd>T</kbd></td><td>Container stats</td></tr>
+            <tr><td><kbd>O</kbd></td><td>Compose view</td></tr>
+            <tr><td><kbd>Y</kbd></td><td>System info</td></tr>
+            <tr><td><kbd>Ctrl+T</kbd></td><td>Host selector</td></tr>
+            <tr><td><kbd>Ctrl+D</kbd></td><td>Refresh data</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>Plus global navigation keys (j/k, Enter, /, R, ?, Esc, etc.).</p>
+    </section>
+
+    <hr class="section-divider">
+
+    <section class="section" id="views">
+      <h2>Views</h2>
+      <p>The Docker plugin provides these views:</p>
+      <ul>
+        <li><strong>Containers</strong> (default) — List and manage containers</li>
+        <li><strong>Images</strong> — Browse and manage images</li>
+        <li><strong>Networks</strong> — View and configure networks</li>
+        <li><strong>Volumes</strong> — Manage volumes</li>
+        <li><strong>Stats</strong> — Container resource usage</li>
+        <li><strong>Inspect</strong> — Detailed container/image inspection</li>
+        <li><strong>Logs</strong> — View container logs</li>
+        <li><strong>Compose</strong> — Docker Compose projects</li>
+        <li><strong>System</strong> — Docker system information</li>
+      </ul>
+    </section>
+
+    <hr class="section-divider">
+
+    <section class="section" id="troubleshooting">
+      <h2>Troubleshooting</h2>
+      <ul>
+        <li><strong>Permission denied</strong> — Add user to <code>docker</code> group</li>
+        <li><strong>Cannot connect to daemon</strong> — Ensure Docker is running</li>
+        <li><strong>TLS errors</strong> — Verify <code>cert_path</code> and certificate files</li>
+      </ul>
+    </section>
+
+    <footer class="footer">
+      <p>Built by <a href="https://oh-myops.com">Hatem Ben Tayeb</a> &bull; <a href="https://github.com/hatembentayeb/omo">GitHub</a> &bull; Apache License 2.0</p>
+    </footer>
+
+  </div>
+</main>
+
+<script>
+// Sidebar active state on scroll
+const sections = document.querySelectorAll('.section[id], .plugin-hero[id]');
+const navLinks = document.querySelectorAll('.sidebar a[href^="#"]');
+
+function updateActiveNav() {
+  const scrollPos = window.scrollY + 100;
+  let current = '';
+
+  sections.forEach(section => {
+    if (section.offsetTop <= scrollPos) {
+      current = section.getAttribute('id');
+    }
+  });
+
+  navLinks.forEach(link => {
+    link.classList.remove('active');
+    if (link.getAttribute('href') === '#' + current) {
+      link.classList.add('active');
+    }
+  });
+}
+
+window.addEventListener('scroll', updateActiveNav);
+window.addEventListener('load', updateActiveNav);
+</script>
+
+</body>
+</html>

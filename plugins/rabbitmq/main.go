@@ -18,6 +18,7 @@ type RabbitMQPlugin struct {
 
 // Start initializes the plugin and returns the main UI component
 func (p *RabbitMQPlugin) Start(app *tview.Application) tview.Primitive {
+	pluginapi.Log().Info("starting plugin")
 	pages := tview.NewPages()
 
 	p.rmqView = NewRabbitMQView(app, pages)

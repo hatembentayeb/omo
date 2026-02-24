@@ -2,77 +2,47 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 
 	"omo/pkg/pluginapi"
-
-	"gopkg.in/yaml.v3"
 )
 
-const sshConfigHeader = `# SSH Plugin Configuration
-# Path: ~/.omo/configs/ssh/ssh.yaml
-#
-# All connection details are stored in KeePass under ssh/<environment>/<name>.
-# This file only controls which environments are enabled and UI settings.
-#
-# KeePass Entry Schema (unified attribute names):
-#   Title    → server display name
-#   URL      → hostname or IP address
-#   UserName → SSH login username
-#   Password → SSH password (fallback when no key is set)
-#   Notes    → description / notes
-#
-#   Custom Attributes (set in KeePass "Advanced" tab):
-#     port           → SSH port (default: 22)
-#     auth_method    → "key", "password", or "auto" (default: auto)
-#     private_key    → PEM-encoded private key content
-#     key_path       → path to private key file (e.g. ~/.ssh/id_ed25519)
-#     passphrase     → private key passphrase
-#     proxy_command  → ProxyCommand (e.g. "ssh -W %h:%p bastion")
-#     jump_host      → jump/bastion host (user@host:port)
-#     jump_key       → PEM key for jump host
-#     jump_key_path  → path to key file for jump host
-#     fingerprint    → expected host key fingerprint
-#     tags           → comma-separated tags (e.g. "web,nginx,prod")
-#     env_*          → environment variables (e.g. env_TERM=xterm-256color)
-#     startup_cmd    → command to run after connecting
-#     keep_alive     → keepalive interval in seconds (default: 30)
-#
-# Example KeePass structure:
-#   ssh/
-#     development/
-#       local-vm       (Title=local-vm, URL=192.168.56.10, UserName=dev ...)
-#       docker-host    (Title=docker-host, URL=192.168.56.20 ...)
-#     production/
-#       web-01         (Title=web-01, URL=10.0.1.10, jump_host=bastion@10.0.0.1 ...)
-#       db-master      (Title=db-master, URL=10.0.2.10, proxy_command=... ...)
-#     staging/
-#       app-01         (...)
-#     sandbox/
-#       test-01        (...)
-`
-
-// SSHConfig is the YAML config. It only controls enable/disable and UI.
-type SSHConfig struct {
-	Environments []SSHEnvToggle `yaml:"environments"`
-	UI           SSHUIConfig    `yaml:"ui"`
-}
-
-// SSHEnvToggle enables or disables a KeePass environment group.
-type SSHEnvToggle struct {
-	Name    string `yaml:"name"`
-	Enabled bool   `yaml:"enabled"`
-}
-
-type SSHUIConfig struct {
-	RefreshInterval int `yaml:"refresh_interval"`
+var defaultSSHEnvironments = []string{
+	"development",
+	"production",
+	"staging",
+	"sandbox",
+	"local",
+	"test",
 }
 
 // SSHServer is built entirely from a KeePass entry at runtime.
+//
+// KeePass Entry Schema (path: ssh/<environment>/<name>):
+//
+//	Title    → server display name
+//	URL      → hostname or IP address
+//	UserName → SSH login username
+//	Password → SSH password (fallback when no key is set)
+//	Notes    → description / notes
+//
+//	Custom Attributes:
+//	  port          → SSH port (default: 22)
+//	  auth_method   → "key", "password", or "auto" (default: auto)
+//	  private_key   → PEM-encoded private key content
+//	  key_path      → path to private key file (e.g. ~/.ssh/id_ed25519)
+//	  passphrase    → private key passphrase
+//	  proxy_command → ProxyCommand (e.g. "ssh -W %h:%p bastion")
+//	  jump_host     → jump/bastion host (user@host:port)
+//	  jump_key      → PEM key for jump host
+//	  jump_key_path → path to key file for jump host
+//	  fingerprint   → expected host key fingerprint
+//	  tags          → comma-separated tags (e.g. "web,nginx,prod")
+//	  env_*         → environment variables (e.g. env_TERM=xterm-256color)
+//	  startup_cmd   → command to run after connecting
+//	  keep_alive    → keepalive interval in seconds (default: 30)
 type SSHServer struct {
 	Name         string
 	Description  string
@@ -96,45 +66,18 @@ type SSHServer struct {
 	KeepAlive    int
 }
 
-func DefaultSSHConfig() *SSHConfig {
-	return &SSHConfig{
-		Environments: []SSHEnvToggle{
-			{Name: "development", Enabled: true},
-			{Name: "production", Enabled: true},
-			{Name: "staging", Enabled: true},
-			{Name: "sandbox", Enabled: true},
-		},
-		UI: SSHUIConfig{
-			RefreshInterval: 10,
-		},
-	}
+type SSHUIConfig struct {
+	RefreshInterval int
 }
 
-func LoadSSHConfig(configPath string) (*SSHConfig, error) {
-	if configPath == "" {
-		configPath = pluginapi.PluginConfigPath("ssh")
+func DefaultSSHUIConfig() SSHUIConfig {
+	return SSHUIConfig{
+		RefreshInterval: 10,
 	}
-
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		_ = writeSSHDefaultConfig(configPath, sshConfigHeader, DefaultSSHConfig())
-	}
-
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("error reading config: %v", err)
-	}
-
-	config := DefaultSSHConfig()
-	if err := yaml.Unmarshal(data, config); err != nil {
-		return nil, fmt.Errorf("error parsing config: %v", err)
-	}
-
-	return config, nil
 }
 
 // DiscoverServers reads KeePass groups under "ssh/" and builds SSHServer
-// objects from the entries. Only enabled environments from the YAML config
-// are included.
+// objects from the entries.
 func DiscoverServers() ([]SSHServer, error) {
 	if !pluginapi.HasSecrets() {
 		return nil, fmt.Errorf("secrets provider not available")
@@ -144,14 +87,7 @@ func DiscoverServers() ([]SSHServer, error) {
 		return nil, fmt.Errorf("reload secrets: %w", err)
 	}
 
-	config, err := LoadSSHConfig("")
-	if err != nil {
-		return nil, err
-	}
-
-	enabled := buildEnabledSet(config)
-
-	ensureSSHKeePassGroups(config)
+	ensureSSHKeePassGroups()
 
 	paths, err := pluginapi.Secrets().List("ssh")
 	if err != nil {
@@ -166,9 +102,6 @@ func DiscoverServers() ([]SSHServer, error) {
 	for _, path := range paths {
 		env := extractEnvironment(path)
 		if env == "" {
-			continue
-		}
-		if _, ok := enabled[env]; !ok {
 			continue
 		}
 
@@ -191,17 +124,6 @@ func DiscoverServers() ([]SSHServer, error) {
 	return servers, nil
 }
 
-func buildEnabledSet(config *SSHConfig) map[string]struct{} {
-	m := make(map[string]struct{})
-	for _, e := range config.Environments {
-		if e.Enabled {
-			m[e.Name] = struct{}{}
-		}
-	}
-	return m
-}
-
-// extractEnvironment returns the environment portion from "ssh/env/name".
 func extractEnvironment(path string) string {
 	parts := strings.SplitN(path, "/", 3)
 	if len(parts) < 3 {
@@ -210,8 +132,6 @@ func extractEnvironment(path string) string {
 	return parts[1]
 }
 
-// entryToServer maps a KeePass SecretEntry to an SSHServer using unified
-// attribute names.
 func entryToServer(entry *pluginapi.SecretEntry, env string) SSHServer {
 	srv := SSHServer{
 		Name:        entry.Title,
@@ -291,45 +211,69 @@ func entryToServer(entry *pluginapi.SecretEntry, env string) SSHServer {
 }
 
 // ensureSSHKeePassGroups creates environment groups in KeePass
-// for each enabled environment. It puts a placeholder entry in each
-// group that doesn't already have any entries, so the folder structure
-// is visible in KeePassXC.
-func ensureSSHKeePassGroups(config *SSHConfig) {
+// with placeholder entries so the folder structure is visible in KeePassXC.
+func ensureSSHKeePassGroups() {
 	if !pluginapi.HasSecrets() {
 		return
 	}
-	for _, env := range config.Environments {
-		if !env.Enabled {
-			continue
-		}
-		prefix := fmt.Sprintf("ssh/%s", env.Name)
+
+	requiredAttrs := map[string]string{
+		"port":          "22",
+		"auth_method":   "auto",
+		"private_key":   "",
+		"key_path":      "",
+		"passphrase":    "",
+		"proxy_command": "",
+		"jump_host":     "",
+		"jump_key":      "",
+		"jump_key_path": "",
+		"fingerprint":   "",
+		"tags":          "",
+		"startup_cmd":   "",
+		"keep_alive":    "30",
+	}
+
+	for _, env := range defaultSSHEnvironments {
+		prefix := fmt.Sprintf("ssh/%s", env)
 		existing, err := pluginapi.Secrets().List(prefix)
 		if err == nil && len(existing) > 0 {
+			backfillAttributes(existing, requiredAttrs)
 			continue
 		}
-		path := fmt.Sprintf("ssh/%s/example-server", env.Name)
+		path := fmt.Sprintf("ssh/%s/example-server", env)
 		_ = pluginapi.Secrets().Put(path, &pluginapi.SecretEntry{
 			Title:    "example-server",
 			UserName: "root",
 			Password: "",
 			URL:      "192.168.1.100",
-			Notes:    fmt.Sprintf("Placeholder for %s. Replace with real server details.", env.Name),
+			Notes:    fmt.Sprintf("SSH %s placeholder. Replace with real server details.", env),
 			CustomAttributes: map[string]string{
 				"port":        "22",
 				"auth_method": "auto",
-				"tags":        env.Name,
+				"tags":        env,
 			},
 		})
 	}
 }
 
-func writeSSHDefaultConfig(configPath, header string, cfg interface{}) error {
-	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
-		return err
+func backfillAttributes(entryPaths []string, required map[string]string) {
+	for _, entryPath := range entryPaths {
+		entry, err := pluginapi.Secrets().Get(entryPath)
+		if err != nil || entry == nil {
+			continue
+		}
+		if entry.CustomAttributes == nil {
+			entry.CustomAttributes = make(map[string]string)
+		}
+		updated := false
+		for attr, defaultVal := range required {
+			if _, exists := entry.CustomAttributes[attr]; !exists {
+				entry.CustomAttributes[attr] = defaultVal
+				updated = true
+			}
+		}
+		if updated {
+			_ = pluginapi.Secrets().Put(entryPath, entry)
+		}
 	}
-	data, err := yaml.Marshal(cfg)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(configPath, []byte(header+"\n"+string(data)), 0644)
 }

@@ -123,7 +123,7 @@ func parseCredentialFileProfiles(credsPath string, regionMap map[string]string) 
 	return profiles
 }
 
-// getAWSProfiles retrieves available AWS profiles from config files
+// getAWSProfiles retrieves available AWS profiles from KeePass and AWS credentials
 func (p *ProfileSelector) getAWSProfiles() []AWSProfileInfo {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {

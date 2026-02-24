@@ -16,6 +16,7 @@ type SSHPlugin struct {
 }
 
 func (p *SSHPlugin) Start(app *tview.Application) tview.Primitive {
+	pluginapi.Log().Info("starting plugin")
 	pages := tview.NewPages()
 	sshView := NewSSHView(app, pages)
 	p.sshView = sshView

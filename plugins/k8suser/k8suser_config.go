@@ -2,214 +2,219 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
+	"sort"
+	"strings"
 
 	"omo/pkg/pluginapi"
-
-	"gopkg.in/yaml.v3"
 )
 
-// k8sUserConfigHeader is prepended to the auto-generated config YAML.
-const k8sUserConfigHeader = `# K8sUser Plugin Configuration
-# Path: ~/.omo/configs/k8suser/k8suser.yaml
-#
-# Clusters are loaded from two sources:
-#   1. This config file (with optional KeePass secret resolution)
-#   2. Host machine's ~/.kube/config (kubectl contexts)
-#
-# KeePass Secret Schema (secret path: k8suser/<environment>/<name>):
-#   Title    → cluster name
-#   URL      → Kubernetes API server URL (e.g. "https://k8s.example.com:6443")
-#   Password → bearer token for authentication
-#   Custom Attributes:
-#     kubeconfig → path to kubeconfig file
-#     context    → kubectl context name
-#     ca_cert    → path to CA certificate
-#
-# When "secret" is set, connection fields are resolved from KeePass.
-# YAML values take precedence over KeePass values (override only blanks).
-`
-
-// K8sUserConfig represents the configuration for the K8s User plugin
-type K8sUserConfig struct {
-	Clusters []K8sCluster    `yaml:"clusters"`
-	UI       K8sUserUIConfig `yaml:"ui"`
+var defaultK8sEnvironments = []string{
+	"development",
+	"production",
+	"staging",
+	"sandbox",
+	"local",
+	"test",
 }
 
-// K8sCluster represents a configured Kubernetes cluster.
-// When the Secret field is set (e.g. "k8suser/production/main-cluster"),
-// it references a KeePass entry whose fields override Kubeconfig, Token, etc.
-type K8sCluster struct {
-	Name        string `yaml:"name"`
-	Description string `yaml:"description"`
-	Secret      string `yaml:"secret,omitempty"` // KeePass path: pluginName/env/entryName
-	Kubeconfig  string `yaml:"kubeconfig,omitempty"`
-	Context     string `yaml:"context,omitempty"`
-	Server      string `yaml:"server,omitempty"`
-	Token       string `yaml:"token,omitempty"`
-	CACert      string `yaml:"ca_cert,omitempty"`
-}
-
-// K8sUserUIConfig represents UI configuration options
-type K8sUserUIConfig struct {
-	RefreshInterval     int    `yaml:"refresh_interval"`
-	DefaultNamespace    string `yaml:"default_namespace"`
-	CertValidityDays    int    `yaml:"cert_validity_days"`
-	EnableRoleManager   bool   `yaml:"enable_role_manager"`
-	EnableAccessTesting bool   `yaml:"enable_access_testing"`
-	EnableExport        bool   `yaml:"enable_export"`
-}
-
-// DefaultK8sUserConfig returns the default configuration
-func DefaultK8sUserConfig() *K8sUserConfig {
-	return &K8sUserConfig{
-		Clusters: []K8sCluster{},
-		UI: K8sUserUIConfig{
-			RefreshInterval:     30,
-			DefaultNamespace:    "default",
-			CertValidityDays:    365,
-			EnableRoleManager:   true,
-			EnableAccessTesting: true,
-			EnableExport:        true,
-		},
-	}
-}
-
-// LoadK8sUserConfig loads the K8s User configuration from the specified file.
-// Default path: ~/.omo/configs/k8suser/k8suser.yaml
+// K8sCluster is built entirely from a KeePass entry at runtime.
 //
-// After unmarshalling, any cluster with a non-empty Secret field will
-// have its connection fields resolved from the KeePass secrets provider.
-func LoadK8sUserConfig(configPath string) (*K8sUserConfig, error) {
-	if configPath == "" {
-		configPath = pluginapi.PluginConfigPath("k8suser")
-	}
-
-	// Auto-create default config if missing
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		_ = writeDefaultConfig(configPath, k8sUserConfigHeader, DefaultK8sUserConfig())
-	}
-
-	// Read the configuration file
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("error reading config file: %v", err)
-	}
-
-	// Unmarshal the configuration
-	config := DefaultK8sUserConfig()
-	err = yaml.Unmarshal(data, config)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing config file: %v", err)
-	}
-
-	// Init KeePass placeholder if no entries exist yet
-	initK8sUserKeePass()
-
-	// Resolve secrets for clusters that reference KeePass entries.
-	if err := resolveK8sUserSecrets(config); err != nil {
-		return nil, fmt.Errorf("error resolving secrets: %v", err)
-	}
-
-	return config, nil
+// KeePass Entry Schema (path: k8suser/<environment>/<name>):
+//
+//	Title    → cluster display name
+//	URL      → Kubernetes API server URL (e.g. "https://k8s.example.com:6443")
+//	Password → bearer token for authentication
+//	Notes    → description / notes
+//
+//	Custom Attributes:
+//	  kubeconfig → path to kubeconfig file (e.g. "~/.kube/config")
+//	  context    → kubectl context name
+//	  ca_cert    → path to CA certificate
+//	  tags       → comma-separated tags
+type K8sCluster struct {
+	Name        string
+	Description string
+	Environment string
+	Server      string
+	Token       string
+	Kubeconfig  string
+	Context     string
+	CACert      string
+	Tags        []string
 }
 
-// initK8sUserKeePass seeds placeholder KeePass entries for K8sUser if none exist.
-func initK8sUserKeePass() {
+// K8sUserUIConfig holds hardcoded UI defaults for the K8sUser plugin.
+type K8sUserUIConfig struct {
+	RefreshInterval     int
+	DefaultNamespace    string
+	CertValidityDays    int
+	EnableRoleManager   bool
+	EnableAccessTesting bool
+	EnableExport        bool
+}
+
+func DefaultK8sUserUIConfig() K8sUserUIConfig {
+	return K8sUserUIConfig{
+		RefreshInterval:     30,
+		DefaultNamespace:    "default",
+		CertValidityDays:    365,
+		EnableRoleManager:   true,
+		EnableAccessTesting: true,
+		EnableExport:        true,
+	}
+}
+
+// DiscoverClusters reads KeePass groups under "k8suser/" and builds
+// K8sCluster objects from the entries.
+func DiscoverClusters() ([]K8sCluster, error) {
 	if !pluginapi.HasSecrets() {
-		return
-	}
-	entries, err := pluginapi.Secrets().List("k8suser")
-	if err != nil || len(entries) > 0 {
-		return
-	}
-	_ = pluginapi.Secrets().Put("k8suser/default/example", &pluginapi.SecretEntry{
-		Title:    "example",
-		UserName: "",
-		Password: "",
-		URL:      "",
-		Notes:    "K8sUser placeholder. Set URL (API server), Password (bearer token).",
-		CustomAttributes: map[string]string{
-			"kubeconfig": "~/.kube/config",
-			"context":    "",
-			"ca_cert":    "",
-		},
-	})
-}
-
-func resolveK8sClusterSecret(cluster *K8sCluster, entry *pluginapi.SecretEntry) {
-	if cluster.Server == "" && entry.URL != "" {
-		cluster.Server = entry.URL
-	}
-	if cluster.Token == "" && entry.Password != "" {
-		cluster.Token = entry.Password
-	}
-	if cluster.Name == "" && entry.Title != "" {
-		cluster.Name = entry.Title
-	}
-	for attr, field := range map[string]*string{
-		"kubeconfig": &cluster.Kubeconfig,
-		"ca_cert":    &cluster.CACert,
-		"context":    &cluster.Context,
-	} {
-		if *field == "" {
-			if v, ok := entry.CustomAttributes[attr]; ok {
-				*field = v
-			}
-		}
-	}
-}
-
-// resolveK8sUserSecrets iterates over clusters and populates connection
-// fields from the secrets provider when a secret path is defined.
-func resolveK8sUserSecrets(config *K8sUserConfig) error {
-	if !pluginapi.HasSecrets() {
-		return nil
+		return nil, fmt.Errorf("secrets provider not available")
 	}
 
-	for i := range config.Clusters {
-		cluster := &config.Clusters[i]
-		if cluster.Secret == "" {
+	if err := pluginapi.Secrets().Reload(); err != nil {
+		return nil, fmt.Errorf("reload secrets: %w", err)
+	}
+
+	ensureK8sUserKeePassGroups()
+
+	paths, err := pluginapi.Secrets().List("k8suser")
+	if err != nil {
+		return nil, fmt.Errorf("list k8suser secrets: %w", err)
+	}
+
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("no K8sUser entries in KeePass (create entries under k8suser/<environment>/<name>)")
+	}
+
+	var clusters []K8sCluster
+	for _, path := range paths {
+		env := extractEnvironment(path)
+		if env == "" {
 			continue
 		}
 
-		entry, err := pluginapi.ResolveSecret(cluster.Secret)
+		entry, err := pluginapi.Secrets().Get(path)
 		if err != nil {
-			return fmt.Errorf("cluster %q: %w", cluster.Name, err)
+			continue
 		}
 
-		resolveK8sClusterSecret(cluster, entry)
+		cluster := entryToK8sCluster(entry, env)
+		clusters = append(clusters, cluster)
 	}
-	return nil
+
+	sort.Slice(clusters, func(i, j int) bool {
+		if clusters[i].Environment != clusters[j].Environment {
+			return clusters[i].Environment < clusters[j].Environment
+		}
+		return clusters[i].Name < clusters[j].Name
+	})
+
+	return clusters, nil
 }
 
-// GetAvailableK8sClusters returns the list of configured K8s clusters
+func extractEnvironment(path string) string {
+	parts := strings.SplitN(path, "/", 3)
+	if len(parts) < 3 {
+		return ""
+	}
+	return parts[1]
+}
+
+func entryToK8sCluster(entry *pluginapi.SecretEntry, env string) K8sCluster {
+	cluster := K8sCluster{
+		Name:        entry.Title,
+		Description: entry.Notes,
+		Environment: env,
+		Server:      entry.URL,
+		Token:       entry.Password,
+	}
+
+	if entry.CustomAttributes == nil {
+		return cluster
+	}
+
+	ca := entry.CustomAttributes
+
+	if v, ok := ca["kubeconfig"]; ok {
+		cluster.Kubeconfig = v
+	}
+	if v, ok := ca["context"]; ok {
+		cluster.Context = v
+	}
+	if v, ok := ca["ca_cert"]; ok {
+		cluster.CACert = v
+	}
+	if v, ok := ca["tags"]; ok {
+		for _, t := range strings.Split(v, ",") {
+			t = strings.TrimSpace(t)
+			if t != "" {
+				cluster.Tags = append(cluster.Tags, t)
+			}
+		}
+	}
+
+	return cluster
+}
+
+func ensureK8sUserKeePassGroups() {
+	if !pluginapi.HasSecrets() {
+		return
+	}
+
+	requiredAttrs := map[string]string{
+		"kubeconfig": "~/.kube/config",
+		"context":    "",
+		"ca_cert":    "",
+		"tags":       "",
+	}
+
+	for _, env := range defaultK8sEnvironments {
+		prefix := fmt.Sprintf("k8suser/%s", env)
+		existing, err := pluginapi.Secrets().List(prefix)
+		if err == nil && len(existing) > 0 {
+			backfillAttributes(existing, requiredAttrs)
+			continue
+		}
+		path := fmt.Sprintf("k8suser/%s/example", env)
+		_ = pluginapi.Secrets().Put(path, &pluginapi.SecretEntry{
+			Title:            "example",
+			UserName:         "",
+			Password:         "",
+			URL:              "",
+			Notes:            fmt.Sprintf("K8sUser %s placeholder. Set URL (API server), Password (bearer token).", env),
+			CustomAttributes: requiredAttrs,
+		})
+	}
+}
+
+func backfillAttributes(entryPaths []string, required map[string]string) {
+	for _, entryPath := range entryPaths {
+		entry, err := pluginapi.Secrets().Get(entryPath)
+		if err != nil || entry == nil {
+			continue
+		}
+		if entry.CustomAttributes == nil {
+			entry.CustomAttributes = make(map[string]string)
+		}
+		updated := false
+		for attr, defaultVal := range required {
+			if _, exists := entry.CustomAttributes[attr]; !exists {
+				entry.CustomAttributes[attr] = defaultVal
+				updated = true
+			}
+		}
+		if updated {
+			_ = pluginapi.Secrets().Put(entryPath, entry)
+		}
+	}
+}
+
+// GetAvailableK8sClusters returns all discovered K8s clusters.
 func GetAvailableK8sClusters() ([]K8sCluster, error) {
-	config, err := LoadK8sUserConfig("")
-	if err != nil {
-		return nil, err
-	}
-	return config.Clusters, nil
+	return DiscoverClusters()
 }
 
-// GetK8sUserUIConfig returns the UI configuration
+// GetK8sUserUIConfig returns the hardcoded UI configuration.
 func GetK8sUserUIConfig() (K8sUserUIConfig, error) {
-	config, err := LoadK8sUserConfig("")
-	if err != nil {
-		return K8sUserUIConfig{}, err
-	}
-	return config.UI, nil
-}
-
-// writeDefaultConfig marshals the default config struct to YAML and writes it to disk.
-func writeDefaultConfig(configPath, header string, cfg interface{}) error {
-	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
-		return err
-	}
-	data, err := yaml.Marshal(cfg)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(configPath, []byte(header+"\n"+string(data)), 0644)
+	return DefaultK8sUserUIConfig(), nil
 }

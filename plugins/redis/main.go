@@ -18,7 +18,7 @@ type RedisPlugin struct {
 
 // Start initializes and starts the Redis plugin UI
 func (r *RedisPlugin) Start(app *tview.Application) tview.Primitive {
-	// Initialize the Redis view
+	pluginapi.Log().Info("starting plugin")
 	pages := tview.NewPages()
 	redisView := NewRedisView(app, pages)
 	r.redisView = redisView

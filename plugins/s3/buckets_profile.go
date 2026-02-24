@@ -101,7 +101,7 @@ func parseAWSCredentialProfiles(credsPath string, regionMap map[string]string, e
 
 // getAWSProfiles retrieves available AWS profiles from credentials and config files.
 // It merges profiles from ~/.aws/credentials with region info from ~/.aws/config,
-// and also includes any profiles defined in the S3 plugin YAML config.
+// and also includes any profiles defined in KeePass under s3/<environment>/<name>.
 func (bv *BucketsView) getAWSProfiles() []S3ProfileInfo {
 	var profileInfos []S3ProfileInfo
 

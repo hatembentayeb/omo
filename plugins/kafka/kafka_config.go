@@ -2,226 +2,248 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
+	"sort"
+	"strings"
 
 	"omo/pkg/pluginapi"
-
-	"gopkg.in/yaml.v3"
 )
 
-// kafkaConfigHeader is prepended to the auto-generated config YAML.
-const kafkaConfigHeader = `# Kafka Plugin Configuration
-# Path: ~/.omo/configs/kafka/kafka.yaml
-#
-# KeePass Secret Schema (secret path: kafka/<environment>/<name>):
-#   Title    → instance name
-#   URL      → bootstrap servers (e.g. "broker1:9092,broker2:9092")
-#   UserName → SASL username
-#   Password → SASL password
-#   Custom Attributes:
-#     ssl_ca_cert → path to SSL CA certificate
-#     ssl_cert    → path to SSL client certificate
-#     ssl_key     → path to SSL client key
-#
-# When "secret" is set, connection fields are resolved from KeePass.
-# YAML values take precedence over KeePass values (override only blanks).
-`
-
-// KafkaConfig represents the configuration for the Kafka plugin
-type KafkaConfig struct {
-	Instances []KafkaInstance `yaml:"instances"`
-	UI        KafkaUIConfig   `yaml:"ui"`
+var defaultKafkaEnvironments = []string{
+	"development",
+	"production",
+	"staging",
+	"sandbox",
+	"local",
+	"test",
 }
 
-// KafkaInstance represents a configured Kafka cluster.
-// When the Secret field is set (e.g. "kafka/production/main-cluster"),
-// it references a KeePass entry whose fields override BootstrapServers,
-// Username, Password, etc. at load time.
-type KafkaInstance struct {
-	Name             string        `yaml:"name"`
-	Description      string        `yaml:"description"`
-	Secret           string        `yaml:"secret,omitempty"` // KeePass path: pluginName/env/entryName
-	BootstrapServers string        `yaml:"bootstrap_servers"`
-	Security         KafkaSecurity `yaml:"security"`
-}
-
-// KafkaSecurity represents security configuration for a Kafka cluster
-type KafkaSecurity struct {
-	EnableSASL    bool   `yaml:"enable_sasl"`
-	SASLMechanism string `yaml:"sasl_mechanism"`
-	Username      string `yaml:"username"`
-	Password      string `yaml:"password"`
-	EnableSSL     bool   `yaml:"enable_ssl"`
-	SSLCACert     string `yaml:"ssl_ca_cert"`
-	SSLCert       string `yaml:"ssl_cert"`
-	SSLKey        string `yaml:"ssl_key"`
-}
-
-// KafkaUIConfig represents UI configuration options
-type KafkaUIConfig struct {
-	RefreshInterval      int    `yaml:"refresh_interval"`
-	MaxTopicsDisplay     int    `yaml:"max_topics_display"`
-	MaxPartitionsDisplay int    `yaml:"max_partitions_display"`
-	DefaultView          string `yaml:"default_view"`
-	EnableMetrics        bool   `yaml:"enable_metrics"`
-	EnableConsumerGroups bool   `yaml:"enable_consumer_groups"`
-	EnableMessageViewer  bool   `yaml:"enable_message_viewer"`
-}
-
-// DefaultKafkaConfig returns the default configuration
-func DefaultKafkaConfig() *KafkaConfig {
-	return &KafkaConfig{
-		Instances: []KafkaInstance{},
-		UI: KafkaUIConfig{
-			RefreshInterval:      10,
-			MaxTopicsDisplay:     100,
-			MaxPartitionsDisplay: 50,
-			DefaultView:          "brokers",
-			EnableMetrics:        true,
-			EnableConsumerGroups: true,
-			EnableMessageViewer:  true,
-		},
-	}
-}
-
-// LoadKafkaConfig loads the Kafka configuration from the specified file.
-// Default path: ~/.omo/configs/kafka/kafka.yaml
+// KafkaInstance is built entirely from a KeePass entry at runtime.
 //
-// After unmarshalling, any instance with a non-empty Secret field will
-// have its connection fields resolved from the KeePass secrets provider.
-func LoadKafkaConfig(configPath string) (*KafkaConfig, error) {
-	if configPath == "" {
-		configPath = pluginapi.PluginConfigPath("kafka")
-	}
-
-	// Auto-create default config if missing
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		_ = writeDefaultConfig(configPath, kafkaConfigHeader, DefaultKafkaConfig())
-	}
-
-	// Read the configuration file
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("error reading config file: %v", err)
-	}
-
-	// Unmarshal the configuration
-	config := DefaultKafkaConfig()
-	err = yaml.Unmarshal(data, config)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing config file: %v", err)
-	}
-
-	// Init KeePass placeholder if no entries exist yet
-	initKafkaKeePass()
-
-	// Resolve secrets for instances that reference KeePass entries.
-	if err := resolveKafkaSecrets(config); err != nil {
-		return nil, fmt.Errorf("error resolving secrets: %v", err)
-	}
-
-	return config, nil
+// KeePass Entry Schema (path: kafka/<environment>/<name>):
+//
+//	Title    → instance display name
+//	URL      → bootstrap servers (e.g. "broker1:9092,broker2:9092")
+//	UserName → SASL username
+//	Password → SASL password
+//	Notes    → description / notes
+//
+//	Custom Attributes:
+//	  sasl_mechanism → SASL mechanism (e.g. "PLAIN", "SCRAM-SHA-256")
+//	  enable_sasl    → "true" to enable SASL auth (default: false)
+//	  enable_ssl     → "true" to enable SSL (default: false)
+//	  ssl_ca_cert    → path to SSL CA certificate
+//	  ssl_cert       → path to SSL client certificate
+//	  ssl_key        → path to SSL client key
+//	  tags           → comma-separated tags
+type KafkaInstance struct {
+	Name             string
+	Description      string
+	Environment      string
+	BootstrapServers string
+	Security         KafkaSecurity
+	Tags             []string
 }
 
-// initKafkaKeePass seeds placeholder KeePass entries for Kafka if none exist.
-func initKafkaKeePass() {
+type KafkaSecurity struct {
+	EnableSASL    bool
+	SASLMechanism string
+	Username      string
+	Password      string
+	EnableSSL     bool
+	SSLCACert     string
+	SSLCert       string
+	SSLKey        string
+}
+
+// KafkaUIConfig holds hardcoded UI defaults for the Kafka plugin.
+type KafkaUIConfig struct {
+	RefreshInterval      int
+	MaxTopicsDisplay     int
+	MaxPartitionsDisplay int
+	DefaultView          string
+	EnableMetrics        bool
+	EnableConsumerGroups bool
+	EnableMessageViewer  bool
+}
+
+func DefaultKafkaUIConfig() KafkaUIConfig {
+	return KafkaUIConfig{
+		RefreshInterval:      10,
+		MaxTopicsDisplay:     100,
+		MaxPartitionsDisplay: 50,
+		DefaultView:          "brokers",
+		EnableMetrics:        true,
+		EnableConsumerGroups: true,
+		EnableMessageViewer:  true,
+	}
+}
+
+// DiscoverInstances reads KeePass groups under "kafka/" and builds
+// KafkaInstance objects from the entries.
+func DiscoverInstances() ([]KafkaInstance, error) {
 	if !pluginapi.HasSecrets() {
-		return
-	}
-	entries, err := pluginapi.Secrets().List("kafka")
-	if err != nil || len(entries) > 0 {
-		return
-	}
-	_ = pluginapi.Secrets().Put("kafka/default/example", &pluginapi.SecretEntry{
-		Title:    "example",
-		UserName: "",
-		Password: "",
-		URL:      "localhost:9092",
-		Notes:    "Kafka placeholder. Set URL (bootstrap servers), UserName/Password (SASL).",
-		CustomAttributes: map[string]string{
-			"ssl_ca_cert": "",
-			"ssl_cert":    "",
-			"ssl_key":     "",
-		},
-	})
-}
-
-func resolveKafkaInstanceSecret(inst *KafkaInstance, entry *pluginapi.SecretEntry) {
-	if inst.BootstrapServers == "" && entry.URL != "" {
-		inst.BootstrapServers = entry.URL
-	}
-	if inst.Security.Username == "" && entry.UserName != "" {
-		inst.Security.Username = entry.UserName
-	}
-	if inst.Security.Password == "" && entry.Password != "" {
-		inst.Security.Password = entry.Password
-	}
-	if inst.Name == "" && entry.Title != "" {
-		inst.Name = entry.Title
-	}
-	for attr, field := range map[string]*string{
-		"ssl_ca_cert": &inst.Security.SSLCACert,
-		"ssl_cert":    &inst.Security.SSLCert,
-		"ssl_key":     &inst.Security.SSLKey,
-	} {
-		if *field == "" {
-			if v, ok := entry.CustomAttributes[attr]; ok {
-				*field = v
-			}
-		}
-	}
-}
-
-// resolveKafkaSecrets iterates over instances and populates connection
-// fields from the secrets provider when a secret path is defined.
-func resolveKafkaSecrets(config *KafkaConfig) error {
-	if !pluginapi.HasSecrets() {
-		return nil
+		return nil, fmt.Errorf("secrets provider not available")
 	}
 
-	for i := range config.Instances {
-		inst := &config.Instances[i]
-		if inst.Secret == "" {
+	if err := pluginapi.Secrets().Reload(); err != nil {
+		return nil, fmt.Errorf("reload secrets: %w", err)
+	}
+
+	ensureKafkaKeePassGroups()
+
+	paths, err := pluginapi.Secrets().List("kafka")
+	if err != nil {
+		return nil, fmt.Errorf("list kafka secrets: %w", err)
+	}
+
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("no Kafka entries in KeePass (create entries under kafka/<environment>/<name>)")
+	}
+
+	var instances []KafkaInstance
+	for _, path := range paths {
+		env := extractEnvironment(path)
+		if env == "" {
 			continue
 		}
 
-		entry, err := pluginapi.ResolveSecret(inst.Secret)
+		entry, err := pluginapi.Secrets().Get(path)
 		if err != nil {
-			return fmt.Errorf("instance %q: %w", inst.Name, err)
+			continue
 		}
 
-		resolveKafkaInstanceSecret(inst, entry)
+		inst := entryToKafkaInstance(entry, env)
+		instances = append(instances, inst)
 	}
-	return nil
+
+	sort.Slice(instances, func(i, j int) bool {
+		if instances[i].Environment != instances[j].Environment {
+			return instances[i].Environment < instances[j].Environment
+		}
+		return instances[i].Name < instances[j].Name
+	})
+
+	return instances, nil
 }
 
-// GetAvailableKafkaInstances returns the list of configured Kafka instances
+func extractEnvironment(path string) string {
+	parts := strings.SplitN(path, "/", 3)
+	if len(parts) < 3 {
+		return ""
+	}
+	return parts[1]
+}
+
+func entryToKafkaInstance(entry *pluginapi.SecretEntry, env string) KafkaInstance {
+	inst := KafkaInstance{
+		Name:             entry.Title,
+		Description:      entry.Notes,
+		Environment:      env,
+		BootstrapServers: entry.URL,
+		Security: KafkaSecurity{
+			Username: entry.UserName,
+			Password: entry.Password,
+		},
+	}
+
+	if entry.CustomAttributes == nil {
+		return inst
+	}
+
+	ca := entry.CustomAttributes
+
+	if v, ok := ca["sasl_mechanism"]; ok {
+		inst.Security.SASLMechanism = v
+	}
+	if v, ok := ca["enable_sasl"]; ok {
+		inst.Security.EnableSASL = v == "true" || v == "1" || v == "yes"
+	}
+	if v, ok := ca["enable_ssl"]; ok {
+		inst.Security.EnableSSL = v == "true" || v == "1" || v == "yes"
+	}
+	if v, ok := ca["ssl_ca_cert"]; ok {
+		inst.Security.SSLCACert = v
+	}
+	if v, ok := ca["ssl_cert"]; ok {
+		inst.Security.SSLCert = v
+	}
+	if v, ok := ca["ssl_key"]; ok {
+		inst.Security.SSLKey = v
+	}
+	if v, ok := ca["tags"]; ok {
+		for _, t := range strings.Split(v, ",") {
+			t = strings.TrimSpace(t)
+			if t != "" {
+				inst.Tags = append(inst.Tags, t)
+			}
+		}
+	}
+
+	return inst
+}
+
+func ensureKafkaKeePassGroups() {
+	if !pluginapi.HasSecrets() {
+		return
+	}
+
+	requiredAttrs := map[string]string{
+		"sasl_mechanism": "",
+		"enable_sasl":    "false",
+		"enable_ssl":     "false",
+		"ssl_ca_cert":    "",
+		"ssl_cert":       "",
+		"ssl_key":        "",
+		"tags":           "",
+	}
+
+	for _, env := range defaultKafkaEnvironments {
+		prefix := fmt.Sprintf("kafka/%s", env)
+		existing, err := pluginapi.Secrets().List(prefix)
+		if err == nil && len(existing) > 0 {
+			backfillAttributes(existing, requiredAttrs)
+			continue
+		}
+		path := fmt.Sprintf("kafka/%s/example", env)
+		_ = pluginapi.Secrets().Put(path, &pluginapi.SecretEntry{
+			Title:            "example",
+			UserName:         "",
+			Password:         "",
+			URL:              "localhost:9092",
+			Notes:            fmt.Sprintf("Kafka %s placeholder. Set URL (bootstrap servers), UserName/Password (SASL).", env),
+			CustomAttributes: requiredAttrs,
+		})
+	}
+}
+
+func backfillAttributes(entryPaths []string, required map[string]string) {
+	for _, entryPath := range entryPaths {
+		entry, err := pluginapi.Secrets().Get(entryPath)
+		if err != nil || entry == nil {
+			continue
+		}
+		if entry.CustomAttributes == nil {
+			entry.CustomAttributes = make(map[string]string)
+		}
+		updated := false
+		for attr, defaultVal := range required {
+			if _, exists := entry.CustomAttributes[attr]; !exists {
+				entry.CustomAttributes[attr] = defaultVal
+				updated = true
+			}
+		}
+		if updated {
+			_ = pluginapi.Secrets().Put(entryPath, entry)
+		}
+	}
+}
+
+// GetAvailableKafkaInstances returns all discovered Kafka instances.
 func GetAvailableKafkaInstances() ([]KafkaInstance, error) {
-	config, err := LoadKafkaConfig("")
-	if err != nil {
-		return nil, err
-	}
-	return config.Instances, nil
+	return DiscoverInstances()
 }
 
-// GetKafkaUIConfig returns the UI configuration
+// GetKafkaUIConfig returns the hardcoded UI configuration.
 func GetKafkaUIConfig() (KafkaUIConfig, error) {
-	config, err := LoadKafkaConfig("")
-	if err != nil {
-		return KafkaUIConfig{}, err
-	}
-	return config.UI, nil
-}
-
-// writeDefaultConfig marshals the default config struct to YAML and writes it to disk.
-func writeDefaultConfig(configPath, header string, cfg interface{}) error {
-	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
-		return err
-	}
-	data, err := yaml.Marshal(cfg)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(configPath, []byte(header+"\n"+string(data)), 0644)
+	return DefaultKafkaUIConfig(), nil
 }

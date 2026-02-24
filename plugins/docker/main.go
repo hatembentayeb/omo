@@ -18,7 +18,7 @@ type DockerPlugin struct {
 
 // Start initializes and starts the Docker plugin UI
 func (d *DockerPlugin) Start(app *tview.Application) tview.Primitive {
-	// Initialize the Docker view
+	pluginapi.Log().Info("starting plugin")
 	pages := tview.NewPages()
 	dockerView := NewDockerView(app, pages)
 	d.dockerView = dockerView

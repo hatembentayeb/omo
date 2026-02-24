@@ -16,9 +16,9 @@ import (
 //
 //	~/.omo/
 //	├── plugins/<name>/<name>.so     ← compiled plugin shared libraries
-//	├── configs/<name>/<name>.yaml   ← per-plugin configuration files
-//	├── secrets/omo.kdbx             ← KeePass secrets database
-//	└── keys/omo.key                 ← KeePass key file (auto-generated)
+//	├── secrets/omo.kdbx             ← KeePass secrets database (all config + secrets)
+//	├── keys/omo.key                 ← KeePass key file (auto-generated)
+//	└── logs/<name>.log              ← per-plugin + main app log files
 const OmoHome = ".omo"
 
 // PluginMetadata defines metadata for OhMyOps plugins.
@@ -62,15 +62,9 @@ func PluginsDir() string {
 	return filepath.Join(OmoDir(), "plugins")
 }
 
-// ConfigsDir returns the absolute path to ~/.omo/configs.
-func ConfigsDir() string {
-	return filepath.Join(OmoDir(), "configs")
-}
-
-// PluginConfigPath returns the config file path for a given plugin name.
-// e.g. PluginConfigPath("redis") → ~/.omo/configs/redis/redis.yaml
-func PluginConfigPath(pluginName string) string {
-	return filepath.Join(ConfigsDir(), pluginName, pluginName+".yaml")
+// LogsDir returns the absolute path to ~/.omo/logs.
+func LogsDir() string {
+	return filepath.Join(OmoDir(), "logs")
 }
 
 // PluginSOPath returns the shared library path for a given plugin name.
@@ -96,16 +90,7 @@ func NewHTTPClient(timeout time.Duration) *http.Client {
 	}
 }
 
-// EnsurePluginDirs creates the plugin and config directories for a given plugin.
+// EnsurePluginDirs creates the plugin directory for a given plugin.
 func EnsurePluginDirs(pluginName string) error {
-	dirs := []string{
-		filepath.Join(PluginsDir(), pluginName),
-		filepath.Join(ConfigsDir(), pluginName),
-	}
-	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return err
-		}
-	}
-	return nil
+	return os.MkdirAll(filepath.Join(PluginsDir(), pluginName), 0755)
 }

@@ -17,7 +17,7 @@ type S3Plugin struct {
 
 // Start initializes and starts the S3 plugin UI
 func (s *S3Plugin) Start(app *tview.Application) tview.Primitive {
-	// Initialize the bucket view
+	pluginapi.Log().Info("starting plugin")
 	pages := tview.NewPages()
 	bucketsView := NewBucketsView(app, pages)
 	s.bucketsView = bucketsView

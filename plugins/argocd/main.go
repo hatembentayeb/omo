@@ -44,11 +44,12 @@ type CredentialInfo struct {
 
 // Start initializes the plugin
 func (p *ArgocdPlugin) Start(app *tview.Application) tview.Primitive {
+	pluginapi.Log().Info("starting plugin")
+
 	// Initialize debug logger
 	err := InitDebugLogger()
 	if err != nil {
-		// If we can't initialize the logger, log to console instead
-		fmt.Printf("Failed to initialize debug logger: %v\n", err)
+		pluginapi.Log().Error("failed to initialize debug logger: %v", err)
 	} else {
 		Debug("ArgoCD plugin starting...")
 	}

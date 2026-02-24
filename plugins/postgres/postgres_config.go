@@ -2,177 +2,224 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
 
 	"omo/pkg/pluginapi"
-
-	"gopkg.in/yaml.v3"
 )
 
-// postgresConfigHeader is prepended to the auto-generated config YAML.
-const postgresConfigHeader = `# PostgreSQL Plugin Configuration
-# Path: ~/.omo/configs/postgres/postgres.yaml
-#
-# KeePass Secret Schema (secret path: postgres/<environment>/<name>):
-#   Title    → instance name
-#   URL      → host (e.g. "localhost", "pg.example.com")
-#   UserName → PostgreSQL username
-#   Password → PostgreSQL password
-#
-# When "secret" is set, connection fields are resolved from KeePass.
-# YAML values take precedence over KeePass values (override only blanks).
-`
-
-// PostgresConfig represents the configuration for the PostgreSQL plugin
-type PostgresConfig struct {
-	Instances       []PostgresInstance `yaml:"instances"`
-	UI              UIConfig           `yaml:"ui"`
-	DefaultInstance string             `yaml:"default_instance,omitempty"`
+var defaultPostgresEnvironments = []string{
+	"development",
+	"production",
+	"staging",
+	"sandbox",
+	"local",
+	"test",
 }
 
-// PostgresInstance represents a configured PostgreSQL server instance.
+// PostgresInstance is built entirely from a KeePass entry at runtime.
+//
+// KeePass Entry Schema (path: postgres/<environment>/<name>):
+//
+//	Title    → instance display name
+//	URL      → host (e.g. "localhost", "pg.example.com")
+//	UserName → PostgreSQL username
+//	Password → PostgreSQL password
+//	Notes    → description / notes
+//
+//	Custom Attributes:
+//	  port     → PostgreSQL port (default: 5432)
+//	  database → database name (default: "postgres")
+//	  sslmode  → SSL mode (default: "disable")
+//	  tags     → comma-separated tags
 type PostgresInstance struct {
-	Name        string `yaml:"name"`
-	Description string `yaml:"description"`
-	Secret      string `yaml:"secret,omitempty"`
-	Host        string `yaml:"host"`
-	Port        int    `yaml:"port"`
-	Username    string `yaml:"username"`
-	Password    string `yaml:"password"`
-	Database    string `yaml:"database"`
-	SSLMode     string `yaml:"sslmode"`
+	Name        string
+	Description string
+	Environment string
+	Host        string
+	Port        int
+	Username    string
+	Password    string
+	Database    string
+	SSLMode     string
+	Tags        []string
 }
 
-// UIConfig represents UI configuration options
+// UIConfig holds hardcoded UI defaults for the PostgreSQL plugin.
 type UIConfig struct {
-	RefreshInterval int  `yaml:"refresh_interval"`
-	MaxRowsDisplay  int  `yaml:"max_rows_display"`
-	EnableLogs      bool `yaml:"enable_logs"`
-	EnableStats     bool `yaml:"enable_stats"`
+	RefreshInterval int
+	MaxRowsDisplay  int
+	EnableLogs      bool
+	EnableStats     bool
 }
 
-// DefaultConfig returns the default configuration
-func DefaultConfig() *PostgresConfig {
-	return &PostgresConfig{
-		Instances: []PostgresInstance{},
-		UI: UIConfig{
-			RefreshInterval: 10,
-			MaxRowsDisplay:  1000,
-			EnableLogs:      true,
-			EnableStats:     true,
-		},
+func DefaultUIConfig() UIConfig {
+	return UIConfig{
+		RefreshInterval: 10,
+		MaxRowsDisplay:  1000,
+		EnableLogs:      true,
+		EnableStats:     true,
 	}
 }
 
-// LoadConfig loads the PostgreSQL configuration from the specified file.
-func LoadConfig(configPath string) (*PostgresConfig, error) {
-	if configPath == "" {
-		configPath = pluginapi.PluginConfigPath("postgres")
-	}
-
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		_ = writeDefaultConfig(configPath, postgresConfigHeader, DefaultConfig())
-	}
-
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("error reading config file: %v", err)
-	}
-
-	config := DefaultConfig()
-	err = yaml.Unmarshal(data, config)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing config file: %v", err)
-	}
-
-	initPostgresKeePass()
-
-	if err := resolvePostgresSecrets(config); err != nil {
-		return nil, fmt.Errorf("error resolving secrets: %v", err)
-	}
-
-	return config, nil
-}
-
-// initPostgresKeePass seeds placeholder KeePass entries for PostgreSQL if none exist.
-func initPostgresKeePass() {
+// DiscoverInstances reads KeePass groups under "postgres/" and builds
+// PostgresInstance objects from the entries.
+func DiscoverInstances() ([]PostgresInstance, error) {
 	if !pluginapi.HasSecrets() {
-		return
-	}
-	entries, err := pluginapi.Secrets().List("postgres")
-	if err != nil || len(entries) > 0 {
-		return
-	}
-	_ = pluginapi.Secrets().Put("postgres/default/example", &pluginapi.SecretEntry{
-		Title:    "example",
-		UserName: "postgres",
-		Password: "",
-		URL:      "localhost",
-		Notes:    "PostgreSQL placeholder. Set URL (host), UserName, Password.",
-	})
-}
-
-// resolvePostgresSecrets iterates over instances and populates connection
-// fields from the secrets provider when a secret path is defined.
-func resolvePostgresSecrets(config *PostgresConfig) error {
-	if !pluginapi.HasSecrets() {
-		return nil
+		return nil, fmt.Errorf("secrets provider not available")
 	}
 
-	for i := range config.Instances {
-		inst := &config.Instances[i]
-		if inst.Secret == "" {
+	if err := pluginapi.Secrets().Reload(); err != nil {
+		return nil, fmt.Errorf("reload secrets: %w", err)
+	}
+
+	ensurePostgresKeePassGroups()
+
+	paths, err := pluginapi.Secrets().List("postgres")
+	if err != nil {
+		return nil, fmt.Errorf("list postgres secrets: %w", err)
+	}
+
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("no PostgreSQL entries in KeePass (create entries under postgres/<environment>/<name>)")
+	}
+
+	var instances []PostgresInstance
+	for _, path := range paths {
+		env := extractEnvironment(path)
+		if env == "" {
 			continue
 		}
 
-		entry, err := pluginapi.ResolveSecret(inst.Secret)
+		entry, err := pluginapi.Secrets().Get(path)
 		if err != nil {
-			return fmt.Errorf("instance %q: %w", inst.Name, err)
+			continue
 		}
 
-		if inst.Host == "" && entry.URL != "" {
-			inst.Host = entry.URL
-		}
-		if inst.Username == "" && entry.UserName != "" {
-			inst.Username = entry.UserName
-		}
-		if inst.Password == "" && entry.Password != "" {
-			inst.Password = entry.Password
-		}
-		if inst.Name == "" && entry.Title != "" {
-			inst.Name = entry.Title
-		}
+		inst := entryToPostgresInstance(entry, env)
+		instances = append(instances, inst)
 	}
-	return nil
+
+	sort.Slice(instances, func(i, j int) bool {
+		if instances[i].Environment != instances[j].Environment {
+			return instances[i].Environment < instances[j].Environment
+		}
+		return instances[i].Name < instances[j].Name
+	})
+
+	return instances, nil
 }
 
-// GetAvailableInstances returns the list of configured PostgreSQL instances
+func extractEnvironment(path string) string {
+	parts := strings.SplitN(path, "/", 3)
+	if len(parts) < 3 {
+		return ""
+	}
+	return parts[1]
+}
+
+func entryToPostgresInstance(entry *pluginapi.SecretEntry, env string) PostgresInstance {
+	inst := PostgresInstance{
+		Name:        entry.Title,
+		Description: entry.Notes,
+		Environment: env,
+		Host:        entry.URL,
+		Username:    entry.UserName,
+		Password:    entry.Password,
+		Port:        5432,
+		Database:    "postgres",
+		SSLMode:     "disable",
+	}
+
+	if entry.CustomAttributes == nil {
+		return inst
+	}
+
+	ca := entry.CustomAttributes
+
+	if v, ok := ca["port"]; ok {
+		if p, err := strconv.Atoi(v); err == nil {
+			inst.Port = p
+		}
+	}
+	if v, ok := ca["database"]; ok && v != "" {
+		inst.Database = v
+	}
+	if v, ok := ca["sslmode"]; ok && v != "" {
+		inst.SSLMode = v
+	}
+	if v, ok := ca["tags"]; ok {
+		for _, t := range strings.Split(v, ",") {
+			t = strings.TrimSpace(t)
+			if t != "" {
+				inst.Tags = append(inst.Tags, t)
+			}
+		}
+	}
+
+	return inst
+}
+
+func ensurePostgresKeePassGroups() {
+	if !pluginapi.HasSecrets() {
+		return
+	}
+
+	requiredAttrs := map[string]string{
+		"port":     "5432",
+		"database": "postgres",
+		"sslmode":  "disable",
+		"tags":     "",
+	}
+
+	for _, env := range defaultPostgresEnvironments {
+		prefix := fmt.Sprintf("postgres/%s", env)
+		existing, err := pluginapi.Secrets().List(prefix)
+		if err == nil && len(existing) > 0 {
+			backfillAttributes(existing, requiredAttrs)
+			continue
+		}
+		path := fmt.Sprintf("postgres/%s/example", env)
+		_ = pluginapi.Secrets().Put(path, &pluginapi.SecretEntry{
+			Title:            "example",
+			UserName:         "postgres",
+			Password:         "",
+			URL:              "localhost",
+			Notes:            fmt.Sprintf("PostgreSQL %s placeholder. Set URL (host), UserName, Password.", env),
+			CustomAttributes: requiredAttrs,
+		})
+	}
+}
+
+func backfillAttributes(entryPaths []string, required map[string]string) {
+	for _, entryPath := range entryPaths {
+		entry, err := pluginapi.Secrets().Get(entryPath)
+		if err != nil || entry == nil {
+			continue
+		}
+		if entry.CustomAttributes == nil {
+			entry.CustomAttributes = make(map[string]string)
+		}
+		updated := false
+		for attr, defaultVal := range required {
+			if _, exists := entry.CustomAttributes[attr]; !exists {
+				entry.CustomAttributes[attr] = defaultVal
+				updated = true
+			}
+		}
+		if updated {
+			_ = pluginapi.Secrets().Put(entryPath, entry)
+		}
+	}
+}
+
+// GetAvailableInstances returns all discovered PostgreSQL instances.
 func GetAvailableInstances() ([]PostgresInstance, error) {
-	config, err := LoadConfig("")
-	if err != nil {
-		return nil, err
-	}
-	return config.Instances, nil
+	return DiscoverInstances()
 }
 
-// GetUIConfig returns the UI configuration
+// GetUIConfig returns the hardcoded UI configuration.
 func GetUIConfig() (UIConfig, error) {
-	config, err := LoadConfig("")
-	if err != nil {
-		return UIConfig{}, err
-	}
-	return config.UI, nil
-}
-
-// writeDefaultConfig marshals the default config struct to YAML and writes it to disk.
-func writeDefaultConfig(configPath, header string, cfg interface{}) error {
-	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
-		return err
-	}
-	data, err := yaml.Marshal(cfg)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(configPath, []byte(header+"\n"+string(data)), 0644)
+	return DefaultUIConfig(), nil
 }

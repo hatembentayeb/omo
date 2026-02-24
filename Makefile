@@ -1,7 +1,6 @@
 PLUGINS_DIR := ./plugins
 OMO_HOME := $(HOME)/.omo
 PLUGINS_INSTALL_DIR := $(OMO_HOME)/plugins
-CONFIGS_INSTALL_DIR := $(OMO_HOME)/configs
 BUILD_MODE := -buildmode=plugin
 
 .PHONY: all clean install dirs
@@ -26,9 +25,9 @@ all: dirs
 
 # Create the ~/.omo directory structure
 dirs:
-	@mkdir -p $(PLUGINS_INSTALL_DIR) $(CONFIGS_INSTALL_DIR)
+	@mkdir -p $(PLUGINS_INSTALL_DIR)
 
-# Seed KeePass secrets and install default configs for all plugins.
+# Seed KeePass secrets for all plugins.
 # Plugins that need Docker (redis, kafka) also start their containers.
 dev-setup:
 	@bash dev/setup.sh
