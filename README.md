@@ -9,100 +9,260 @@
   <a href="https://goreportcard.com/report/github.com/hatembentayeb/omo"><img src="https://goreportcard.com/badge/github.com/hatembentayeb/omo?style=flat-square" alt="Go Report Card"></a>
   <a href="https://github.com/hatembentayeb/omo/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue?style=flat-square" alt="License"></a>
   <a href="https://github.com/hatembentayeb/omo/releases"><img src="https://img.shields.io/github/downloads/hatembentayeb/omo/total?style=flat-square&color=4ade80" alt="Downloads"></a>
-  <img src="https://img.shields.io/badge/Go-1.24+-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go Version">
   <img src="https://img.shields.io/badge/platform-linux%20%7C%20macOS%20%7C%20windows-lightgrey?style=flat-square" alt="Platform">
 </p>
 
 <p align="center">
   <a href="https://oh-myops.com">Website</a> &bull;
-  <a href="#installation">Install</a> &bull;
+  <a href="#quick-start">Quick Start</a> &bull;
   <a href="#plugins">Plugins</a> &bull;
-  <a href="#architecture">Architecture</a> &bull;
+  <a href="#keepass-setup">KeePass Setup</a> &bull;
   <a href="#contributing">Contributing</a>
-</p>
-
----
-
-## Demo
-
-<p align="center">
-  <img src="assets/demo.gif" alt="omo demo" width="800">
-  <br>
-  <a href="https://youtu.be/uTpyVshDUEo">Watch full demo on YouTube</a>
 </p>
 
 ---
 
 ## What is omo?
 
-**omo** (OhMyOps) is an operations dashboard that runs entirely in your terminal. Instead of juggling dozens of browser tabs, CLI tools, and dashboards, omo gives you a single keyboard-driven interface to manage your entire infrastructure stack.
+**omo** is an operations dashboard that runs entirely in your terminal. Instead of juggling browser tabs, CLI tools, and dashboards, omo gives you a single keyboard-driven interface to manage your entire infrastructure.
 
-```
-                   omo
-                    |
-     +---------+----+----+---------+
-     |         |         |         |
-  Docker    Redis     Kafka    ArgoCD   ...11 plugins
-```
-
-One binary. One config directory. Every service you run.
+One binary. One KeePass file. Every service you run.
 
 ---
 
-## Why omo?
+## Quick Start
 
-**The problem:** You have Redis in one terminal, `docker ps` in another, k9s somewhere, the ArgoCD UI in a browser, and your AWS cost dashboard in yet another tab. Context switching kills your flow.
-
-**The solution:** omo loads each service as a plugin and presents it through a consistent, keyboard-driven TUI. Filter, sort, search, and act on any resource -- all without leaving your terminal.
-
-- **Keyboard-first** -- every action is one or two keystrokes away
-- **Plugin architecture** -- only load what you need, build your own in Go
-- **Secrets management** -- KeePass (KDBX4) integration keeps credentials out of config files
-- **Cross-platform** -- Linux, macOS, Windows (Linux recommended for plugin `.so` support)
-- **Fast** -- written in Go, launches in milliseconds
-
----
-
-## Plugins
-
-omo ships with 12 official plugins. Each one is a standalone `.so` binary that the host loads at runtime.
-
-| Plugin | Description | Key Features |
-|--------|-------------|--------------|
-| **docker** | Containers, images, networks, volumes | Start/stop/restart, logs, exec, prune |
-| **redis** | Keys, memory, clients, slowlog, pub/sub | Key browser, TTL management, live metrics |
-| **kafka** | Brokers, topics, partitions, consumer groups | Topic creation, partition details, lag monitoring |
-| **rabbitmq** | Queues, exchanges, bindings, connections, nodes | Publish/browse messages, purge, create/delete |
-| **postgres** | Databases, schemas, tables, connections, replication | Query execution, connection monitoring |
-| **ssh** | Remote servers, execution, monitoring | Key/password/proxy/jump host auth, remote exec, system info |
-| **argocd** | Applications, projects, accounts, sync status | Sync, refresh, rollback |
-| **k8suser** | Kubernetes user certificate management | CSR generation, RBAC binding, KeePass storage |
-| **awsCosts** | Cost explorer, budgets, forecasts | Daily/monthly breakdown, budget alerts |
-| **s3** | Buckets, objects, previews | Browse, upload, download, presigned URLs |
-| **git** | Repositories, branches, commits, diffs | Multi-repo view, branch comparison |
-| **sysprocess** | Processes, CPU, memory, disk, ports | Process tree, kill, resource graphs |
-
-### Built-in Package Manager
-
-omo includes a package manager that fetches plugins from the [official index](index.yaml):
-
-```
-omo → Package Manager → Install / Update / Remove plugins
-```
-
----
-
-## Installation
-
-### One-line install (recommended)
+### 1. Install omo
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/hatembentayeb/omo/main/install.sh | bash
 ```
 
-This downloads the latest release for your platform, installs the `omo` binary to `/usr/local/bin`, and creates the `~/.omo` directory structure. Then launch `omo`, open the **Package Manager** (`p`), press `S` to sync the plugin index, and `A` to install all plugins.
+This downloads the latest release binary and creates the `~/.omo/` directory.
 
-### From source
+### 2. Launch omo
+
+```bash
+omo
+```
+
+On first launch, omo **automatically**:
+- Generates a master key file at `~/.omo/keys/omo.key`
+- Creates a KeePass database at `~/.omo/secrets/omo.kdbx` (secured by the key file)
+
+No password prompts, no manual setup. The key file authenticates everything.
+
+> **Important:** Back up `~/.omo/keys/omo.key` — it's the only way to unlock your secrets database. If you lose it, you lose access to all stored credentials.
+
+### 3. Install plugins
+
+Once inside omo:
+
+1. Press `p` from the plugins list (or **Tab** to the bottom actions list and select **Package Manager**)
+2. Press `S` to sync the plugin index from GitHub
+3. Press `A` to install all plugins
+4. Press `Q` to go back
+
+### 4. Add your first connection
+
+All plugin configurations live in the KeePass database. The path structure is:
+
+```
+<plugin-name>/<environment>/<instance-name>
+```
+
+Open the KeePass database with KeePassXC (using the key file for authentication):
+
+1. Open `~/.omo/secrets/omo.kdbx` in KeePassXC
+2. When prompted, select **Key File** and point to `~/.omo/keys/omo.key`
+3. Inside the `omo` root group, create a group hierarchy: e.g. `redis` → `development`
+4. Create an entry named `local` with:
+   - **URL**: `localhost` (the host)
+   - **Username**: Redis ACL username (leave empty if none)
+   - **Password**: Redis password (leave empty if none)
+   - Add a custom attribute `port` = `6379`
+
+Plugins also auto-create placeholder entries on first run to guide you.
+
+### 5. Use the plugin
+
+Select the plugin from the sidebar — it auto-discovers your KeePass entries and connects.
+
+---
+
+## How It Works
+
+```
+┌──────────────────────────────────────────────┐
+│  KeePass (secrets/omo.kdbx + keys/omo.key)   │
+│  └── redis/production/cache-01               │
+│  └── docker/development/local                │
+│  └── kafka/staging/cluster-1                 │
+│  └── ...                                     │
+└──────────────┬───────────────────────────────┘
+               │ pluginapi.Secrets()
+┌──────────────▼───────────────────────────────┐
+│  omo (host binary)                           │
+│  ├── Auto-bootstrap KeePass on first run     │
+│  ├── Plugin loader                           │
+│  ├── Tab/Shift+Tab panel cycling             │
+│  └── Per-plugin logging (~/.omo/logs/)       │
+└──────────────┬───────────────────────────────┘
+               │ plugin.Open()
+┌──────────────▼───────────────────────────────┐
+│  Plugins (.so shared libraries)              │
+│  redis.so  docker.so  kafka.so  ...          │
+└──────────────────────────────────────────────┘
+```
+
+---
+
+## Plugins
+
+omo ships with 12 official plugins:
+
+| Plugin | Description | KeePass Path |
+|--------|-------------|-------------|
+| **docker** | Containers, images, networks, volumes, compose | `docker/<env>/<host>` |
+| **redis** | Keys, memory, clients, slowlog, pub/sub | `redis/<env>/<instance>` |
+| **kafka** | Brokers, topics, partitions, consumer groups | `kafka/<env>/<cluster>` |
+| **rabbitmq** | Queues, exchanges, bindings, connections | `rabbitmq/<env>/<instance>` |
+| **postgres** | Databases, users, queries, replication | `postgres/<env>/<instance>` |
+| **ssh** | Remote servers, execution, system monitoring | `ssh/<env>/<server>` |
+| **argocd** | Applications, projects, accounts, RBAC | `argocd/<env>/<instance>` |
+| **k8suser** | Kubernetes user & certificate management | `k8suser/<env>/<cluster>` |
+| **awsCosts** | Cost explorer, budgets, forecasts | `awsCosts/<env>/<profile>` |
+| **s3** | Buckets, objects, upload, download | `s3/<env>/<profile>` |
+| **git** | Repositories, branches, commits, diffs | `git/<env>/<repo>` |
+| **sysprocess** | Processes, CPU, memory, disk, ports | *(no config needed)* |
+
+---
+
+## KeePass Setup
+
+omo creates and manages the KeePass database automatically. You only need to interact with it when adding or editing connections.
+
+### Database location
+
+| File | Purpose |
+|------|---------|
+| `~/.omo/secrets/omo.kdbx` | KeePass KDBX4 database (all credentials) |
+| `~/.omo/keys/omo.key` | Master key file (auto-generated, **back this up!**) |
+
+To open the database in KeePassXC, select "Key File" authentication and point to `~/.omo/keys/omo.key`.
+
+### Entry fields
+
+Each KeePass entry maps to a connection. Plugins use standard KeePass fields plus custom attributes:
+
+| KeePass Field | Used For |
+|---------------|----------|
+| **Title** | Display name |
+| **URL** | Host / endpoint |
+| **UserName** | Username |
+| **Password** | Password / token |
+| **Notes** | Description |
+| Custom attributes | Plugin-specific (e.g. `port`, `database`, `ssl_mode`) |
+
+Empty fields are ignored — only fill in what your service needs.
+
+### Example: Redis
+
+| Field | Value |
+|-------|-------|
+| Path | `redis/production/cache-main` |
+| Title | `cache-main` |
+| URL | `redis.example.com` |
+| Password | `your-redis-password` |
+| Custom: `port` | `6379` |
+| Custom: `database` | `0` |
+
+### Example: PostgreSQL
+
+| Field | Value |
+|-------|-------|
+| Path | `postgres/production/app-db` |
+| Title | `app-db` |
+| URL | `db.example.com` |
+| UserName | `admin` |
+| Password | `your-db-password` |
+| Custom: `port` | `5432` |
+| Custom: `database` | `myapp` |
+| Custom: `ssl_mode` | `require` |
+
+### Example: Docker
+
+| Field | Value |
+|-------|-------|
+| Path | `docker/development/local` |
+| Title | `local` |
+| URL | `unix:///var/run/docker.sock` |
+
+### Example: SSH
+
+| Field | Value |
+|-------|-------|
+| Path | `ssh/production/web-01` |
+| Title | `web-01` |
+| URL | `10.0.1.50` |
+| UserName | `deploy` |
+| Custom: `port` | `22` |
+| Custom: `auth_method` | `key` |
+| Custom: `private_key_path` | `~/.ssh/id_ed25519` |
+
+---
+
+## Keyboard Shortcuts
+
+### Global
+
+| Key | Action |
+|-----|--------|
+| **Tab** | Cycle focus: plugins → main → actions |
+| **Shift+Tab** | Cycle focus in reverse |
+| **↑ / ↓** | Navigate lists |
+| **Enter** | Select item |
+| **r** | Refresh plugins *(when sidebar focused)* |
+| **p** | Open Package Manager *(when sidebar focused)* |
+
+### Inside plugins
+
+| Key | Action |
+|-----|--------|
+| **Ctrl+T** | Switch instance / connection |
+| **R** | Refresh data |
+| **/** | Filter / search |
+| **?** | Show plugin help |
+| **Esc** | Go back |
+
+Each plugin has its own keybindings — press `?` inside any plugin to see them.
+
+---
+
+## Directory Structure
+
+```
+~/.omo/
+  secrets/
+    omo.kdbx            KeePass database (all credentials)
+  keys/
+    omo.key             Master key file (auto-generated)
+  index.yaml            Plugin index (auto-managed)
+  installed.yaml        Installed plugin versions
+  logs/
+    omo.log             Main app log
+    redis.log           Per-plugin logs
+    docker.log
+    ...
+  plugins/
+    redis/redis.so      Plugin binaries
+    docker/docker.so
+    ...
+```
+
+---
+
+## Building from Source
 
 ```bash
 git clone https://github.com/hatembentayeb/omo.git
@@ -110,200 +270,58 @@ cd omo
 make all
 ```
 
-This builds the `omo` binary and all plugins locally, then installs everything to `~/.omo/`.
-
-### Custom install directory
-
-```bash
-OMO_INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/hatembentayeb/omo/main/install.sh | bash
-```
+This builds the `omo` binary (with version injected) and all 12 plugins, then installs everything to `~/.omo/`.
 
 ### Requirements
 
-- **Linux** (required for plugin `.so` support; macOS/Windows run the core binary only)
-- **KeePass KDBX4** database at `~/.omo/secrets.kdbx` (omo prompts for the password on startup)
-- **Go 1.24+** (only if building from source)
-- **OpenSSL** (required by k8suser plugin for certificate generation)
-- **Docker** (required by docker plugin, and for dev environments)
+- **Linux** (required for Go plugin `.so` support)
+- **Go 1.25+** (only if building from source)
+- **KeePassXC** (optional — only needed to manually view/edit `secrets/omo.kdbx`; omo manages the database automatically)
 
----
-
-## Quick Start
+### Development setup
 
 ```bash
-# Install omo
-curl -fsSL https://raw.githubusercontent.com/hatembentayeb/omo/main/install.sh | bash
-
-# Launch
-omo
-
-# Inside omo: open Package Manager (p) → Sync index (S) → Install all (A)
-```
-
-Once inside:
-
-| Key | Action |
-|-----|--------|
-| `j` / `k` | Navigate up/down |
-| `Enter` | Select / expand |
-| `/` | Filter current view |
-| `Shift+Tab` | Cycle between panels |
-| `?` | Help |
-| `q` | Quit |
-
-Each plugin defines its own keybindings (visible in the help panel).
-
----
-
-## Architecture
-
-```
-cmd/omo/              Main binary -- boots TUI, loads plugins
-internal/
-  host/               Plugin host, UI shell, navigation
-  packagemanager/     Plugin install/update/remove
-  registry/           Plugin discovery and manifest
-pkg/
-  pluginapi/          Public API that plugins compile against
-  secrets/            KeePass KDBX4 secrets provider
-  ui/                 Shared TUI components (tables, modals, filters)
-plugins/
-  redis/              Each plugin is a Go shared library (.so)
-  docker/
-  kafka/
-  ...
-dev/                  Docker Compose environments + seed scripts
-config/               Default YAML configs installed to ~/.omo/configs/
-index.yaml            Official plugin index (consumed by package manager)
-```
-
-### Plugin interface
-
-Every plugin exports a single symbol:
-
-```go
-var OhmyopsPlugin pluginapi.PluginInfo
-```
-
-where `PluginInfo` provides the plugin's name, version, and a `CreateView` function that returns a `tview.Primitive`. The host calls `CreateView` when the user selects the plugin from the sidebar.
-
-### Secrets model
-
-omo uses a KeePass KDBX4 file as its secrets backend. Plugins never see raw credentials in config files -- instead, config files reference a KeePass path:
-
-```yaml
-# ~/.omo/configs/redis/development.yaml
-instances:
-  - name: local
-    host: localhost
-    port: 6379
-    secret_path: redis/development/local   # resolved from KeePass at runtime
-```
-
-The `SecretsProvider` interface (`Get`, `Put`, `Delete`, `List`) is available to every plugin via `pluginapi.Secrets()`.
-
----
-
-## Configuration
-
-All configuration lives under `~/.omo/`:
-
-```
-~/.omo/
-  secrets.kdbx          KeePass database
-  index.yaml            Plugin index (auto-managed)
-  installed.json        Installed plugin manifest
-  plugins/
-    redis/redis.so      Plugin binaries
-    docker/docker.so
-    ...
-  configs/
-    redis/
-      development.yaml  Per-plugin YAML configs
-    kafka/
-      production.yaml
-    ...
-```
-
----
-
-## Development
-
-Each plugin has a corresponding `dev/` directory with everything needed to run locally:
-
-```bash
-# Start Redis + Kafka + RabbitMQ containers and seed KeePass
+# Start Redis + Kafka containers and seed KeePass entries
 make dev-setup
 
-# Or set up individual plugins
-cd dev/redis && bash setup.sh
-cd dev/kafka && bash setup.sh
-cd dev/rabbitmq && bash setup.sh
+# Or seed only non-Docker plugins
+make dev-seed
 ```
-
-### Writing a plugin
-
-1. Create a directory under `plugins/yourplugin/`
-2. Implement the `pluginapi.PluginInfo` interface
-3. Export it as `var OhmyopsPlugin pluginapi.PluginInfo`
-4. Add an entry to `index.yaml`
-5. Run `make all`
-
-```go
-package main
-
-import "omo/pkg/pluginapi"
-
-var OhmyopsPlugin = pluginapi.PluginInfo{
-    Name:    "yourplugin",
-    Version: "0.1.0",
-    CreateView: func(app pluginapi.App) pluginapi.View {
-        // return your tview.Primitive here
-    },
-}
-```
-
-See any existing plugin under `plugins/` for a complete example.
 
 ---
 
-## Build matrix
+## Build Matrix
 
-The CI pipeline produces binaries for every major platform:
+| OS | Arch | Binary | Plugins |
+|----|------|--------|---------|
+| Linux | amd64 | ✅ | ✅ `.so` |
+| Linux | arm64 | ✅ | ✅ `.so` |
+| macOS | amd64 | ✅ | ❌ |
+| macOS | arm64 | ✅ | ❌ |
+| Windows | amd64 | ✅ | ❌ |
 
-| OS | Architecture | Binary | Plugins |
-|----|-------------|--------|---------|
-| Linux | amd64 | `omo-linux-amd64` | `.so` (full support) |
-| Linux | arm64 | `omo-linux-arm64` | `.so` (full support) |
-| macOS | amd64 (Intel) | `omo-darwin-amd64` | -- |
-| macOS | arm64 (Apple Silicon) | `omo-darwin-arm64` | -- |
-| Windows | amd64 | `omo-windows-amd64.exe` | -- |
-
-> **Note:** Go's `plugin` build mode currently only supports Linux. macOS and Windows builds run the core binary but cannot load `.so` plugins. This is a Go language limitation.
+> Go's `plugin` build mode only supports Linux. macOS and Windows can run the core binary but cannot load `.so` plugins.
 
 ---
 
 ## Roadmap
 
-- [ ] `omo secrets` CLI commands (get/set/list/delete/export/import)
+- [ ] `omo secrets` CLI for managing KeePass entries without a GUI
 - [ ] Plugin SDK v2 with richer lifecycle hooks
 - [ ] Remote plugin loading (WASM or gRPC)
 - [ ] Prometheus / Grafana plugin
-- [ ] SSH tunnel support for remote instances
 - [ ] Theme and color customization
+
 ---
 
 ## Contributing
 
-Contributions are welcome. Please:
-
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/my-change`)
-3. Write tests where applicable
-4. Ensure `go vet ./...` and `go build ./...` pass
-5. Submit a pull request
+3. Ensure `go vet ./...` and `go build ./...` pass
+4. Submit a pull request
 
-For plugin contributions, include a `dev/` setup script and seed data so reviewers can test locally.
+For plugin contributions, include a `dev/` setup script and KeePass seed data so reviewers can test locally.
 
 ---
 
