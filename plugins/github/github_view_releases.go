@@ -79,8 +79,9 @@ func (gv *GitHubView) getSelectedRelease() (*Release, bool) {
 		return nil, false
 	}
 
+	tag := stripColorTags(row[0])
 	for _, r := range gv.cachedReleases {
-		if r.TagName == row[0] {
+		if r.TagName == tag {
 			return &r, true
 		}
 	}

@@ -84,7 +84,7 @@ func (gv *GitHubView) getSelectedPRNumber() (int, bool) {
 		return 0, false
 	}
 	var num int
-	fmt.Sscanf(row[0], "#%d", &num)
+	fmt.Sscanf(stripColorTags(row[0]), "#%d", &num)
 	return num, num > 0
 }
 

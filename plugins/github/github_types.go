@@ -253,6 +253,22 @@ type Environment struct {
 	UpdatedAt time.Time
 }
 
+func stripColorTags(s string) string {
+	result := s
+	for {
+		start := strings.Index(result, "[")
+		if start == -1 {
+			break
+		}
+		end := strings.Index(result[start:], "]")
+		if end == -1 {
+			break
+		}
+		result = result[:start] + result[start+end+1:]
+	}
+	return result
+}
+
 func formatAge(t time.Time) string {
 	if t.IsZero() {
 		return "-"

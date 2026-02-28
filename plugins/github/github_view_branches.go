@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"omo/pkg/ui"
 )
@@ -69,12 +70,9 @@ func (gv *GitHubView) getSelectedBranchName() (string, bool) {
 	if len(row) == 0 {
 		return "", false
 	}
-	name := row[0]
-	// Strip the default branch marker
-	if len(name) > 0 && name[len(name)-1] == '*' {
-		name = name[:len(name)-1]
-	}
-	return name, true
+	name := stripColorTags(row[0])
+	name = strings.TrimRight(name, " *")
+	return name, name != ""
 }
 
 func (gv *GitHubView) deleteBranch() {
@@ -90,7 +88,7 @@ func (gv *GitHubView) deleteBranch() {
 	}
 
 	row := gv.branchesView.GetSelectedRowData()
-	if len(row) > 2 && row[2] == "Yes" {
+	if len(row) > 2 && stripColorTags(row[2]) == "Yes" {
 		gv.branchesView.Log("[red]Cannot delete a protected branch")
 		return
 	}

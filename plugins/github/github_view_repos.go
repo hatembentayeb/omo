@@ -105,24 +105,17 @@ func (gv *GitHubView) refreshReposData() ([][]string, error) {
 }
 
 func (gv *GitHubView) selectRepo() {
-	row := gv.reposView.GetSelectedRowData()
-	if len(row) == 0 {
+	idx := gv.reposView.GetSelectedRow()
+	if idx < 0 || idx >= len(gv.cachedRepos) {
+		gv.reposView.Log("[red]No repo selected")
 		return
 	}
 
-	repoFullName := row[0]
-
-	for _, repo := range gv.cachedRepos {
-		if repo.FullName == repoFullName {
-			gv.githubClient.SetActiveRepo(&repo)
-			gv.activeRepo = &repo
-			gv.reposView.Log(fmt.Sprintf("[green]Selected repo: %s", repo.FullName))
-			gv.switchToView(viewPRs)
-			return
-		}
-	}
-
-	gv.reposView.Log(fmt.Sprintf("[red]Repo not found: %s", repoFullName))
+	repo := gv.cachedRepos[idx]
+	gv.githubClient.SetActiveRepo(&repo)
+	gv.activeRepo = &repo
+	gv.reposView.Log(fmt.Sprintf("[green]Selected repo: %s", repo.FullName))
+	gv.updateInfoPanel()
 }
 
 func (gv *GitHubView) showRepoDetails() {

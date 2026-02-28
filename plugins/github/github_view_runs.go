@@ -79,7 +79,7 @@ func (gv *GitHubView) getSelectedRunID() (int64, bool) {
 		return 0, false
 	}
 	var id int64
-	fmt.Sscanf(row[0], "%d", &id)
+	fmt.Sscanf(stripColorTags(row[0]), "%d", &id)
 	return id, id > 0
 }
 
