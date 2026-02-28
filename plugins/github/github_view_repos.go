@@ -57,15 +57,15 @@ func (gv *GitHubView) refreshReposData() ([][]string, error) {
 
 	rows := make([][]string, len(repos))
 	for i, r := range repos {
-		visibility := "public"
+		visibility := "[green]public"
 		if r.Private {
-			visibility = "private"
+			visibility = "[yellow]private"
 		}
 		if r.Archived {
-			visibility = "archived"
+			visibility = "[gray]archived"
 		}
 		if r.Fork {
-			visibility += "/fork"
+			visibility += "[gray]/fork"
 		}
 		desc := r.Description
 		if len(desc) > 60 {
@@ -73,20 +73,22 @@ func (gv *GitHubView) refreshReposData() ([][]string, error) {
 		}
 		lang := r.Language
 		if lang == "" {
-			lang = "-"
+			lang = "[gray]-"
+		} else {
+			lang = "[yellow]" + lang
 		}
 		updated := r.UpdatedAt
 		if len(updated) > 10 {
 			updated = updated[:10]
 		}
 		rows[i] = []string{
-			r.FullName,
-			desc,
+			"[white]" + r.FullName,
+			"[gray]" + desc,
 			lang,
-			fmt.Sprintf("%d", r.Stars),
+			"[white]" + fmt.Sprintf("%d", r.Stars),
 			visibility,
-			r.DefaultBranch,
-			updated,
+			"[green]" + r.DefaultBranch,
+			"[gray]" + updated,
 		}
 	}
 
