@@ -66,18 +66,21 @@ func (v *VirtualTableContent) GetCell(row, column int) *tview.TableCell {
 	rowData := v.data[dataRow]
 	if column >= len(rowData) {
 		return tview.NewTableCell("").
-			SetTextColor(tcell.ColorAqua).
 			SetBackgroundColor(tcell.ColorDefault).
 			SetSelectable(true).
 			SetExpansion(v.getExpansion(column))
 	}
 
-	cell := tview.NewTableCell(rowData[column]).
-		SetTextColor(tcell.ColorAqua).
+	text := rowData[column]
+	cell := tview.NewTableCell(text).
 		SetBackgroundColor(tcell.ColorDefault).
 		SetSelectable(true).
 		SetAlign(tview.AlignLeft).
 		SetExpansion(v.getExpansion(column))
+
+	if !strings.HasPrefix(text, "[") || !strings.Contains(text, "]") {
+		cell.SetTextColor(tcell.ColorAqua)
+	}
 
 	return cell
 }

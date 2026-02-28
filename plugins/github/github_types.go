@@ -29,22 +29,30 @@ type PullRequest struct {
 func (pr *PullRequest) GetTableRow() []string {
 	state := pr.State
 	if pr.Draft {
-		state = "draft"
+		state = "[gray]draft"
+	} else if state == "open" {
+		state = "[green]open"
+	} else if state == "closed" {
+		state = "[red]closed"
+	} else if state == "merged" {
+		state = "[purple]merged"
 	}
 	labels := strings.Join(pr.Labels, ", ")
 	if labels == "" {
-		labels = "-"
+		labels = "[gray]-"
+	} else {
+		labels = "[yellow]" + labels
 	}
-	age := formatAge(pr.CreatedAt)
-	changes := fmt.Sprintf("+%d/-%d", pr.Additions, pr.Deletions)
+	age := "[gray]" + formatAge(pr.CreatedAt)
+	changes := fmt.Sprintf("[green]+%d[white]/[red]-%d", pr.Additions, pr.Deletions)
 
 	return []string{
-		fmt.Sprintf("#%d", pr.Number),
-		pr.Title,
+		fmt.Sprintf("[white]#%d", pr.Number),
+		"[white]" + pr.Title,
 		state,
-		pr.Author,
-		pr.Branch,
-		pr.Base,
+		"[aqua]" + pr.Author,
+		"[green]" + pr.Branch,
+		"[yellow]" + pr.Base,
 		changes,
 		labels,
 		age,
@@ -73,17 +81,28 @@ func (wr *WorkflowRun) GetTableRow() []string {
 	if wr.Conclusion != "" {
 		status = wr.Conclusion
 	}
-	age := formatAge(wr.CreatedAt)
+	switch status {
+	case "success":
+		status = "[green]" + status
+	case "failure":
+		status = "[red]" + status
+	case "cancelled":
+		status = "[gray]" + status
+	case "in_progress", "queued", "waiting":
+		status = "[yellow]" + status
+	default:
+		status = "[white]" + status
+	}
 
 	return []string{
-		fmt.Sprintf("%d", wr.ID),
-		wr.WorkflowName,
+		"[gray]" + fmt.Sprintf("%d", wr.ID),
+		"[white]" + wr.WorkflowName,
 		status,
-		wr.Branch,
-		wr.Event,
-		wr.Actor,
-		wr.Duration,
-		age,
+		"[green]" + wr.Branch,
+		"[gray]" + wr.Event,
+		"[aqua]" + wr.Actor,
+		"[white]" + wr.Duration,
+		"[gray]" + formatAge(wr.CreatedAt),
 	}
 }
 
@@ -99,12 +118,18 @@ type Workflow struct {
 }
 
 func (w *Workflow) GetTableRow() []string {
+	state := w.State
+	if state == "active" {
+		state = "[green]" + state
+	} else {
+		state = "[red]" + state
+	}
 	return []string{
-		fmt.Sprintf("%d", w.ID),
-		w.Name,
-		w.Path,
-		w.State,
-		formatAge(w.UpdatedAt),
+		"[gray]" + fmt.Sprintf("%d", w.ID),
+		"[white]" + w.Name,
+		"[gray]" + w.Path,
+		state,
+		"[gray]" + formatAge(w.UpdatedAt),
 	}
 }
 
@@ -117,9 +142,9 @@ type EnvVariable struct {
 
 func (ev *EnvVariable) GetTableRow() []string {
 	return []string{
-		ev.Name,
-		ev.Value,
-		formatAge(ev.UpdatedAt),
+		"[yellow]" + ev.Name,
+		"[white]" + ev.Value,
+		"[gray]" + formatAge(ev.UpdatedAt),
 	}
 }
 
@@ -131,9 +156,9 @@ type RepoSecret struct {
 
 func (rs *RepoSecret) GetTableRow() []string {
 	return []string{
-		rs.Name,
-		"********",
-		formatAge(rs.UpdatedAt),
+		"[yellow]" + rs.Name,
+		"[gray]********",
+		"[gray]" + formatAge(rs.UpdatedAt),
 	}
 }
 
@@ -145,21 +170,21 @@ type Branch struct {
 }
 
 func (b *Branch) GetTableRow() []string {
-	protected := "No"
+	protected := "[gray]No"
 	if b.Protected {
-		protected = "Yes"
+		protected = "[yellow]Yes"
 	}
-	isDefault := ""
+	name := "[white]" + b.Name
 	if b.Default {
-		isDefault = "*"
+		name = "[green]" + b.Name + " *"
 	}
 	shortSHA := b.SHA
 	if len(shortSHA) > 8 {
 		shortSHA = shortSHA[:8]
 	}
 	return []string{
-		b.Name + isDefault,
-		shortSHA,
+		name,
+		"[gray]" + shortSHA,
 		protected,
 	}
 }
@@ -179,19 +204,19 @@ type Release struct {
 }
 
 func (r *Release) GetTableRow() []string {
-	status := "published"
+	status := "[green]published"
 	if r.Draft {
-		status = "draft"
+		status = "[yellow]draft"
 	} else if r.Prerelease {
-		status = "prerelease"
+		status = "[yellow]prerelease"
 	}
 	return []string{
-		r.TagName,
-		r.Name,
+		"[green]" + r.TagName,
+		"[white]" + r.Name,
 		status,
-		r.Author,
-		fmt.Sprintf("%d", r.Assets),
-		formatAge(r.PublishedAt),
+		"[aqua]" + r.Author,
+		"[white]" + fmt.Sprintf("%d", r.Assets),
+		"[gray]" + formatAge(r.PublishedAt),
 	}
 }
 
