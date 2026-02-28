@@ -108,8 +108,10 @@ func (c *CoreView) refreshTable() {
 			}
 		}
 	}
-	if !restored && selectedIndex >= 0 && len(c.tableData) > 0 {
-		// Fallback to previous index if signature isn't available
+	if !restored && len(c.tableData) > 0 {
+		if selectedIndex < 0 {
+			selectedIndex = 0
+		}
 		if selectedIndex >= len(c.tableData) {
 			selectedIndex = len(c.tableData) - 1
 		}
