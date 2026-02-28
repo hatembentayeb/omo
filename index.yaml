@@ -8,7 +8,7 @@ download_url_template: "https://github.com/hatembentayeb/omo/releases/download/v
 
 plugins:
   - name: "redis"
-    version: "2026.02.28-ef7b2aa"
+    version: "2026.02.28-996e14f"
     description: "Manage Redis instances and monitor performance"
     author: "ohmyops"
     license: "MIT"
@@ -16,11 +16,11 @@ plugins:
     tags: ["database","cache","monitoring"]
     arch: ["amd64","arm64"]
     checksums:
-      linux-amd64: "68d6a3cfceaaec7e344b94b479e943f8d3621f31692662f497ed2d0188c0ac0f"
-      linux-arm64: "727f65632f06851c4e9056cd0f092d70d9ecf6a638f0cee6deb6bd7b0a76caad"
+      linux-amd64: "149d5c8a5b445c74b15f2f68eeadc81e89331631440b019b966dd3b2e08ec6bd"
+      linux-arm64: "95f27b4f221e5b7ddfe8edcfc8360a471c5503286b54aee2f3513db678dc46b1"
 
   - name: "docker"
-    version: "2026.02.28-ef7b2aa"
+    version: "2026.02.28-996e14f"
     description: "Manage Docker containers, images, networks, and volumes"
     author: "ohmyops"
     license: "MIT"
@@ -28,11 +28,11 @@ plugins:
     tags: ["containers","devops","infrastructure"]
     arch: ["amd64","arm64"]
     checksums:
-      linux-amd64: "b146beca611899c955ebcd570862f4c1ee5864c999fa37a9f3e6fc5ed31469b2"
-      linux-arm64: "142d16e65647a32c67714d8d2efe74c4520712064f190373c43d93ee54cb29d4"
+      linux-amd64: "8e61af32c340558c3035ee01960d38e8374cc54722cc55a895ecaca832698f3f"
+      linux-arm64: "a1a2985116accc32c2926111cbb95f77a5ef38281d5a3348e0ffde19da2273ff"
 
   - name: "git"
-    version: "2026.02.28-ef7b2aa"
+    version: "2026.02.28-996e14f"
     description: "Manage Git repositories, branches, and commits"
     author: "ohmyops"
     license: "MIT"
@@ -40,11 +40,11 @@ plugins:
     tags: ["vcs","developer-tools"]
     arch: ["amd64","arm64"]
     checksums:
-      linux-amd64: "1a0905ce8ad3f4cbe6755d398ba9f6bde1c8fdaf555d3910f4aec54be0617fcb"
-      linux-arm64: "77cd79d0406e9475334339a851851c8de3a833763e8c1d8a7d7801022ff44858"
+      linux-amd64: "9d39f811f8664bb478e100f6fc8f15522476ac4ec96e4d349756fe193a2ab4f7"
+      linux-arm64: "2558c73064967ca2dd673f628d93a6b6e68d7cdf28f52f917b1aa7009d55d685"
 
   - name: "argocd"
-    version: "2026.02.28-ef7b2aa"
+    version: "2026.02.28-996e14f"
     description: "Manage ArgoCD applications, projects, and accounts"
     author: "ohmyops"
     license: "MIT"
@@ -52,11 +52,11 @@ plugins:
     tags: ["gitops","kubernetes","cd"]
     arch: ["amd64","arm64"]
     checksums:
-      linux-amd64: "e20f15b25c476a5d8eaf16092ae5ed468e892d8697d7a8dcda7df8d73be2b45b"
-      linux-arm64: "d1d3302c63acde1fbd687cd446aa143f223d1c6e2039678b785459fcfa591267"
+      linux-amd64: "45c6ad176132e67d2820976b48c93c7cdb046c69b1f6f1d72041f670be525a72"
+      linux-arm64: "888b4064311da4a9e5b4d48e3dc6596c2c7a424745e22b61d084bc342a25b499"
 
   - name: "kafka"
-    version: "2026.02.28-ef7b2aa"
+    version: "2026.02.28-996e14f"
     description: "Monitor Kafka brokers, topics, and consumer groups"
     author: "ohmyops"
     license: "MIT"
@@ -64,11 +64,11 @@ plugins:
     tags: ["streaming","messaging","monitoring"]
     arch: ["amd64","arm64"]
     checksums:
-      linux-amd64: "996d014d222b5f7e02f3aebb0572fc47a5c77b1cc0674580e9bfb7b1327ba12a"
-      linux-arm64: "0c6dc531bf5066696fff7c4b576e48aed9938cdd15ae155e66eccbde156a31cc"
+      linux-amd64: "67a343e179845ccef47b39dc856c900ecea9de6d4dcee39f9621f5c437a84398"
+      linux-arm64: "90de2f5f7143df66d13d6e9c27d982334c73cfae014d5168cc97d3f35bc2ef8e"
 
   - name: "s3"
-    version: "2026.02.28-ef7b2aa"
+    version: "2026.02.28-996e14f"
     description: "Browse and manage AWS S3 buckets and objects"
     author: "ohmyops"
     license: "MIT"
@@ -76,11 +76,11 @@ plugins:
     tags: ["aws","storage","cloud"]
     arch: ["amd64","arm64"]
     checksums:
-      linux-amd64: "250450488546f3c305dbd1917b1ac55caf1814e9cc3660b4da9b3b9a530b5b24"
-      linux-arm64: "e6fb35d4db2099ff111be3f4fe1306bb6c53d81f631d8b732f43c77434c6878a"
+      linux-amd64: "7c9d4aeb8c9955299d19e6eee76dd253f033343e9474b0ca9fb6d7c8a4001acc"
+      linux-arm64: "bceb58be1ebcf9d82928ba8c76a5f906d1b478818c69cd802eed8fb8995b04d9"
 
   - name: "k8suser"
-    version: "2026.02.28-ef7b2aa"
+    version: "2026.02.28-996e14f"
     description: "Manage Kubernetes users with certificate-based authentication"
     author: "ohmyops"
     license: "MIT"
@@ -88,11 +88,11 @@ plugins:
     tags: ["kubernetes","security","rbac"]
     arch: ["amd64","arm64"]
     checksums:
-      linux-amd64: "38cfb759b328fe84f2d264917d11f5c2b3fee5e54935c15a1ddb35c166a5176f"
-      linux-arm64: "076892e4815ae0ec94d77cfc680affa228597d853f358a6d646cce9958fbe116"
+      linux-amd64: "eb7c042498b534cb1f542e80ee59b422b4a0bf9330c18ddf4c15d5c283dafc66"
+      linux-arm64: "41e8989e5be5117f226a0f2505d6ba575f8cccd965caabbaa9065b1424483c7b"
 
   - name: "sysprocess"
-    version: "2026.02.28-ef7b2aa"
+    version: "2026.02.28-996e14f"
     description: "Monitor and analyze system processes"
     author: "ohmyops"
     license: "MIT"
@@ -100,11 +100,11 @@ plugins:
     tags: ["system","monitoring","processes"]
     arch: ["amd64","arm64"]
     checksums:
-      linux-amd64: "b8699c0068dd4ea8ed3adef4fc9f7a6077508086e0091b0bccfeb1341d136a4f"
-      linux-arm64: "1e93e8f4393b611681868e30b873a47bcf954a01878f26d7c92e2e2da8fbe6d7"
+      linux-amd64: "c0220efff625431ae840927b9904541583bbc284695337cf4f77c42b7d9acef2"
+      linux-arm64: "61da219504df1b4f9a738b12d96e3e4a1473e6b683223024d818826918475a99"
 
   - name: "awsCosts"
-    version: "2026.02.28-ef7b2aa"
+    version: "2026.02.28-996e14f"
     description: "Monitor AWS costs, forecasts, and budgets"
     author: "ohmyops"
     license: "MIT"
@@ -112,11 +112,11 @@ plugins:
     tags: ["aws","finops","cloud"]
     arch: ["amd64","arm64"]
     checksums:
-      linux-amd64: "5bac0b39027f6ecd4ddc25892347ab0facb47270163703d6bb4e86bdbffd8092"
-      linux-arm64: "8b9021eda889d9248cbde9d0831e6eaf9451252d87e31311b7c58e9e4430cd04"
+      linux-amd64: "9e85a0c99a1052dbeea38170b0221a05241eabd54c3f923fd83501d48ee79ff4"
+      linux-arm64: "b2df97e47b693aaa6b08e1ab14d0883374d4ef8c3a824e29dc8ec3ef61dcf3c5"
 
   - name: "rabbitmq"
-    version: "2026.02.28-ef7b2aa"
+    version: "2026.02.28-996e14f"
     description: "Manage RabbitMQ queues, exchanges, bindings, and connections"
     author: "ohmyops"
     license: "MIT"
@@ -124,11 +124,11 @@ plugins:
     tags: ["messaging","broker","amqp"]
     arch: ["amd64","arm64"]
     checksums:
-      linux-amd64: "0853dc77ce88769865ead7c6d293ecb24f3463b327ad8d426b5833b0ab020915"
-      linux-arm64: "004096356ad8331407f5a56802c24015296052ff1f959ce432dfe9ad9bcfd204"
+      linux-amd64: "8d7c43434e5de232d37fa9a069dab325903fd8c362a560804e539a917a9d41c4"
+      linux-arm64: "af6bc5597d1c45e589d396b5b6c424c0c6de0279f0e36bf2f944a09a85497632"
 
   - name: "ssh"
-    version: "2026.02.28-ef7b2aa"
+    version: "2026.02.28-996e14f"
     description: "Manage SSH connections, remote execution, and server monitoring"
     author: "ohmyops"
     license: "MIT"
@@ -136,11 +136,11 @@ plugins:
     tags: ["ssh","remote","server","devops"]
     arch: ["amd64","arm64"]
     checksums:
-      linux-amd64: "b38c9b3515f47c6bce80d80dc68fbdd32b462b01926a402f35ef41d2416f6be7"
-      linux-arm64: "a880cf33865af127e9da3298519fa1328be0c83f148ab9b6f3e61a916a2dcf9f"
+      linux-amd64: "49d0741d40ac96566158225c1d3553cbd29cb52c1620d62b6d491b30c1e39266"
+      linux-arm64: "1bbf7f6ec5e2464b8a3dc6a666c50def761f322f61877f03d6f8b428bf03ccd5"
 
   - name: "github"
-    version: "2026.02.28-ef7b2aa"
+    version: "2026.02.28-996e14f"
     description: "Manage GitHub PRs, Actions pipelines, environment variables, secrets, and releases"
     author: "ohmyops"
     license: "MIT"
@@ -148,11 +148,11 @@ plugins:
     tags: ["github","ci-cd","devops","pull-requests","actions"]
     arch: ["amd64","arm64"]
     checksums:
-      linux-amd64: "9c6c2d6c763072dada362ee138d9d8b7e39fe25e70ed599d0972eef5ba361342"
-      linux-arm64: "f8de67482eb3fde9c3e0c1f0e1620e4239b873fd53a6185453b4bf6c785a786a"
+      linux-amd64: "b02c30fa58c92dda4309965cb2298e7b13404cdd0d722b6af3cd69eda54c27c6"
+      linux-arm64: "f20fd6c4060587481608cf7df1fc08ff23279961ffa54035c641211243f1a488"
 
   - name: "postgres"
-    version: "2026.02.28-ef7b2aa"
+    version: "2026.02.28-996e14f"
     description: "Manage PostgreSQL databases, schemas, and queries"
     author: "ohmyops"
     license: "MIT"
@@ -160,6 +160,6 @@ plugins:
     tags: ["database","sql","monitoring"]
     arch: ["amd64","arm64"]
     checksums:
-      linux-amd64: "c6424b5e7373ecb5bccf69844a837ca5db14628c2ca2faa93503dca27494e5bb"
-      linux-arm64: "4df50f4b3a771e5db3b2ffd19d2d9d5f78462472da41e8d067672729b74a46a8"
+      linux-amd64: "f51ea93ac208ec7b6218d714ddf511ff158e2d0124fe6b8411f3746fc66ab147"
+      linux-arm64: "0f6402f167afda1779205afa97d11ac370caa978acc629bfac4858d69107fdef"
 
