@@ -159,6 +159,7 @@ func (h *Host) OpenPackageManager() {
 	pm := packagemanager.NewPackageManager(h.App, h.Pages, h.PluginsDir)
 	h.Pages.AddPage("packageManager", pm.GetLayout(), true, false)
 	h.MainFrame.SetPrimitive(pm.GetLayout())
+	h.App.SetFocus(pm.GetTable())
 }
 
 func discoverPlugins(pluginsDir string) (*tview.List, error) {
