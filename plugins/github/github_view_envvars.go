@@ -78,7 +78,7 @@ func (gv *GitHubView) getSelectedVarName() (string, bool) {
 	if len(row) == 0 {
 		return "", false
 	}
-	return row[0], true
+	return stripColorTags(row[0]), true
 }
 
 func (gv *GitHubView) createEnvVar() {

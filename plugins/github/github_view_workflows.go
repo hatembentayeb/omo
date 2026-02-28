@@ -77,7 +77,7 @@ func (gv *GitHubView) getSelectedWorkflowID() (int64, bool) {
 		return 0, false
 	}
 	var id int64
-	fmt.Sscanf(row[0], "%d", &id)
+	fmt.Sscanf(stripColorTags(row[0]), "%d", &id)
 	return id, id > 0
 }
 
@@ -86,7 +86,7 @@ func (gv *GitHubView) getSelectedWorkflowName() string {
 	if len(row) < 2 {
 		return ""
 	}
-	return row[1]
+	return stripColorTags(row[1])
 }
 
 func (gv *GitHubView) dispatchWorkflow() {
@@ -97,8 +97,8 @@ func (gv *GitHubView) dispatchWorkflow() {
 	}
 
 	row := gv.workflowsView.GetSelectedRowData()
-	if len(row) >= 4 && row[3] != "active" {
-		gv.workflowsView.Log(fmt.Sprintf("[red]Cannot dispatch: workflow is %s", row[3]))
+	if len(row) >= 4 && stripColorTags(row[3]) != "active" {
+		gv.workflowsView.Log(fmt.Sprintf("[red]Cannot dispatch: workflow is %s", stripColorTags(row[3])))
 		return
 	}
 
