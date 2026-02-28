@@ -73,6 +73,14 @@ plugins:
       - remote
       - server
       - devops
+  github:
+    description: Manage GitHub PRs, Actions pipelines, environment variables, secrets, and releases
+    tags:
+      - github
+      - ci-cd
+      - devops
+      - pull-requests
+      - actions
   postgres:
     description: Manage PostgreSQL databases, schemas, and queries
     tags:
