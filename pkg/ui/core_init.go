@@ -64,11 +64,10 @@ func (c *CoreView) initUI() {
 	c.table.Box.SetBorderAttributes(tcell.AttrNone)
 	c.table.SetBorder(false) // Remove border to match Redis style
 
-	// Set selection style to match Redis plugin
 	c.table.SetSelectedStyle(
 		tcell.StyleDefault.
-			Foreground(tcell.ColorBlack).
-			Background(tcell.ColorAqua).
+			Foreground(tcell.ColorWhite).
+			Background(tcell.ColorDarkSlateGray).
 			Attributes(tcell.AttrBold),
 	)
 
