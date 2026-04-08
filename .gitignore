@@ -42,8 +42,8 @@ compiled_plugins/
 # Build artifacts
 build/ 
 
-# Binary
-omo
+# Binary (anchored to root to avoid ignoring cmd/omo/ source directory)
+/omo
 
 # Local dev environment
 dev/
