@@ -16,6 +16,12 @@ import (
 var Version = "dev"
 
 func main() {
+	// Dispatch CLI subcommands before starting the TUI.
+	if len(os.Args) > 1 && os.Args[1] == "secrets" {
+		runSecretsCLI(os.Args[2:])
+		return
+	}
+
 	// App logger: ~/.omo/logs/omo.log
 	logger, err := pluginapi.NewLogger("omo")
 	if err != nil {
