@@ -2,10 +2,12 @@ PLUGINS_DIR := ./plugins
 OMO_HOME := $(HOME)/.omo
 PLUGINS_INSTALL_DIR := $(OMO_HOME)/plugins
 BUILD_MODE := -buildmode=plugin
+# Plugins built as RPC executables (hashicorp/go-plugin) instead of native .so
+RPC_PLUGINS := redis
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS := -ldflags "-X main.Version=$(VERSION)"
 
-.PHONY: all clean install dirs
+.PHONY: all clean install dirs plugin-redis
 
 # Build the host binary and all plugins, then install to ~/.omo
 all: dirs
@@ -16,14 +18,28 @@ all: dirs
 	@echo "Building and installing plugins to $(PLUGINS_INSTALL_DIR)"
 	@for plugin in $(wildcard $(PLUGINS_DIR)/*); do \
 		name=$$(basename $$plugin); \
-		echo "  $$name"; \
 		mkdir -p $(PLUGINS_INSTALL_DIR)/$$name; \
-		go build $(BUILD_MODE) -o $(PLUGINS_INSTALL_DIR)/$$name/$$name.so $$plugin; \
+		if echo "$(RPC_PLUGINS)" | grep -qw "$$name"; then \
+			echo "  $$name (rpc)"; \
+			go build -o $(PLUGINS_INSTALL_DIR)/$$name/$$name ./plugins/$$name/cmd/$$name; \
+			chmod +x $(PLUGINS_INSTALL_DIR)/$$name/$$name; \
+		else \
+			echo "  $$name (native)"; \
+			go build $(BUILD_MODE) -o $(PLUGINS_INSTALL_DIR)/$$name/$$name.so $$plugin; \
+		fi; \
 	done
 	@echo "Generating installed manifest"
 	@go run ./cmd/manifest
 	@cp index.yaml $(OMO_HOME)/index.yaml
 	@echo "Done. Plugins installed to $(PLUGINS_INSTALL_DIR)"
+
+# Build only the redis RPC plugin binary for fast iteration
+plugin-redis: dirs
+	@mkdir -p $(PLUGINS_INSTALL_DIR)/redis
+	@echo "Building redis RPC plugin"
+	@go build -o $(PLUGINS_INSTALL_DIR)/redis/redis ./plugins/redis/cmd/redis
+	@chmod +x $(PLUGINS_INSTALL_DIR)/redis/redis
+	@echo "Installed $(PLUGINS_INSTALL_DIR)/redis/redis"
 
 # Create the ~/.omo directory structure
 dirs:

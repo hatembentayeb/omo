@@ -10,15 +10,6 @@ import (
 	"omo/pkg/pluginapi"
 )
 
-var defaultGitEnvironments = []string{
-	"development",
-	"production",
-	"staging",
-	"sandbox",
-	"local",
-	"test",
-}
-
 // GitRepoConfig is built entirely from a KeePass entry at runtime.
 //
 // KeePass Entry Schema (path: git/<environment>/<name>):
@@ -77,9 +68,7 @@ func DiscoverRepositories() ([]GitRepoConfig, error) {
 		return nil, fmt.Errorf("reload secrets: %w", err)
 	}
 
-	ensureGitKeePassGroups()
-
-	paths, err := pluginapi.Secrets().List("git")
+	paths, err := pluginapi.ListNonReferenceSecrets("git")
 	if err != nil {
 		return nil, fmt.Errorf("list git secrets: %w", err)
 	}
@@ -147,57 +136,6 @@ func entryToGitRepo(entry *pluginapi.SecretEntry, env string) GitRepoConfig {
 	}
 
 	return repo
-}
-
-func ensureGitKeePassGroups() {
-	if !pluginapi.HasSecrets() {
-		return
-	}
-
-	requiredAttrs := map[string]string{
-		"path": "",
-		"tags": "",
-	}
-
-	for _, env := range defaultGitEnvironments {
-		prefix := fmt.Sprintf("git/%s", env)
-		existing, err := pluginapi.Secrets().List(prefix)
-		if err == nil && len(existing) > 0 {
-			backfillAttributes(existing, requiredAttrs)
-			continue
-		}
-		path := fmt.Sprintf("git/%s/example", env)
-		_ = pluginapi.Secrets().Put(path, &pluginapi.SecretEntry{
-			Title:            "example",
-			UserName:         "",
-			Password:         "",
-			URL:              "",
-			Notes:            fmt.Sprintf("Git %s placeholder. Set URL (remote URL), UserName (git user), Password (PAT/token).", env),
-			CustomAttributes: requiredAttrs,
-		})
-	}
-}
-
-func backfillAttributes(entryPaths []string, required map[string]string) {
-	for _, entryPath := range entryPaths {
-		entry, err := pluginapi.Secrets().Get(entryPath)
-		if err != nil || entry == nil {
-			continue
-		}
-		if entry.CustomAttributes == nil {
-			entry.CustomAttributes = make(map[string]string)
-		}
-		updated := false
-		for attr, defaultVal := range required {
-			if _, exists := entry.CustomAttributes[attr]; !exists {
-				entry.CustomAttributes[attr] = defaultVal
-				updated = true
-			}
-		}
-		if updated {
-			_ = pluginapi.Secrets().Put(entryPath, entry)
-		}
-	}
 }
 
 // GetSearchPaths returns default search paths for auto-discovering

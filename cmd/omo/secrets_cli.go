@@ -20,12 +20,17 @@ Usage:
   omo secrets get    <path>
   omo secrets put    <path>  [flags]
   omo secrets delete <path>
+  omo secrets reset  [--yes]  (deletes ~/.omo/secrets/omo.kdbx; recreates on next open)
 
 Commands:
   list    List all entry paths, optionally filtered by prefix
   get     Print all fields of an entry as JSON
   put     Create or update an entry (only supplied flags are written)
   delete  Remove an entry
+  reset   Delete the KeePass database file (use --yes). Key file is kept.
+
+Environment:
+  OMO_SECRETS_RESET=1   Same as reset: delete DB before next open (e.g. omo secrets get)
 
 Flags for 'put':
   --username  string
@@ -41,6 +46,7 @@ Examples:
   omo secrets put  redis/production/cache --username admin --password s3cr3t --url redis://localhost:6379
   omo secrets put  redis/production/cache --attr tls_cert="-----BEGIN CERT-----..."
   omo secrets delete redis/production/cache
+  omo secrets reset --yes
 `
 
 // runSecretsCLI is the entrypoint for the `omo secrets` subcommand.
@@ -51,13 +57,19 @@ func runSecretsCLI(args []string) {
 		os.Exit(1)
 	}
 
+	cmd, rest := args[0], args[1:]
+
+	// reset must run before opening the DB so we can delete the file cleanly.
+	if cmd == "reset" {
+		runSecretsReset(rest)
+		return
+	}
+
 	p, err := secrets.New()
 	if err != nil {
 		fatalf("open secrets database: %v", err)
 	}
 	defer p.Close()
-
-	cmd, rest := args[0], args[1:]
 
 	switch cmd {
 	case "list":
@@ -226,6 +238,32 @@ func runSecretsDeleteCmd(p secrets.Provider, args []string) {
 		fatalf("delete %s: %v", path, err)
 	}
 	fmt.Printf("deleted: %s\n", path)
+}
+
+// ── reset ────────────────────────────────────────────────────────────────────
+
+func runSecretsReset(args []string) {
+	fs := flag.NewFlagSet("reset", flag.ExitOnError)
+	yes := fs.Bool("yes", false, "confirm destructive reset of the KeePass database")
+	if err := fs.Parse(args); err != nil {
+		os.Exit(1)
+	}
+	if !*yes {
+		fmt.Fprintf(os.Stderr, "This permanently deletes the KeePass database at:\n  %s\n"+
+			"Your key file is not removed. To confirm, run:\n  omo secrets reset --yes\n", secrets.DefaultDBPath())
+		os.Exit(1)
+	}
+	if err := secrets.ResetDB(); err != nil {
+		fatalf("reset: %v", err)
+	}
+	p, err := secrets.New()
+	if err != nil {
+		fatalf("recreate database: %v", err)
+	}
+	if err := p.Close(); err != nil {
+		fatalf("close: %v", err)
+	}
+	fmt.Println("KeePass database reset. Reference entries: <plugin>/default/default_config")
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────

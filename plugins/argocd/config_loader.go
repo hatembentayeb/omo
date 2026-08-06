@@ -8,15 +8,6 @@ import (
 	"omo/pkg/pluginapi"
 )
 
-var defaultArgocdEnvironments = []string{
-	"development",
-	"production",
-	"staging",
-	"sandbox",
-	"local",
-	"test",
-}
-
 // ArgocdConfig holds non-secret settings for the ArgoCD plugin.
 // These are hardcoded defaults (no YAML file needed).
 type ArgocdConfig struct {
@@ -89,9 +80,7 @@ func DiscoverArgoInstances() ([]ArgocdInstance, error) {
 		return nil, fmt.Errorf("reload secrets: %w", err)
 	}
 
-	ensureArgocdKeePassGroups()
-
-	paths, err := pluginapi.Secrets().List("argocd")
+	paths, err := pluginapi.ListNonReferenceSecrets("argocd")
 	if err != nil {
 		return nil, fmt.Errorf("list argocd secrets: %w", err)
 	}
@@ -176,62 +165,4 @@ func entryToArgoInstance(entry *pluginapi.SecretEntry, env string) ArgocdInstanc
 	}
 
 	return inst
-}
-
-// ensureArgocdKeePassGroups creates environment groups in KeePass
-// with placeholder entries and ensures all known custom attributes
-// exist on every entry so users can see what fields are available.
-func ensureArgocdKeePassGroups() {
-	if !pluginapi.HasSecrets() {
-		return
-	}
-
-	requiredAttrs := map[string]string{
-		"auth_token":      "",
-		"insecure":        "false",
-		"kubeconfig":      "",
-		"kubeconfig_path": "",
-		"namespace":       "argocd",
-		"tags":            "",
-	}
-
-	for _, env := range defaultArgocdEnvironments {
-		prefix := fmt.Sprintf("argocd/%s", env)
-		existing, err := pluginapi.Secrets().List(prefix)
-		if err == nil && len(existing) > 0 {
-			backfillAttributes(existing, requiredAttrs)
-			continue
-		}
-		path := fmt.Sprintf("argocd/%s/example", env)
-		_ = pluginapi.Secrets().Put(path, &pluginapi.SecretEntry{
-			Title:            "example",
-			UserName:         "admin",
-			Password:         "",
-			URL:              "https://argocd.example.com",
-			Notes:            fmt.Sprintf("ArgoCD %s placeholder. Fill in your ArgoCD details and rename this entry.", env),
-			CustomAttributes: requiredAttrs,
-		})
-	}
-}
-
-func backfillAttributes(entryPaths []string, required map[string]string) {
-	for _, entryPath := range entryPaths {
-		entry, err := pluginapi.Secrets().Get(entryPath)
-		if err != nil || entry == nil {
-			continue
-		}
-		if entry.CustomAttributes == nil {
-			entry.CustomAttributes = make(map[string]string)
-		}
-		updated := false
-		for attr, defaultVal := range required {
-			if _, exists := entry.CustomAttributes[attr]; !exists {
-				entry.CustomAttributes[attr] = defaultVal
-				updated = true
-			}
-		}
-		if updated {
-			_ = pluginapi.Secrets().Put(entryPath, entry)
-		}
-	}
 }

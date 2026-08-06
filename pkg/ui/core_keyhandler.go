@@ -60,7 +60,7 @@ func (c *CoreView) StandardKeyHandler(event *tcell.EventKey, oldCapture func(*tc
 		case "/":
 			c.showFilterModal()
 		case "?":
-			c.ToggleHelpExpanded()
+			c.ShowHelpModal()
 		}
 		return nil
 	}
@@ -97,13 +97,35 @@ func (c *CoreView) handleEscape(event *tcell.EventKey, oldCapture func(*tcell.Ev
 	return event
 }
 
-// ToggleHelpExpanded switches between basic and expanded help views.
+// ShowHelpModal opens a centered help modal (same pattern as other plugins).
+// The shortcuts header stays compact; help content appears in the modal.
+func (c *CoreView) ShowHelpModal() {
+	if c.helpExpanded {
+		c.helpExpanded = false
+		c.helpPanel.SetText(c.getHelpText())
+	}
+	if c.pages == nil || c.app == nil {
+		c.ToggleHelpExpanded()
+		return
+	}
+	title := "Help"
+	if c.title != "" {
+		title = c.title + " Help"
+	}
+	ShowInfoModal(c.pages, c.app, title, c.getExpandedHelpText(), func() {
+		if table := c.GetTable(); table != nil {
+			c.app.SetFocus(table)
+		}
+	})
+}
+
+// ToggleHelpExpanded switches between basic and expanded help in the header panel.
+// Prefer ShowHelpModal for user-facing "?" help.
 func (c *CoreView) ToggleHelpExpanded() {
-	if c.helpPanel.GetTitle() == "Keybindings" {
-		c.helpPanel.SetTitle("Keybindings (expanded)")
+	c.helpExpanded = !c.helpExpanded
+	if c.helpExpanded {
 		c.helpPanel.SetText(c.getExpandedHelpText())
 	} else {
-		c.helpPanel.SetTitle("Keybindings")
 		c.helpPanel.SetText(c.getHelpText())
 	}
 }

@@ -9,15 +9,6 @@ import (
 	"omo/pkg/pluginapi"
 )
 
-var defaultPostgresEnvironments = []string{
-	"development",
-	"production",
-	"staging",
-	"sandbox",
-	"local",
-	"test",
-}
-
 // PostgresInstance is built entirely from a KeePass entry at runtime.
 //
 // KeePass Entry Schema (path: postgres/<environment>/<name>):
@@ -74,9 +65,7 @@ func DiscoverInstances() ([]PostgresInstance, error) {
 		return nil, fmt.Errorf("reload secrets: %w", err)
 	}
 
-	ensurePostgresKeePassGroups()
-
-	paths, err := pluginapi.Secrets().List("postgres")
+	paths, err := pluginapi.ListNonReferenceSecrets("postgres")
 	if err != nil {
 		return nil, fmt.Errorf("list postgres secrets: %w", err)
 	}
@@ -159,59 +148,6 @@ func entryToPostgresInstance(entry *pluginapi.SecretEntry, env string) PostgresI
 	}
 
 	return inst
-}
-
-func ensurePostgresKeePassGroups() {
-	if !pluginapi.HasSecrets() {
-		return
-	}
-
-	requiredAttrs := map[string]string{
-		"port":     "5432",
-		"database": "postgres",
-		"sslmode":  "disable",
-		"tags":     "",
-	}
-
-	for _, env := range defaultPostgresEnvironments {
-		prefix := fmt.Sprintf("postgres/%s", env)
-		existing, err := pluginapi.Secrets().List(prefix)
-		if err == nil && len(existing) > 0 {
-			backfillAttributes(existing, requiredAttrs)
-			continue
-		}
-		path := fmt.Sprintf("postgres/%s/example", env)
-		_ = pluginapi.Secrets().Put(path, &pluginapi.SecretEntry{
-			Title:            "example",
-			UserName:         "postgres",
-			Password:         "",
-			URL:              "localhost",
-			Notes:            fmt.Sprintf("PostgreSQL %s placeholder. Set URL (host), UserName, Password.", env),
-			CustomAttributes: requiredAttrs,
-		})
-	}
-}
-
-func backfillAttributes(entryPaths []string, required map[string]string) {
-	for _, entryPath := range entryPaths {
-		entry, err := pluginapi.Secrets().Get(entryPath)
-		if err != nil || entry == nil {
-			continue
-		}
-		if entry.CustomAttributes == nil {
-			entry.CustomAttributes = make(map[string]string)
-		}
-		updated := false
-		for attr, defaultVal := range required {
-			if _, exists := entry.CustomAttributes[attr]; !exists {
-				entry.CustomAttributes[attr] = defaultVal
-				updated = true
-			}
-		}
-		if updated {
-			_ = pluginapi.Secrets().Put(entryPath, entry)
-		}
-	}
 }
 
 // GetAvailableInstances returns all discovered PostgreSQL instances.

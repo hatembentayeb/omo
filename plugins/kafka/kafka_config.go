@@ -8,15 +8,6 @@ import (
 	"omo/pkg/pluginapi"
 )
 
-var defaultKafkaEnvironments = []string{
-	"development",
-	"production",
-	"staging",
-	"sandbox",
-	"local",
-	"test",
-}
-
 // KafkaInstance is built entirely from a KeePass entry at runtime.
 //
 // KeePass Entry Schema (path: kafka/<environment>/<name>):
@@ -89,9 +80,7 @@ func DiscoverInstances() ([]KafkaInstance, error) {
 		return nil, fmt.Errorf("reload secrets: %w", err)
 	}
 
-	ensureKafkaKeePassGroups()
-
-	paths, err := pluginapi.Secrets().List("kafka")
+	paths, err := pluginapi.ListNonReferenceSecrets("kafka")
 	if err != nil {
 		return nil, fmt.Errorf("list kafka secrets: %w", err)
 	}
@@ -180,62 +169,6 @@ func entryToKafkaInstance(entry *pluginapi.SecretEntry, env string) KafkaInstanc
 	}
 
 	return inst
-}
-
-func ensureKafkaKeePassGroups() {
-	if !pluginapi.HasSecrets() {
-		return
-	}
-
-	requiredAttrs := map[string]string{
-		"sasl_mechanism": "",
-		"enable_sasl":    "false",
-		"enable_ssl":     "false",
-		"ssl_ca_cert":    "",
-		"ssl_cert":       "",
-		"ssl_key":        "",
-		"tags":           "",
-	}
-
-	for _, env := range defaultKafkaEnvironments {
-		prefix := fmt.Sprintf("kafka/%s", env)
-		existing, err := pluginapi.Secrets().List(prefix)
-		if err == nil && len(existing) > 0 {
-			backfillAttributes(existing, requiredAttrs)
-			continue
-		}
-		path := fmt.Sprintf("kafka/%s/example", env)
-		_ = pluginapi.Secrets().Put(path, &pluginapi.SecretEntry{
-			Title:            "example",
-			UserName:         "",
-			Password:         "",
-			URL:              "localhost:9092",
-			Notes:            fmt.Sprintf("Kafka %s placeholder. Set URL (bootstrap servers), UserName/Password (SASL).", env),
-			CustomAttributes: requiredAttrs,
-		})
-	}
-}
-
-func backfillAttributes(entryPaths []string, required map[string]string) {
-	for _, entryPath := range entryPaths {
-		entry, err := pluginapi.Secrets().Get(entryPath)
-		if err != nil || entry == nil {
-			continue
-		}
-		if entry.CustomAttributes == nil {
-			entry.CustomAttributes = make(map[string]string)
-		}
-		updated := false
-		for attr, defaultVal := range required {
-			if _, exists := entry.CustomAttributes[attr]; !exists {
-				entry.CustomAttributes[attr] = defaultVal
-				updated = true
-			}
-		}
-		if updated {
-			_ = pluginapi.Secrets().Put(entryPath, entry)
-		}
-	}
 }
 
 // GetAvailableKafkaInstances returns all discovered Kafka instances.

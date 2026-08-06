@@ -97,30 +97,31 @@ func (h *ErrorHandler) HandleError(err error, level ErrorLevel, title string) {
 	}
 
 	// For errors and fatal errors, show a modal
-	if level >= ErrorLevelError {
+	if level >= ErrorLevelError && h.app != nil {
 		if title == "" {
 			title = "Error"
 		}
-
-		// Use the standard error modal
-		ShowStandardErrorModal(
-			h.pages,
-			h.app,
-			title,
-			err.Error(),
-			func() {
-				// Auto-dismiss after a timeout for non-fatal errors
-				if level < ErrorLevelFatal {
-					time.AfterFunc(5*time.Second, func() {
-						h.app.QueueUpdateDraw(func() {
-							if h.pages.HasPage("error-modal") {
-								h.pages.RemovePage("error-modal")
-							}
+		errText := err.Error()
+		h.app.QueueUpdateDraw(func() {
+			ShowStandardErrorModal(
+				h.pages,
+				h.app,
+				title,
+				errText,
+				func() {
+					// Auto-dismiss after a timeout for non-fatal errors
+					if level < ErrorLevelFatal {
+						time.AfterFunc(5*time.Second, func() {
+							h.app.QueueUpdateDraw(func() {
+								if h.pages.HasPage("error-modal") {
+									h.pages.RemovePage("error-modal")
+								}
+							})
 						})
-					})
-				}
-			},
-		)
+					}
+				},
+			)
+		})
 	}
 }
 

@@ -8,15 +8,6 @@ import (
 	"omo/pkg/pluginapi"
 )
 
-var defaultS3Environments = []string{
-	"development",
-	"production",
-	"staging",
-	"sandbox",
-	"local",
-	"test",
-}
-
 // S3Profile is built entirely from a KeePass entry at runtime.
 //
 // KeePass Entry Schema (path: s3/<environment>/<name>):
@@ -79,9 +70,7 @@ func DiscoverProfiles() ([]S3Profile, error) {
 		return nil, fmt.Errorf("reload secrets: %w", err)
 	}
 
-	ensureS3KeePassGroups()
-
-	paths, err := pluginapi.Secrets().List("s3")
+	paths, err := pluginapi.ListNonReferenceSecrets("s3")
 	if err != nil {
 		return nil, fmt.Errorf("list s3 secrets: %w", err)
 	}
@@ -156,58 +145,6 @@ func entryToS3Profile(entry *pluginapi.SecretEntry, env string) S3Profile {
 	}
 
 	return prof
-}
-
-func ensureS3KeePassGroups() {
-	if !pluginapi.HasSecrets() {
-		return
-	}
-
-	requiredAttrs := map[string]string{
-		"region":   "us-east-1",
-		"role_arn": "",
-		"tags":     "",
-	}
-
-	for _, env := range defaultS3Environments {
-		prefix := fmt.Sprintf("s3/%s", env)
-		existing, err := pluginapi.Secrets().List(prefix)
-		if err == nil && len(existing) > 0 {
-			backfillAttributes(existing, requiredAttrs)
-			continue
-		}
-		path := fmt.Sprintf("s3/%s/example", env)
-		_ = pluginapi.Secrets().Put(path, &pluginapi.SecretEntry{
-			Title:            "example",
-			UserName:         "",
-			Password:         "",
-			URL:              "",
-			Notes:            fmt.Sprintf("S3 %s placeholder. Set UserName (Access Key ID), Password (Secret Key), URL (endpoint).", env),
-			CustomAttributes: requiredAttrs,
-		})
-	}
-}
-
-func backfillAttributes(entryPaths []string, required map[string]string) {
-	for _, entryPath := range entryPaths {
-		entry, err := pluginapi.Secrets().Get(entryPath)
-		if err != nil || entry == nil {
-			continue
-		}
-		if entry.CustomAttributes == nil {
-			entry.CustomAttributes = make(map[string]string)
-		}
-		updated := false
-		for attr, defaultVal := range required {
-			if _, exists := entry.CustomAttributes[attr]; !exists {
-				entry.CustomAttributes[attr] = defaultVal
-				updated = true
-			}
-		}
-		if updated {
-			_ = pluginapi.Secrets().Put(entryPath, entry)
-		}
-	}
 }
 
 // GetAvailableS3Profiles returns all discovered S3 profiles.

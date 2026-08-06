@@ -79,9 +79,7 @@ func main() {
 			focus := app.GetFocus()
 			switch {
 			case focus == pluginsList:
-				if mc := omoHost.MainFrame.GetPrimitive(); mc != nil {
-					app.SetFocus(mc)
-				}
+				omoHost.FocusPluginContent()
 			case focus == actionsView:
 				app.SetFocus(pluginsList)
 			default:
@@ -96,9 +94,7 @@ func main() {
 			case focus == pluginsList:
 				app.SetFocus(actionsView)
 			case focus == actionsView:
-				if mc := omoHost.MainFrame.GetPrimitive(); mc != nil {
-					app.SetFocus(mc)
-				}
+				omoHost.FocusPluginContent()
 			default:
 				app.SetFocus(pluginsList)
 			}

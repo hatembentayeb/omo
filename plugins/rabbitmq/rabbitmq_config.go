@@ -9,15 +9,6 @@ import (
 	"omo/pkg/pluginapi"
 )
 
-var defaultRabbitMQEnvironments = []string{
-	"development",
-	"production",
-	"staging",
-	"sandbox",
-	"local",
-	"test",
-}
-
 // RabbitMQInstance is built entirely from a KeePass entry at runtime.
 //
 // KeePass Entry Schema (path: rabbitmq/<environment>/<name>):
@@ -78,9 +69,7 @@ func DiscoverInstances() ([]RabbitMQInstance, error) {
 		return nil, fmt.Errorf("reload secrets: %w", err)
 	}
 
-	ensureRabbitMQKeePassGroups()
-
-	paths, err := pluginapi.Secrets().List("rabbitmq")
+	paths, err := pluginapi.ListNonReferenceSecrets("rabbitmq")
 	if err != nil {
 		return nil, fmt.Errorf("list rabbitmq secrets: %w", err)
 	}
@@ -168,62 +157,6 @@ func entryToRabbitMQInstance(entry *pluginapi.SecretEntry, env string) RabbitMQI
 	}
 
 	return inst
-}
-
-// ensureRabbitMQKeePassGroups creates environment groups in KeePass
-// with placeholder entries so the folder structure is visible in KeePassXC.
-func ensureRabbitMQKeePassGroups() {
-	if !pluginapi.HasSecrets() {
-		return
-	}
-
-	requiredAttrs := map[string]string{
-		"amqp_port": "5672",
-		"mgmt_port": "15672",
-		"vhost":     "/",
-		"use_tls":   "false",
-		"tags":      "",
-	}
-
-	for _, env := range defaultRabbitMQEnvironments {
-		prefix := fmt.Sprintf("rabbitmq/%s", env)
-		existing, err := pluginapi.Secrets().List(prefix)
-		if err == nil && len(existing) > 0 {
-			backfillAttributes(existing, requiredAttrs)
-			continue
-		}
-		path := fmt.Sprintf("rabbitmq/%s/example", env)
-		_ = pluginapi.Secrets().Put(path, &pluginapi.SecretEntry{
-			Title:    "example",
-			UserName: "guest",
-			Password: "guest",
-			URL:      "localhost",
-			Notes:    fmt.Sprintf("RabbitMQ %s placeholder. Replace with real RabbitMQ details.", env),
-			CustomAttributes: requiredAttrs,
-		})
-	}
-}
-
-func backfillAttributes(entryPaths []string, required map[string]string) {
-	for _, entryPath := range entryPaths {
-		entry, err := pluginapi.Secrets().Get(entryPath)
-		if err != nil || entry == nil {
-			continue
-		}
-		if entry.CustomAttributes == nil {
-			entry.CustomAttributes = make(map[string]string)
-		}
-		updated := false
-		for attr, defaultVal := range required {
-			if _, exists := entry.CustomAttributes[attr]; !exists {
-				entry.CustomAttributes[attr] = defaultVal
-				updated = true
-			}
-		}
-		if updated {
-			_ = pluginapi.Secrets().Put(entryPath, entry)
-		}
-	}
 }
 
 // GetRabbitMQUIConfig returns the hardcoded UI configuration.
