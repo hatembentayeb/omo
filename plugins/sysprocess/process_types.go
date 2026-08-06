@@ -1,10 +1,19 @@
-package main
+package sysprocess
 
 import (
 	"fmt"
 	"strings"
 	"time"
 )
+
+// diskEntry holds a directory entry with its size for the disk browser.
+type diskEntry struct {
+	name     string
+	path     string
+	size     int64
+	isDir    bool
+	isParent bool
+}
 
 // UserProcess represents a user-space process with enriched context
 type UserProcess struct {

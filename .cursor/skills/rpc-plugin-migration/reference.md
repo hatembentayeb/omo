@@ -1,4 +1,4 @@
-# RPC migration reference (redis pilot lessons)
+# RPC plugin reference (redis pilot lessons)
 
 ## Activate lifecycle
 
@@ -17,8 +17,8 @@ Host: `resolvePluginConfig` in `plugin_manager.go` prefers `<plugin>/development
 
 ## Breadcrumbs
 
-Native stack pattern: `[]string{"<plugin>", "defaultView"}` then append secondary view id.
-RPC host already does `redis > keys [> view]` — for other plugins, generalize `SetViewStack` in `Apply` using `view.View` and plugin name (update `RPCRenderer` to use `r.name` instead of hardcoding `"redis"` when migrating the second plugin).
+Host sets `[]string{pluginName, homeView, …secondary}` via `SetViewStack` in `RPCRenderer.Apply`.
+ESC returns to `goto_<homeView>`.
 
 ## Modal actions host should special-case (optional)
 
@@ -27,24 +27,29 @@ RPC host already does `redis > keys [> view]` — for other plugins, generalize 
 | `delete` / destructive | `ShowStandardConfirmationModal` then `DoAction` |
 | `create_*` / forms | `ShowCompactStyledInputModal` then `DoAction` with payload |
 | `view_*` / doctor | `DoAction` → `ModalTitle`/`ModalBody` → `ShowInfoModal` |
+| interactive shell (ssh) | `ActionResult.ExternalSession` → host Suspend + exec |
 | live streams (pubsub) | peek window or poll; avoid long blocking without UI feedback |
 
-## Makefile
+## Makefile / release
 
 ```make
-RPC_PLUGINS := redis docker   # space-separated
+RPC_PLUGINS := redis docker …   # all plugins
 ```
 
-Install path: `~/.omo/plugins/<name>/<name>` (executable, not `.so`).
+Install path: `~/.omo/plugins/<name>/<name>` (executable).
+
+CI (`.github/workflows/release.yml`) builds `./plugins/<name>/cmd/<name>` into
+`{name}-{VERSION}-linux-{amd64,arm64}.tar.gz` (binary named `<name>` inside).
+Package Manager extracts to `PluginBinPath`.
 
 ## Logs
 
 - Host: `~/.omo/logs/rpc-host.log`
 - Plugin: `~/.omo/logs/<name>-rpc.log` (via pluginrpc OpenRPCLog)
 
-## Feature parity method
+## Feature checklist
 
-1. Inventory native `AddKeyBinding` + view list from `*_view*.go`
+1. Inventory `KeyBindings` + view IDs in `service.go` / `service_views.go`
 2. Map each to view id + action string
 3. Implement `buildViewLocked` / `DoAction` cases
-4. Keep native `.so` path working until RPC is default for that plugin
+4. Build with `make plugin-<name>` and verify via rpc logs

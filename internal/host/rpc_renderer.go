@@ -99,6 +99,7 @@ func (r *RPCRenderer) Apply(view pluginrpc.ViewData) tview.Primitive {
 	r.core.AddKeyBinding("R", "Refresh", r.refresh)
 	r.core.AddKeyBinding("?", "Help", func() { r.core.ShowHelpModal() })
 	r.core.AddKeyBinding("/", "Filter", nil)
+	r.core.AddKeyBinding("^t", "Target", nil) // handled globally in main (Ctrl+t)
 
 	for _, kb := range view.KeyBindings {
 		action := kb.Action
@@ -136,6 +137,8 @@ func (r *RPCRenderer) Apply(view pluginrpc.ViewData) tview.Primitive {
 				r.dispatchAction("view_key")
 			case "pubsub":
 				r.dispatchAction("subscribe")
+			case "servers":
+				r.dispatchAction("shell")
 			}
 		})
 	}
@@ -379,6 +382,16 @@ func (r *RPCRenderer) runAction(action string, payload map[string]string) {
 			View:    viewID,
 			Payload: payload,
 		})
+		if err == nil && result.ExternalSession != nil {
+			sess := *result.ExternalSession
+			r.app.QueueUpdate(func() {
+				if result.Message != "" {
+					r.core.Log("[green]" + result.Message)
+				}
+				r.launchExternalSession(sess)
+			})
+			return
+		}
 		r.app.QueueUpdateDraw(func() {
 			if err != nil {
 				r.core.Log(fmt.Sprintf("[red]action %s failed: %v", action, err))

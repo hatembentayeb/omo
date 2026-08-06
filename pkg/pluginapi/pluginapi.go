@@ -7,15 +7,12 @@ import (
 	"os"
 	"path/filepath"
 	"time"
-
-	"github.com/rivo/tview"
 )
 
 // OmoHome is the root directory for all omo data under the user's home.
 // Layout:
 //
 //	~/.omo/
-//	├── plugins/<name>/<name>.so     ← native Go shared libraries (legacy)
 //	├── plugins/<name>/<name>        ← RPC plugin executables (go-plugin)
 //	├── secrets/omo.kdbx             ← KeePass secrets database (all config + secrets)
 //	├── keys/omo.key                 ← KeePass key file (auto-generated)
@@ -34,17 +31,6 @@ type PluginMetadata struct {
 	Arch        []string  // Supported CPU architectures (e.g., "amd64", "arm64")
 	LastUpdated time.Time // Last update timestamp of the plugin
 	URL         string    // URL to the plugin repository or documentation
-}
-
-// Plugin is the minimal interface every plugin must implement.
-type Plugin interface {
-	Start(*tview.Application) tview.Primitive
-	GetMetadata() PluginMetadata
-}
-
-// Stoppable is an optional lifecycle hook for plugins that need cleanup.
-type Stoppable interface {
-	Stop()
 }
 
 // OmoDir returns the absolute path to ~/.omo.
@@ -66,12 +52,6 @@ func PluginsDir() string {
 // LogsDir returns the absolute path to ~/.omo/logs.
 func LogsDir() string {
 	return filepath.Join(OmoDir(), "logs")
-}
-
-// PluginSOPath returns the shared library path for a given plugin name.
-// e.g. PluginSOPath("redis") → ~/.omo/plugins/redis/redis.so
-func PluginSOPath(pluginName string) string {
-	return filepath.Join(PluginsDir(), pluginName, pluginName+".so")
 }
 
 // PluginBinPath returns the RPC plugin executable path for a given plugin name.

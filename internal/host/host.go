@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"plugin"
 	"strings"
 
 	"omo/internal/packagemanager"
@@ -22,7 +21,6 @@ type Host struct {
 	MainFrame       *tview.Frame
 	MainUI          *tview.Grid
 	PluginsList     *tview.List
-	ActivePlugin    pluginapi.Plugin
 	activePluginIdx int
 	rpcManager      *PluginManager
 	PluginsDir      string
@@ -72,25 +70,11 @@ func (h *Host) LoadPlugins() *tview.List {
 		if s2 == "" {
 			return
 		}
-		if strings.HasSuffix(s2, ".so") {
-			h.activateNative(list, i, s2)
-			return
-		}
 		h.activateRPC(list, i, s2)
 	})
 
 	h.PluginsList = list
 	return list
-}
-
-func (h *Host) stopNative() {
-	if h.ActivePlugin != nil {
-		if stoppable, ok := h.ActivePlugin.(pluginapi.Stoppable); ok {
-			stoppable.Stop()
-		}
-		h.ActivePlugin = nil
-		pluginapi.ClosePluginLogger()
-	}
 }
 
 func (h *Host) markActive(list *tview.List, i int) string {
@@ -107,55 +91,8 @@ func (h *Host) markActive(list *tview.List, i int) string {
 	return curName
 }
 
-func (h *Host) activateNative(list *tview.List, i int, soPath string) {
-	pluginFile, err := plugin.Open(soPath)
-	if err != nil {
-		h.log("failed to load plugin %s: %v", soPath, err)
-		h.showPluginLoadError("Failed to load plugin", err)
-		return
-	}
-	startSymbol, err := pluginFile.Lookup("OhmyopsPlugin")
-	if err != nil {
-		h.log("plugin entrypoint not found in %s: %v", soPath, err)
-		h.showPluginLoadError("Plugin entrypoint not found", err)
-		return
-	}
-
-	ohmyopsPlugin, ok := startSymbol.(pluginapi.Plugin)
-	if !ok {
-		h.log("plugin interface mismatch in %s", soPath)
-		h.showPluginLoadError("Plugin interface mismatch", fmt.Errorf("invalid plugin type"))
-		return
-	}
-
-	// Pause RPC sessions (keep-warm); stop previous native plugin.
-	if h.rpcManager != nil {
-		h.rpcManager.PauseActive()
-	}
-	h.stopNative()
-	h.ActivePlugin = ohmyopsPlugin
-
-	curName := h.markActive(list, i)
-
-	metadata := ohmyopsPlugin.GetMetadata()
-	registry.RegisterPlugin(curName, metadata)
-
-	pluginLogger, err := pluginapi.NewLogger(curName)
-	if err != nil {
-		h.log("failed to create logger for %s: %v", curName, err)
-	}
-	pluginapi.SetPluginLogger(pluginLogger)
-
-	h.log("activated native plugin: %s %s", curName, metadata.Version)
-
-	component := ohmyopsPlugin.Start(h.App)
-	h.MainFrame.SetPrimitive(component)
-}
-
 func (h *Host) activateRPC(list *tview.List, i int, binPath string) {
 	pluginrpc.RPCLog("host.activateRPC begin bin=%s", binPath)
-	// Stop native UI; RPC manager keep-warms other RPC plugins.
-	h.stopNative()
 
 	curName := h.markActive(list, i)
 
@@ -185,6 +122,14 @@ func (h *Host) FocusPluginContent() {
 	if mc := h.MainFrame.GetPrimitive(); mc != nil {
 		h.App.SetFocus(mc)
 	}
+}
+
+// SelectTarget opens the connection/instance picker for the active RPC plugin (Ctrl+t).
+func (h *Host) SelectTarget() {
+	if h.rpcManager == nil {
+		return
+	}
+	h.rpcManager.ShowTargetSelector()
 }
 
 // LogoView returns a compact OMO logo with version for the top-left corner.
@@ -241,14 +186,9 @@ func discoverPlugins(pluginsDir string) (*tview.List, error) {
 		}
 		name := entry.Name()
 		binPath := filepath.Join(pluginsDir, name, name)
-		soPath := filepath.Join(pluginsDir, name, name+".so")
 
 		if info, err := os.Stat(binPath); err == nil && isExecutable(info) {
 			list.AddItem("  → "+name, binPath, 0, nil)
-			continue
-		}
-		if _, err := os.Stat(soPath); err == nil {
-			list.AddItem("  → "+name, soPath, 0, nil)
 		}
 	}
 

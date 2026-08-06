@@ -39,12 +39,21 @@ type ActionRequest struct {
 	Payload map[string]string
 }
 
+// ExternalSession asks the host to suspend the TUI and run a local process
+// (e.g. interactive ssh). Password, if set, is fed via SSH_ASKPASS on the host.
+type ExternalSession struct {
+	Argv     []string // e.g. ["ssh", "-p", "22", "user@host"]
+	Password string
+	Banner   string
+}
+
 // ActionResult is returned after DoAction; optional Next replaces cached view.
 // ModalTitle/ModalBody ask the host to show an info modal (key content, doctor, etc.).
 type ActionResult struct {
-	OK         bool
-	Message    string
-	Next       *ViewData
-	ModalTitle string
-	ModalBody  string
+	OK              bool
+	Message         string
+	Next            *ViewData
+	ModalTitle      string
+	ModalBody       string
+	ExternalSession *ExternalSession
 }
