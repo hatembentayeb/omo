@@ -8,15 +8,6 @@ import (
 	"omo/pkg/pluginapi"
 )
 
-var defaultAWSEnvironments = []string{
-	"development",
-	"production",
-	"staging",
-	"sandbox",
-	"local",
-	"test",
-}
-
 // AWSProfile is built entirely from a KeePass entry at runtime.
 //
 // KeePass Entry Schema (path: awsCosts/<environment>/<name>):
@@ -73,9 +64,7 @@ func DiscoverProfiles() ([]AWSProfile, error) {
 		return nil, fmt.Errorf("reload secrets: %w", err)
 	}
 
-	ensureAWSCostsKeePassGroups()
-
-	paths, err := pluginapi.Secrets().List("awsCosts")
+	paths, err := pluginapi.ListNonReferenceSecrets("awsCosts")
 	if err != nil {
 		return nil, fmt.Errorf("list awsCosts secrets: %w", err)
 	}
@@ -147,57 +136,6 @@ func entryToAWSProfile(entry *pluginapi.SecretEntry, env string) AWSProfile {
 	}
 
 	return prof
-}
-
-func ensureAWSCostsKeePassGroups() {
-	if !pluginapi.HasSecrets() {
-		return
-	}
-
-	requiredAttrs := map[string]string{
-		"role_arn": "",
-		"tags":     "",
-	}
-
-	for _, env := range defaultAWSEnvironments {
-		prefix := fmt.Sprintf("awsCosts/%s", env)
-		existing, err := pluginapi.Secrets().List(prefix)
-		if err == nil && len(existing) > 0 {
-			backfillAttributes(existing, requiredAttrs)
-			continue
-		}
-		path := fmt.Sprintf("awsCosts/%s/example", env)
-		_ = pluginapi.Secrets().Put(path, &pluginapi.SecretEntry{
-			Title:            "example",
-			UserName:         "",
-			Password:         "",
-			URL:              "us-east-1",
-			Notes:            fmt.Sprintf("AWS Costs %s placeholder. Set UserName (Access Key ID), Password (Secret Key), URL (region).", env),
-			CustomAttributes: requiredAttrs,
-		})
-	}
-}
-
-func backfillAttributes(entryPaths []string, required map[string]string) {
-	for _, entryPath := range entryPaths {
-		entry, err := pluginapi.Secrets().Get(entryPath)
-		if err != nil || entry == nil {
-			continue
-		}
-		if entry.CustomAttributes == nil {
-			entry.CustomAttributes = make(map[string]string)
-		}
-		updated := false
-		for attr, defaultVal := range required {
-			if _, exists := entry.CustomAttributes[attr]; !exists {
-				entry.CustomAttributes[attr] = defaultVal
-				updated = true
-			}
-		}
-		if updated {
-			_ = pluginapi.Secrets().Put(entryPath, entry)
-		}
-	}
 }
 
 // GetAvailableAWSProfiles returns all discovered AWS profiles.

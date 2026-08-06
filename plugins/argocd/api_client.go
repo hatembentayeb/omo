@@ -1277,7 +1277,7 @@ func (c *ArgoAPIClient) tryGetProjects(path string) ([]Project, error) {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		errorMsg := fmt.Sprintf("failed to get projects with status %d: %s", resp.StatusCode, string(bodyBytes))
 		Debug("%s", errorMsg)
-		return nil, fmt.Errorf(errorMsg)
+		return nil, fmt.Errorf("%s", errorMsg)
 	}
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
@@ -1372,7 +1372,7 @@ func (c *ArgoAPIClient) tryGetApplications(path string) ([]Application, error) {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		errorMsg := fmt.Sprintf("failed to get applications with status %d: %s", resp.StatusCode, string(bodyBytes))
 		Debug("%s", errorMsg)
-		return nil, fmt.Errorf(errorMsg)
+		return nil, fmt.Errorf("%s", errorMsg)
 	}
 
 	bodyBytes, _ := io.ReadAll(resp.Body)

@@ -4,6 +4,9 @@
 // authenticated with a key file at ~/.omo/keys/omo.key. Both are
 // bootstrapped automatically on first run.
 //
+// Set OMO_SECRETS_RESET=1 to delete the existing database file and create a
+// new one with empty reference entries only (real credentials must be re-added).
+//
 // Secret paths follow the convention: pluginName/environment/entryName
 // where each entry contains Title, UserName, Password, URL, Notes, and
 // optional custom string attributes (e.g. certificates, private keys).
@@ -128,16 +131,25 @@ func NewWithPaths(dbPath, keyPath string) (Provider, error) {
 		}
 	}
 
-	// Bootstrap database if missing.
-	if _, err := os.Stat(dbPath); errors.Is(err, os.ErrNotExist) {
+	if os.Getenv("OMO_SECRETS_RESET") == "1" {
+		_ = os.Remove(dbPath)
+	}
+
+	switch _, err := os.Stat(dbPath); {
+	case errors.Is(err, os.ErrNotExist):
 		if err := kp.createDatabase(); err != nil {
 			return nil, fmt.Errorf("secrets: create database: %w", err)
 		}
+	case err != nil:
+		return nil, fmt.Errorf("secrets: stat database: %w", err)
 	}
 
-	// Open existing database.
 	if err := kp.openDatabase(); err != nil {
 		return nil, fmt.Errorf("secrets: open database: %w", err)
+	}
+
+	if err := kp.ensureReferenceTemplates(); err != nil {
+		return nil, err
 	}
 
 	return kp, nil

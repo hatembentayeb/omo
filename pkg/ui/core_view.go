@@ -23,10 +23,11 @@ type CoreView struct {
 	title      string             // Plugin title
 
 	// Header row panels
-	infoPanel   *tview.TextView // Left: context and status information
-	helpPanel   *tview.TextView // Middle: keybinding and help information
-	logPanel    *tview.TextView // Right: logs and messages
-	breadcrumbs *tview.TextView // Navigation breadcrumbs
+	infoPanel    *tview.TextView // Left: context and status information
+	helpPanel    *tview.TextView // Middle: keybinding and help information
+	helpExpanded bool            // Whether help panel shows expanded text
+	logPanel     *tview.TextView // Right: logs and messages
+	breadcrumbs  *tview.TextView // Navigation breadcrumbs
 
 	// Table view
 	table        *Table

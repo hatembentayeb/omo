@@ -8,15 +8,6 @@ import (
 	"omo/pkg/pluginapi"
 )
 
-var defaultK8sEnvironments = []string{
-	"development",
-	"production",
-	"staging",
-	"sandbox",
-	"local",
-	"test",
-}
-
 // K8sCluster is built entirely from a KeePass entry at runtime.
 //
 // KeePass Entry Schema (path: k8suser/<environment>/<name>):
@@ -75,9 +66,7 @@ func DiscoverClusters() ([]K8sCluster, error) {
 		return nil, fmt.Errorf("reload secrets: %w", err)
 	}
 
-	ensureK8sUserKeePassGroups()
-
-	paths, err := pluginapi.Secrets().List("k8suser")
+	paths, err := pluginapi.ListNonReferenceSecrets("k8suser")
 	if err != nil {
 		return nil, fmt.Errorf("list k8suser secrets: %w", err)
 	}
@@ -154,59 +143,6 @@ func entryToK8sCluster(entry *pluginapi.SecretEntry, env string) K8sCluster {
 	}
 
 	return cluster
-}
-
-func ensureK8sUserKeePassGroups() {
-	if !pluginapi.HasSecrets() {
-		return
-	}
-
-	requiredAttrs := map[string]string{
-		"kubeconfig": "~/.kube/config",
-		"context":    "",
-		"ca_cert":    "",
-		"tags":       "",
-	}
-
-	for _, env := range defaultK8sEnvironments {
-		prefix := fmt.Sprintf("k8suser/%s", env)
-		existing, err := pluginapi.Secrets().List(prefix)
-		if err == nil && len(existing) > 0 {
-			backfillAttributes(existing, requiredAttrs)
-			continue
-		}
-		path := fmt.Sprintf("k8suser/%s/example", env)
-		_ = pluginapi.Secrets().Put(path, &pluginapi.SecretEntry{
-			Title:            "example",
-			UserName:         "",
-			Password:         "",
-			URL:              "",
-			Notes:            fmt.Sprintf("K8sUser %s placeholder. Set URL (API server), Password (bearer token).", env),
-			CustomAttributes: requiredAttrs,
-		})
-	}
-}
-
-func backfillAttributes(entryPaths []string, required map[string]string) {
-	for _, entryPath := range entryPaths {
-		entry, err := pluginapi.Secrets().Get(entryPath)
-		if err != nil || entry == nil {
-			continue
-		}
-		if entry.CustomAttributes == nil {
-			entry.CustomAttributes = make(map[string]string)
-		}
-		updated := false
-		for attr, defaultVal := range required {
-			if _, exists := entry.CustomAttributes[attr]; !exists {
-				entry.CustomAttributes[attr] = defaultVal
-				updated = true
-			}
-		}
-		if updated {
-			_ = pluginapi.Secrets().Put(entryPath, entry)
-		}
-	}
 }
 
 // GetAvailableK8sClusters returns all discovered K8s clusters.

@@ -5,6 +5,8 @@ package ui
 import (
 	"fmt"
 	"time"
+
+	"github.com/rivo/tview"
 )
 
 // SetRefreshCallback sets a function to be called when refresh is triggered.
@@ -79,10 +81,8 @@ func (c *CoreView) StopAutoRefresh() *CoreView {
 }
 
 // RefreshData manually triggers a refresh of the data.
-// This function calls the refresh callback to fetch fresh data,
-// updates the table with the new data, and logs the result.
-// It can be called manually or is triggered automatically by
-// the refresh timer if auto-refresh is enabled.
+// The refresh callback runs in a background goroutine; table updates and logs
+// are applied on the tview UI thread so the terminal stays responsive.
 //
 // Returns:
 //   - The CoreView instance for method chaining
@@ -94,45 +94,22 @@ func (c *CoreView) RefreshData() *CoreView {
 		return c
 	}
 	c.isLoading = true
+	app := c.app
 	c.dataMutex.Unlock()
 
-	if c.lazyLoader != nil {
-		c.Log("Refreshing data...")
-		data, err := c.lazyLoader(0, c.lazyPageSize)
-
+	if app == nil {
 		c.dataMutex.Lock()
 		c.isLoading = false
-		if err != nil {
-			c.dataMutex.Unlock()
-			c.Log(fmt.Sprintf("[red]Error refreshing data: %v", err))
-			return c
-		}
-		c.lazyOffset = len(data)
-		c.lazyHasMore = len(data) >= c.lazyPageSize
-		c.rawTableData = data
-		c.tableData = c.applyFilter(data)
-		c.refreshTable()
 		c.dataMutex.Unlock()
-		c.Log("[green]Data refreshed successfully")
 		return c
 	}
 
+	if c.lazyLoader != nil {
+		go c.runLazyRefreshInitial(app)
+		return c
+	}
 	if c.onRefresh != nil {
-		c.Log("Refreshing data...")
-		data, err := c.onRefresh()
-
-		c.dataMutex.Lock()
-		c.isLoading = false
-		if err != nil {
-			c.dataMutex.Unlock()
-			c.Log(fmt.Sprintf("[red]Error refreshing data: %v", err))
-			return c
-		}
-		c.rawTableData = data
-		c.tableData = c.applyFilter(data)
-		c.refreshTable()
-		c.dataMutex.Unlock()
-		c.Log("[green]Data refreshed successfully")
+		go c.runOnRefresh(app)
 		return c
 	}
 
@@ -140,6 +117,65 @@ func (c *CoreView) RefreshData() *CoreView {
 	c.isLoading = false
 	c.dataMutex.Unlock()
 	return c
+}
+
+func (c *CoreView) runLazyRefreshInitial(app *tview.Application) {
+	loader := c.lazyLoader
+	pageSize := c.lazyPageSize
+	if loader == nil {
+		c.clearLoadingOnUI(app)
+		return
+	}
+	c.Log("Refreshing data...")
+	data, err := loader(0, pageSize)
+	app.QueueUpdateDraw(func() {
+		c.dataMutex.Lock()
+		c.isLoading = false
+		if err != nil {
+			c.dataMutex.Unlock()
+			c.Log(fmt.Sprintf("[red]Error refreshing data: %v", err))
+			return
+		}
+		c.lazyOffset = len(data)
+		c.lazyHasMore = len(data) >= pageSize
+		c.rawTableData = data
+		c.tableData = c.applyFilter(data)
+		c.refreshTable()
+		c.dataMutex.Unlock()
+		c.Log("[green]Data refreshed successfully")
+	})
+}
+
+func (c *CoreView) runOnRefresh(app *tview.Application) {
+	cb := c.onRefresh
+	if cb == nil {
+		c.clearLoadingOnUI(app)
+		return
+	}
+	c.Log("Refreshing data...")
+	data, err := cb()
+	app.QueueUpdateDraw(func() {
+		c.dataMutex.Lock()
+		c.isLoading = false
+		if err != nil {
+			c.dataMutex.Unlock()
+			c.Log(fmt.Sprintf("[red]Error refreshing data: %v", err))
+			return
+		}
+		c.rawTableData = data
+		c.tableData = c.applyFilter(data)
+		c.refreshTable()
+		c.dataMutex.Unlock()
+		c.Log("[green]Data refreshed successfully")
+	})
+}
+
+func (c *CoreView) clearLoadingOnUI(app *tview.Application) {
+	app.QueueUpdateDraw(func() {
+		c.dataMutex.Lock()
+		c.isLoading = false
+		c.dataMutex.Unlock()
+	})
 }
 
 // SetLazyLoader enables lazy loading with a page size and loader function.
@@ -155,6 +191,7 @@ func (c *CoreView) SetLazyLoader(pageSize int, loader func(offset, limit int) ([
 }
 
 // LoadMore fetches the next page when lazy loading is enabled.
+// The loader runs in a background goroutine; UI updates run on the tview thread.
 func (c *CoreView) LoadMore() *CoreView {
 	if c.lazyLoader == nil {
 		return c
@@ -170,23 +207,41 @@ func (c *CoreView) LoadMore() *CoreView {
 		return c
 	}
 	c.isLoading = true
+	offset := c.lazyOffset
+	pageSize := c.lazyPageSize
+	loader := c.lazyLoader
+	app := c.app
 	c.dataMutex.Unlock()
 
-	// Fetch data outside lock
-	data, err := c.lazyLoader(c.lazyOffset, c.lazyPageSize)
+	if app == nil {
+		c.dataMutex.Lock()
+		c.isLoading = false
+		c.dataMutex.Unlock()
+		return c
+	}
 
+	go func() {
+		data, err := loader(offset, pageSize)
+		app.QueueUpdateDraw(func() {
+			c.finalizeLoadMore(data, err)
+		})
+	}()
+	return c
+}
+
+func (c *CoreView) finalizeLoadMore(data [][]string, err error) {
 	c.dataMutex.Lock()
 	c.isLoading = false
 	if err != nil {
 		c.dataMutex.Unlock()
 		c.Log(fmt.Sprintf("[red]Error loading more: %v", err))
-		return c
+		return
 	}
 	if len(data) == 0 {
 		c.lazyHasMore = false
 		c.dataMutex.Unlock()
 		c.Log("[yellow]No more rows to load")
-		return c
+		return
 	}
 	c.rawTableData = append(c.rawTableData, data...)
 	c.tableData = c.applyFilter(c.rawTableData)
@@ -197,5 +252,4 @@ func (c *CoreView) LoadMore() *CoreView {
 	c.refreshTable()
 	c.dataMutex.Unlock()
 	c.Log(fmt.Sprintf("[green]Loaded %d more rows", len(data)))
-	return c
 }

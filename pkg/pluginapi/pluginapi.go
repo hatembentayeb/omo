@@ -15,7 +15,8 @@ import (
 // Layout:
 //
 //	~/.omo/
-//	├── plugins/<name>/<name>.so     ← compiled plugin shared libraries
+//	├── plugins/<name>/<name>.so     ← native Go shared libraries (legacy)
+//	├── plugins/<name>/<name>        ← RPC plugin executables (go-plugin)
 //	├── secrets/omo.kdbx             ← KeePass secrets database (all config + secrets)
 //	├── keys/omo.key                 ← KeePass key file (auto-generated)
 //	└── logs/<name>.log              ← per-plugin + main app log files
@@ -71,6 +72,12 @@ func LogsDir() string {
 // e.g. PluginSOPath("redis") → ~/.omo/plugins/redis/redis.so
 func PluginSOPath(pluginName string) string {
 	return filepath.Join(PluginsDir(), pluginName, pluginName+".so")
+}
+
+// PluginBinPath returns the RPC plugin executable path for a given plugin name.
+// e.g. PluginBinPath("redis") → ~/.omo/plugins/redis/redis
+func PluginBinPath(pluginName string) string {
+	return filepath.Join(PluginsDir(), pluginName, pluginName)
 }
 
 // NewHTTPClient returns an http.Client that forces IPv4 connections.

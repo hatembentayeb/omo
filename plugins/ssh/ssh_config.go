@@ -9,15 +9,6 @@ import (
 	"omo/pkg/pluginapi"
 )
 
-var defaultSSHEnvironments = []string{
-	"development",
-	"production",
-	"staging",
-	"sandbox",
-	"local",
-	"test",
-}
-
 // SSHServer is built entirely from a KeePass entry at runtime.
 //
 // KeePass Entry Schema (path: ssh/<environment>/<name>):
@@ -87,9 +78,7 @@ func DiscoverServers() ([]SSHServer, error) {
 		return nil, fmt.Errorf("reload secrets: %w", err)
 	}
 
-	ensureSSHKeePassGroups()
-
-	paths, err := pluginapi.Secrets().List("ssh")
+	paths, err := pluginapi.ListNonReferenceSecrets("ssh")
 	if err != nil {
 		return nil, fmt.Errorf("list ssh secrets: %w", err)
 	}
@@ -208,72 +197,4 @@ func entryToServer(entry *pluginapi.SecretEntry, env string) SSHServer {
 	}
 
 	return srv
-}
-
-// ensureSSHKeePassGroups creates environment groups in KeePass
-// with placeholder entries so the folder structure is visible in KeePassXC.
-func ensureSSHKeePassGroups() {
-	if !pluginapi.HasSecrets() {
-		return
-	}
-
-	requiredAttrs := map[string]string{
-		"port":          "22",
-		"auth_method":   "auto",
-		"private_key":   "",
-		"key_path":      "",
-		"passphrase":    "",
-		"proxy_command": "",
-		"jump_host":     "",
-		"jump_key":      "",
-		"jump_key_path": "",
-		"fingerprint":   "",
-		"tags":          "",
-		"startup_cmd":   "",
-		"keep_alive":    "30",
-	}
-
-	for _, env := range defaultSSHEnvironments {
-		prefix := fmt.Sprintf("ssh/%s", env)
-		existing, err := pluginapi.Secrets().List(prefix)
-		if err == nil && len(existing) > 0 {
-			backfillAttributes(existing, requiredAttrs)
-			continue
-		}
-		path := fmt.Sprintf("ssh/%s/example-server", env)
-		_ = pluginapi.Secrets().Put(path, &pluginapi.SecretEntry{
-			Title:    "example-server",
-			UserName: "root",
-			Password: "",
-			URL:      "192.168.1.100",
-			Notes:    fmt.Sprintf("SSH %s placeholder. Replace with real server details.", env),
-			CustomAttributes: map[string]string{
-				"port":        "22",
-				"auth_method": "auto",
-				"tags":        env,
-			},
-		})
-	}
-}
-
-func backfillAttributes(entryPaths []string, required map[string]string) {
-	for _, entryPath := range entryPaths {
-		entry, err := pluginapi.Secrets().Get(entryPath)
-		if err != nil || entry == nil {
-			continue
-		}
-		if entry.CustomAttributes == nil {
-			entry.CustomAttributes = make(map[string]string)
-		}
-		updated := false
-		for attr, defaultVal := range required {
-			if _, exists := entry.CustomAttributes[attr]; !exists {
-				entry.CustomAttributes[attr] = defaultVal
-				updated = true
-			}
-		}
-		if updated {
-			_ = pluginapi.Secrets().Put(entryPath, entry)
-		}
-	}
 }

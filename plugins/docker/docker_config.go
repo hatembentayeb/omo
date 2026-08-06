@@ -8,15 +8,6 @@ import (
 	"omo/pkg/pluginapi"
 )
 
-var defaultDockerEnvironments = []string{
-	"development",
-	"production",
-	"staging",
-	"sandbox",
-	"local",
-	"test",
-}
-
 // DockerHost is built entirely from a KeePass entry at runtime.
 //
 // KeePass Entry Schema (path: docker/<environment>/<name>):
@@ -75,9 +66,7 @@ func DiscoverHosts() ([]DockerHost, error) {
 		return nil, fmt.Errorf("reload secrets: %w", err)
 	}
 
-	ensureDockerKeePassGroups()
-
-	paths, err := pluginapi.Secrets().List("docker")
+	paths, err := pluginapi.ListNonReferenceSecrets("docker")
 	if err != nil {
 		return nil, fmt.Errorf("list docker secrets: %w", err)
 	}
@@ -153,57 +142,6 @@ func entryToDockerHost(entry *pluginapi.SecretEntry, env string) DockerHost {
 	}
 
 	return host
-}
-
-func ensureDockerKeePassGroups() {
-	if !pluginapi.HasSecrets() {
-		return
-	}
-
-	requiredAttrs := map[string]string{
-		"cert_path":  "",
-		"tls":        "false",
-		"tls_verify": "false",
-		"tags":       "",
-	}
-
-	for _, env := range defaultDockerEnvironments {
-		prefix := fmt.Sprintf("docker/%s", env)
-		existing, err := pluginapi.Secrets().List(prefix)
-		if err == nil && len(existing) > 0 {
-			backfillAttributes(existing, requiredAttrs)
-			continue
-		}
-		path := fmt.Sprintf("docker/%s/example", env)
-		_ = pluginapi.Secrets().Put(path, &pluginapi.SecretEntry{
-			Title:            "example",
-			URL:              "unix:///var/run/docker.sock",
-			Notes:            fmt.Sprintf("Docker %s placeholder. Set URL (docker host), cert_path (TLS certs dir).", env),
-			CustomAttributes: requiredAttrs,
-		})
-	}
-}
-
-func backfillAttributes(entryPaths []string, required map[string]string) {
-	for _, entryPath := range entryPaths {
-		entry, err := pluginapi.Secrets().Get(entryPath)
-		if err != nil || entry == nil {
-			continue
-		}
-		if entry.CustomAttributes == nil {
-			entry.CustomAttributes = make(map[string]string)
-		}
-		updated := false
-		for attr, defaultVal := range required {
-			if _, exists := entry.CustomAttributes[attr]; !exists {
-				entry.CustomAttributes[attr] = defaultVal
-				updated = true
-			}
-		}
-		if updated {
-			_ = pluginapi.Secrets().Put(entryPath, entry)
-		}
-	}
 }
 
 // GetAvailableHosts returns all discovered Docker hosts.

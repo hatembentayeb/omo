@@ -19,23 +19,25 @@ func (c *CoreView) SetInfoTitle(title string) *CoreView {
 	return c
 }
 
-// Log adds a new message to the log panel
+// Log adds a new message to the log panel.
+// Safe from any goroutine, including from inside QueueUpdate/QueueUpdateDraw.
+// The update is queued on a separate goroutine so we never block the tview
+// event loop waiting for itself (which deadlocks).
 func (c *CoreView) Log(message string) *CoreView {
-	timestamp := time.Now().Format("15:04:05")
-	content := c.logPanel.GetText(false)
-	if content != "" {
-		content += "\n"
+	if c.app == nil || c.logPanel == nil {
+		return c
 	}
-
-	// Format message in Redis style with gray timestamp
-	content += fmt.Sprintf("[gray::d]%s[-] %s", timestamp, message)
-
-	c.logPanel.SetText(content)
-	c.logPanel.ScrollToEnd()
-
-	// Queue a draw instead of drawing synchronously — prevents rapid
-	// screen redraws from goroutines that would clear terminal text selection.
-	go c.app.QueueUpdateDraw(func() {})
+	timestamp := time.Now().Format("15:04:05")
+	line := fmt.Sprintf("[gray::d]%s[-] %s", timestamp, message)
+	go c.app.QueueUpdate(func() {
+		content := c.logPanel.GetText(false)
+		if content != "" {
+			content += "\n"
+		}
+		content += line
+		c.logPanel.SetText(content)
+		c.logPanel.ScrollToEnd()
+	})
 	return c
 }
 

@@ -8,12 +8,6 @@ import (
 	"omo/pkg/pluginapi"
 )
 
-var defaultGitHubEnvironments = []string{
-	"personal",
-	"work",
-	"organization",
-}
-
 // GitHubAccount represents a GitHub account/token stored in KeePass.
 // One token gives access to all repos for the authenticated user.
 //
@@ -81,9 +75,7 @@ func DiscoverAccounts() ([]GitHubAccount, error) {
 		return nil, fmt.Errorf("reload secrets: %w", err)
 	}
 
-	ensureGitHubKeePassGroups()
-
-	paths, err := pluginapi.Secrets().List("github")
+	paths, err := pluginapi.ListNonReferenceSecrets("github")
 	if err != nil {
 		return nil, fmt.Errorf("list github secrets: %w", err)
 	}
@@ -157,56 +149,6 @@ func entryToGitHubAccount(entry *pluginapi.SecretEntry, env string) GitHubAccoun
 	}
 
 	return acct
-}
-
-func ensureGitHubKeePassGroups() {
-	if !pluginapi.HasSecrets() {
-		return
-	}
-
-	requiredAttrs := map[string]string{
-		"type": "user",
-	}
-
-	for _, env := range defaultGitHubEnvironments {
-		prefix := fmt.Sprintf("github/%s", env)
-		existing, err := pluginapi.Secrets().List(prefix)
-		if err == nil && len(existing) > 0 {
-			backfillAttributes(existing, requiredAttrs)
-			continue
-		}
-		path := fmt.Sprintf("github/%s/example", env)
-		_ = pluginapi.Secrets().Put(path, &pluginapi.SecretEntry{
-			Title:            "example",
-			UserName:         "",
-			Password:         "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-			URL:              "",
-			Notes:            fmt.Sprintf("GitHub %s account. Set Password (PAT token). For orgs: set type=org and UserName to the org name.", env),
-			CustomAttributes: requiredAttrs,
-		})
-	}
-}
-
-func backfillAttributes(entryPaths []string, required map[string]string) {
-	for _, entryPath := range entryPaths {
-		entry, err := pluginapi.Secrets().Get(entryPath)
-		if err != nil || entry == nil {
-			continue
-		}
-		if entry.CustomAttributes == nil {
-			entry.CustomAttributes = make(map[string]string)
-		}
-		updated := false
-		for attr, defaultVal := range required {
-			if _, exists := entry.CustomAttributes[attr]; !exists {
-				entry.CustomAttributes[attr] = defaultVal
-				updated = true
-			}
-		}
-		if updated {
-			_ = pluginapi.Secrets().Put(entryPath, entry)
-		}
-	}
 }
 
 func GetAvailableAccounts() ([]GitHubAccount, error) {

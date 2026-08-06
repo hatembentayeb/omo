@@ -1,4 +1,4 @@
-package main
+package redis
 
 import (
 	"fmt"
@@ -8,15 +8,6 @@ import (
 
 	"omo/pkg/pluginapi"
 )
-
-var defaultRedisEnvironments = []string{
-	"development",
-	"production",
-	"staging",
-	"sandbox",
-	"local",
-	"test",
-}
 
 // RedisInstance is built entirely from a KeePass entry at runtime.
 //
@@ -72,9 +63,7 @@ func DiscoverInstances() ([]RedisInstance, error) {
 		return nil, fmt.Errorf("reload secrets: %w", err)
 	}
 
-	ensureRedisKeePassGroups()
-
-	paths, err := pluginapi.Secrets().List("redis")
+	paths, err := pluginapi.ListNonReferenceSecrets("redis")
 	if err != nil {
 		return nil, fmt.Errorf("list redis secrets: %w", err)
 	}
@@ -155,60 +144,6 @@ func entryToRedisInstance(entry *pluginapi.SecretEntry, env string) RedisInstanc
 	}
 
 	return inst
-}
-
-// ensureRedisKeePassGroups creates environment groups in KeePass
-// with placeholder entries so the folder structure is visible in KeePassXC.
-func ensureRedisKeePassGroups() {
-	if !pluginapi.HasSecrets() {
-		return
-	}
-
-	requiredAttrs := map[string]string{
-		"port":     "6379",
-		"database": "0",
-		"tags":     "",
-	}
-
-	for _, env := range defaultRedisEnvironments {
-		prefix := fmt.Sprintf("redis/%s", env)
-		existing, err := pluginapi.Secrets().List(prefix)
-		if err == nil && len(existing) > 0 {
-			for _, entryPath := range existing {
-				backfillAttributes(entryPath, requiredAttrs)
-			}
-			continue
-		}
-		path := fmt.Sprintf("redis/%s/example", env)
-		_ = pluginapi.Secrets().Put(path, &pluginapi.SecretEntry{
-			Title:            "example",
-			UserName:         "",
-			Password:         "",
-			URL:              "localhost",
-			Notes:            fmt.Sprintf("Redis %s placeholder. Set URL (host), UserName (ACL user), Password.", env),
-			CustomAttributes: requiredAttrs,
-		})
-	}
-}
-
-func backfillAttributes(entryPath string, required map[string]string) {
-	entry, err := pluginapi.Secrets().Get(entryPath)
-	if err != nil || entry == nil {
-		return
-	}
-	if entry.CustomAttributes == nil {
-		entry.CustomAttributes = make(map[string]string)
-	}
-	updated := false
-	for attr, defaultVal := range required {
-		if _, exists := entry.CustomAttributes[attr]; !exists {
-			entry.CustomAttributes[attr] = defaultVal
-			updated = true
-		}
-	}
-	if updated {
-		_ = pluginapi.Secrets().Put(entryPath, entry)
-	}
 }
 
 // GetAvailableInstances returns all discovered Redis instances.
