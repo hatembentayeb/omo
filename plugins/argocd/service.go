@@ -321,7 +321,7 @@ func (s *Service) viewDetailsLocked(req pluginrpc.ActionRequest) (pluginrpc.Acti
 		return pluginrpc.ActionResult{
 			OK:         true,
 			ModalTitle: "RBAC: " + name,
-			ModalBody:  "Selected: " + name + "\n(RBAC mutations requiring multi-field forms are skipped in RPC; use native plugin or edit ConfigMaps)",
+			ModalBody:  "Selected: " + name + "\n(RBAC mutations requiring multi-field forms are not yet supported; edit ConfigMaps directly)",
 		}, nil
 
 	default:

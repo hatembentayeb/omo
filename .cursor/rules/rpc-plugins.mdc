@@ -22,9 +22,9 @@ When editing plugin RPC, host plugin manager/renderer, or CoreView input/logging
 - Embed tview in the RPC plugin process for the main UI
 - `QueueUpdateDraw` from `SetSelectedFunc` during activate
 - Nested `QueueUpdate` wait inside an active `QueueUpdateDraw` callback
-- Ship RPC plugins with only a fraction of native keybindings without a follow-up
+- Reintroduce Go `-buildmode=plugin` / `.so` loading
 
-## Migrate next plugin
+## New / extended plugin
 
 Follow project skill `rpc-plugin-migration`. Reference: `plugins/redis/service.go` + `service_views.go`.
 Add the name to `RPC_PLUGINS` in the Makefile.

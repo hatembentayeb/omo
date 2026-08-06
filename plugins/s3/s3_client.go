@@ -239,33 +239,3 @@ func formatS3ObjectRow(obj *s3.Object, prefix string) *ObjectRow {
 	}
 	return &ObjectRow{Name: name, Size: size, LastModified: lastModified, StorageClass: storageClass}
 }
-
-// configureAWSSession configures the AWS session on BucketsView (native UI path).
-func (bv *BucketsView) configureAWSSession(profile, region string) error {
-	sess, err := session.NewSessionWithOptions(session.Options{
-		Profile: profile,
-		Config: aws.Config{
-			Region: aws.String(region),
-		},
-		SharedConfigState: session.SharedConfigEnable,
-	})
-	if err != nil {
-		bv.cores.Log(fmt.Sprintf("[red]Error creating AWS session: %v", err))
-		return err
-	}
-	bv.s3Client = s3.New(sess)
-	bv.currentProfile = profile
-	bv.currentRegion = region
-	bv.cores.Log(fmt.Sprintf("[green]Connected to AWS with profile: %s, region: %s", profile, region))
-	return nil
-}
-
-// createS3ClientForRegion creates a new S3 client for a specific region (native UI).
-func (bv *BucketsView) createS3ClientForRegion(profile, region string) *s3.S3 {
-	return CreateS3ClientForRegion(profile, region, "", "", "")
-}
-
-// getBucketRegion gets the region for a bucket (native UI).
-func (bv *BucketsView) getBucketRegion(bucketName string) (string, error) {
-	return GetBucketRegion(bv.currentProfile, bv.currentRegion, "", "", "", bucketName)
-}

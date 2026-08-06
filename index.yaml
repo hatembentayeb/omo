@@ -4,7 +4,7 @@
 
 api_version: v1
 
-download_url_template: "https://github.com/hatembentayeb/omo/releases/download/v{{version}}/{{name}}-v{{version}}-{{os}}-{{arch}}.so.tar.gz"
+download_url_template: "https://github.com/hatembentayeb/omo/releases/download/v{{version}}/{{name}}-v{{version}}-{{os}}-{{arch}}.tar.gz"
 
 plugins:
   - name: "redis"

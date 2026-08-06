@@ -1,8 +1,7 @@
 PLUGINS_DIR := ./plugins
 OMO_HOME := $(HOME)/.omo
 PLUGINS_INSTALL_DIR := $(OMO_HOME)/plugins
-BUILD_MODE := -buildmode=plugin
-# Plugins built as RPC executables (hashicorp/go-plugin) instead of native .so
+# RPC plugin executables (hashicorp/go-plugin)
 RPC_PLUGINS := redis docker git sysprocess argocd k8suser ssh postgres rabbitmq kafka github s3 awsCosts
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS := -ldflags "-X main.Version=$(VERSION)"
@@ -16,17 +15,11 @@ all: dirs
 	@go build $(LDFLAGS) -o omo ./cmd/omo
 	@go install $(LDFLAGS) ./cmd/omo
 	@echo "Building and installing plugins to $(PLUGINS_INSTALL_DIR)"
-	@for plugin in $(wildcard $(PLUGINS_DIR)/*); do \
-		name=$$(basename $$plugin); \
+	@for name in $(RPC_PLUGINS); do \
 		mkdir -p $(PLUGINS_INSTALL_DIR)/$$name; \
-		if echo "$(RPC_PLUGINS)" | grep -qw "$$name"; then \
-			echo "  $$name (rpc)"; \
-			go build -o $(PLUGINS_INSTALL_DIR)/$$name/$$name ./plugins/$$name/cmd/$$name; \
-			chmod +x $(PLUGINS_INSTALL_DIR)/$$name/$$name; \
-		else \
-			echo "  $$name (native)"; \
-			go build $(BUILD_MODE) -o $(PLUGINS_INSTALL_DIR)/$$name/$$name.so $$plugin; \
-		fi; \
+		echo "  $$name"; \
+		go build -o $(PLUGINS_INSTALL_DIR)/$$name/$$name ./plugins/$$name/cmd/$$name; \
+		chmod +x $(PLUGINS_INSTALL_DIR)/$$name/$$name; \
 	done
 	@echo "Generating installed manifest"
 	@go run ./cmd/manifest

@@ -330,3 +330,73 @@ func formatDuration(d time.Duration) string {
 	}
 	return fmt.Sprintf("%dm", minutes)
 }
+
+// buildUserProcess creates a UserProcess from a gopsutil Process with ancestry and source
+func buildUserProcess(proc *process.Process, cpuCache map[int32]float64, portCache map[int32][]string) *UserProcess {
+	name, _ := proc.Name()
+	username, _ := proc.Username()
+	cmdline, _ := proc.Cmdline()
+	cwd, _ := proc.Cwd()
+	status, _ := proc.Status()
+	statusStr := strings.Join(status, ", ")
+	memPercent, _ := proc.MemoryPercent()
+	memInfo, _ := proc.MemoryInfo()
+	threads, _ := proc.NumThreads()
+	createTime, _ := proc.CreateTime()
+	ppid, _ := proc.Ppid()
+
+	cpuPercent := cpuCache[proc.Pid]
+
+	var memRSS, memVMS uint64
+	if memInfo != nil {
+		memRSS = memInfo.RSS
+		memVMS = memInfo.VMS
+	}
+
+	ancestry := getProcessAncestry(proc)
+	source := detectSource(ancestry)
+	ports := portCache[proc.Pid]
+
+	up := &UserProcess{
+		PID:        proc.Pid,
+		Name:       name,
+		Username:   username,
+		Cmdline:    cmdline,
+		Cwd:        cwd,
+		Status:     statusStr,
+		CPUPercent: cpuPercent,
+		MemPercent: float64(memPercent),
+		MemRSS:     memRSS,
+		MemVMS:     memVMS,
+		Threads:    threads,
+		CreateTime: createTime,
+		PPID:       ppid,
+		Source:     source,
+		Ancestry:   ancestry,
+		Ports:      ports,
+	}
+
+	up.Warnings = getProcessWarnings(up)
+
+	return up
+}
+
+// dirSize returns total size of a directory (walks the tree)
+func dirSize(path string) int64 {
+	var total int64
+	filepath.WalkDir(path, func(_ string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		total += info.Size()
+		return nil
+	})
+	return total
+}

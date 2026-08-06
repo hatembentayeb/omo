@@ -104,14 +104,14 @@ Select the plugin from the sidebar — it auto-discovers your KeePass entries an
 ┌──────────────▼───────────────────────────────┐
 │  omo (host binary)                           │
 │  ├── Auto-bootstrap KeePass on first run     │
-│  ├── Plugin loader                           │
+│  ├── RPC plugin launcher (go-plugin)         │
 │  ├── Tab/Shift+Tab panel cycling             │
 │  └── Per-plugin logging (~/.omo/logs/)       │
 └──────────────┬───────────────────────────────┘
-               │ plugin.Open()
+               │ exec + RPC (ViewData / DoAction)
 ┌──────────────▼───────────────────────────────┐
-│  Plugins (.so shared libraries)              │
-│  redis.so  docker.so  kafka.so  ...          │
+│  Plugins (standalone executables)            │
+│  redis  docker  kafka  …                     │
 └──────────────────────────────────────────────┘
 ```
 
@@ -229,7 +229,7 @@ Empty fields are ignored — only fill in what your service needs.
 
 | Key | Action |
 |-----|--------|
-| **Ctrl+T** | Switch instance / connection |
+| **Ctrl+t** | Switch instance / connection |
 | **R** | Refresh data |
 | **/** | Filter / search |
 | **?** | Show plugin help |
@@ -255,8 +255,8 @@ Each plugin has its own keybindings — press `?` inside any plugin to see them.
     docker.log
     ...
   plugins/
-    redis/redis.so      Plugin binaries
-    docker/docker.so
+    redis/redis         RPC plugin executables
+    docker/docker
     ...
 ```
 
@@ -270,11 +270,10 @@ cd omo
 make all
 ```
 
-This builds the `omo` binary (with version injected) and all 12 plugins, then installs everything to `~/.omo/`.
+This builds the `omo` binary (with version injected) and all plugins as RPC executables, then installs everything to `~/.omo/`.
 
 ### Requirements
 
-- **Linux** (required for Go plugin `.so` support)
 - **Go 1.25+** (only if building from source)
 - **KeePassXC** (optional — only needed to manually view/edit `secrets/omo.kdbx`; omo manages the database automatically)
 
@@ -292,23 +291,23 @@ make dev-seed
 
 ## Build Matrix
 
-| OS | Arch | Binary | Plugins |
-|----|------|--------|---------|
-| Linux | amd64 | ✅ | ✅ `.so` |
-| Linux | arm64 | ✅ | ✅ `.so` |
-| macOS | amd64 | ✅ | ❌ |
-| macOS | arm64 | ✅ | ❌ |
-| Windows | amd64 | ✅ | ❌ |
+| OS | Arch | Binary | Plugins (RPC) |
+|----|------|--------|---------------|
+| Linux | amd64 | ✅ | ✅ |
+| Linux | arm64 | ✅ | ✅ |
+| macOS | amd64 | ✅ | ✅ (local build / future releases) |
+| macOS | arm64 | ✅ | ✅ (local build / future releases) |
+| Windows | amd64 | ✅ | ✅ (local build / future releases) |
 
-> Go's `plugin` build mode only supports Linux. macOS and Windows can run the core binary but cannot load `.so` plugins.
+> Plugins are standalone RPC executables (hashicorp/go-plugin), not Go native `.so` files — so they are not tied to the host Go version and work across platforms.
 
 ---
 
 ## Roadmap
 
-- [ ] `omo secrets` CLI for managing KeePass entries without a GUI
+- [x] `omo secrets` CLI for managing KeePass entries without a GUI
+- [x] RPC plugins (no more Go `.so` version mismatches)
 - [ ] Plugin SDK v2 with richer lifecycle hooks
-- [ ] Remote plugin loading (WASM or gRPC)
 - [ ] Prometheus / Grafana plugin
 - [ ] Theme and color customization
 

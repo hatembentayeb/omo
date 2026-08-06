@@ -1,5 +1,5 @@
 // Command manifest generates ~/.omo/installed.yaml from index.yaml
-// by checking which plugins have a .so file in ~/.omo/plugins/.
+// by checking which plugins are installed under ~/.omo/plugins/<name>/.
 // Run after "make all" to keep the manifest in sync with built plugins.
 package main
 

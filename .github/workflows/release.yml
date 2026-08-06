@@ -15,7 +15,6 @@ permissions:
 
 jobs:
   build-and-release:
-    # Pin to x64 runner to avoid CGO cross-compilation issues with plugins
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
@@ -71,25 +70,31 @@ jobs:
           done
           cd ..
 
-      - name: Build plugins for Linux (amd64 + arm64)
+      - name: Build RPC plugins for Linux (amd64 + arm64)
         run: |
-          mkdir -p dist/plugins
+          mkdir -p dist/plugins/staging
           for plugin_dir in plugins/*; do
-            if [ -d "$plugin_dir" ]; then
-              plugin_name=$(basename "$plugin_dir")
-              echo "Building plugin: $plugin_name (linux-amd64)"
-              CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o "dist/plugins/${plugin_name}-${{ env.VERSION }}-linux-amd64.so" -buildmode=plugin "./${plugin_dir}"
-              echo "Building plugin: $plugin_name (linux-arm64)"
-              CGO_ENABLED=1 GOOS=linux GOARCH=arm64 CC=aarch64-linux-gnu-gcc go build -o "dist/plugins/${plugin_name}-${{ env.VERSION }}-linux-arm64.so" -buildmode=plugin "./${plugin_dir}"
+            if [ ! -d "$plugin_dir" ]; then
+              continue
             fi
+            plugin_name=$(basename "$plugin_dir")
+            cmd_path="./plugins/${plugin_name}/cmd/${plugin_name}"
+            if [ ! -d "$cmd_path" ]; then
+              echo "SKIP $plugin_name (no cmd/${plugin_name})"
+              continue
+            fi
+            for arch in amd64 arm64; do
+              echo "Building RPC plugin: $plugin_name (linux-$arch)"
+              stage="dist/plugins/staging/${plugin_name}-linux-${arch}"
+              mkdir -p "$stage"
+              CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build \
+                -o "${stage}/${plugin_name}" \
+                "$cmd_path"
+              tar -C "$stage" -czf "dist/plugins/${plugin_name}-${{ env.VERSION }}-linux-${arch}.tar.gz" "${plugin_name}"
+              rm -rf "$stage"
+            done
           done
-          # Compress plugin binaries
-          cd dist/plugins
-          for file in *; do
-            tar -czf "$file.tar.gz" "$file"
-            rm "$file"
-          done
-          cd ..
+          ls -lh dist/plugins/
 
       - name: Generate plugin index
         run: |

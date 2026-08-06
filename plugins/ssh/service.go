@@ -12,7 +12,6 @@ import (
 )
 
 // Service is the RPC-facing SSH backend (no tview).
-// View IDs live in ssh_view_nav.go (shared with native UI).
 type Service struct {
 	mu          sync.Mutex
 	client      *SSHClient
@@ -163,9 +162,27 @@ func (s *Service) DoAction(req pluginrpc.ActionRequest) (pluginrpc.ActionResult,
 		return pluginrpc.ActionResult{OK: true, Message: "connected to " + s.server.Host, Next: &view}, nil
 
 	case "shell", "ssh_shell", "quick_ssh":
+		if !s.configured || s.server.Host == "" {
+			return pluginrpc.ActionResult{OK: false, Message: "not configured"}, nil
+		}
+		args := buildSSHArgs(s.server)
+		banner := fmt.Sprintf("SSH to %s (%s@%s:%d)\n", s.server.Name, s.server.User, s.server.Host, s.server.Port)
+		if s.server.JumpHost != "" {
+			banner += fmt.Sprintf("via jump host: %s\n", s.server.JumpHost)
+		}
+		banner += "Type 'exit' to return to omo.\n"
+		pass := ""
+		if s.server.Password != "" && s.server.PrivateKey == "" && s.server.KeyPath == "" {
+			pass = s.server.Password
+		}
 		return pluginrpc.ActionResult{
 			OK:      true,
-			Message: "use native ssh for shell",
+			Message: "opening shell",
+			ExternalSession: &pluginrpc.ExternalSession{
+				Argv:     append([]string{"ssh"}, args...),
+				Password: pass,
+				Banner:   banner,
+			},
 		}, nil
 
 	case "execute":

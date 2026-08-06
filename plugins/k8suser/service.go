@@ -237,7 +237,7 @@ func (s *Service) DoAction(req pluginrpc.ActionRequest) (pluginrpc.ActionResult,
 	case "download_cert":
 		return pluginrpc.ActionResult{
 			OK:      true,
-			Message: "cert download / KeePass UX skipped in RPC — use native plugin or create_user",
+			Message: "cert download / KeePass UX not yet supported — use create_user",
 		}, nil
 
 	case "set_context":

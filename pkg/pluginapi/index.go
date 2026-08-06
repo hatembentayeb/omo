@@ -116,18 +116,24 @@ func SaveLocalIndex(idx *PluginIndex) error {
 	return os.WriteFile(filepath.Join(dir, "index.yaml"), data, 0644)
 }
 
-// IsInstalled checks if a plugin is installed locally.
+// IsInstalled reports whether a plugin RPC executable exists.
 func IsInstalled(pluginName string) bool {
-	_, err := os.Stat(PluginSOPath(pluginName))
-	return err == nil
+	_, ok := InstalledPluginPath(pluginName)
+	return ok
 }
 
-// InstalledVersion attempts to read the version of an installed plugin
-// by loading its .so and calling GetMetadata(). Returns empty string if
-// not installed or version cannot be determined.
+// InstalledPluginPath returns the on-disk path of an installed plugin
+// (~/.omo/plugins/<name>/<name>).
+func InstalledPluginPath(pluginName string) (string, bool) {
+	bin := PluginBinPath(pluginName)
+	if info, err := os.Stat(bin); err == nil && !info.IsDir() {
+		return bin, true
+	}
+	return "", false
+}
+
+// InstalledVersion returns the recorded version from ~/.omo/installed.yaml.
 func InstalledVersion(pluginName string) string {
-	// We can't load .so here without the plugin package (circular),
-	// so we'll store installed versions in a manifest.
 	manifest := loadManifest()
 	if v, ok := manifest[pluginName]; ok {
 		return v

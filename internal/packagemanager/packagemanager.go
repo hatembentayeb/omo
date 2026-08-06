@@ -193,10 +193,12 @@ func updateDetailPanel(core *ui.CoreView, index **pluginapi.PluginIndex, name st
 		}
 	}
 
-	soPath := pluginapi.PluginSOPath(entry.Name)
+	pluginPath, ok := pluginapi.InstalledPluginPath(entry.Name)
 	sizeStr := "-"
-	if info, err := os.Stat(soPath); err == nil {
-		sizeStr = formatBytes(info.Size())
+	if ok {
+		if info, err := os.Stat(pluginPath); err == nil {
+			sizeStr = formatBytes(info.Size())
+		}
 	}
 
 	archStr := strings.Join(entry.Arch, ", ")
@@ -413,10 +415,12 @@ func handleRemovePlugin(core *ui.CoreView, app *tview.Application, pages *tview.
 		return
 	}
 
-	soPath := pluginapi.PluginSOPath(name)
+	pluginPath, ok := pluginapi.InstalledPluginPath(name)
 	sizeStr := ""
-	if info, err := os.Stat(soPath); err == nil {
-		sizeStr = fmt.Sprintf(" (%s)", formatBytes(info.Size()))
+	if ok {
+		if info, err := os.Stat(pluginPath); err == nil {
+			sizeStr = fmt.Sprintf(" (%s)", formatBytes(info.Size()))
+		}
 	}
 
 	ui.ShowStandardConfirmationModal(
@@ -492,7 +496,7 @@ func handleInstallAll(core *ui.CoreView, app *tview.Application, pages *tview.Pa
 						sem <- struct{}{}
 						defer func() { <-sem }()
 
-					pm.UpdateProgress(idx, fmt.Sprintf("Downloading %s (%d/%d)...", e.Name, idx+1, total))
+						pm.UpdateProgress(idx, fmt.Sprintf("Downloading %s (%d/%d)...", e.Name, idx+1, total))
 
 						if err := downloadPlugin(&e, index.DownloadURLTemplate, nil); err != nil {
 							mu.Lock()
@@ -610,7 +614,7 @@ func downloadPlugin(entry *pluginapi.IndexEntry, urlTemplate string, onProgress 
 		return fmt.Errorf("create dirs: %w", err)
 	}
 
-	destPath := pluginapi.PluginSOPath(entry.Name)
+	destPath := pluginapi.PluginBinPath(entry.Name)
 	tmpPath := destPath + ".tmp"
 	archivePath := destPath + ".download"
 
@@ -667,7 +671,7 @@ func downloadPlugin(entry *pluginapi.IndexEntry, urlTemplate string, onProgress 
 	}()
 
 	if strings.HasSuffix(url, ".tar.gz") || strings.HasSuffix(url, ".tgz") {
-		if err := extractSOFromTarGz(archiveReader, entry.Name, tmpPath); err != nil {
+		if err := extractPluginFromTarGz(archiveReader, entry.Name, tmpPath); err != nil {
 			os.Remove(tmpPath)
 			return fmt.Errorf("extract: %w", err)
 		}
@@ -704,7 +708,7 @@ func (pr *progressReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func extractSOFromTarGz(r io.Reader, pluginName, destPath string) error {
+func extractPluginFromTarGz(r io.Reader, pluginName, destPath string) error {
 	gz, err := gzip.NewReader(r)
 	if err != nil {
 		return fmt.Errorf("gzip: %w", err)
@@ -712,6 +716,8 @@ func extractSOFromTarGz(r io.Reader, pluginName, destPath string) error {
 	defer gz.Close()
 
 	tr := tar.NewReader(gz)
+	var anyFile []byte
+
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
@@ -720,23 +726,29 @@ func extractSOFromTarGz(r io.Reader, pluginName, destPath string) error {
 		if err != nil {
 			return fmt.Errorf("tar: %w", err)
 		}
+		if hdr.Typeflag != tar.TypeReg {
+			continue
+		}
 
 		name := filepath.Base(hdr.Name)
-		if strings.HasSuffix(name, ".so") && strings.HasPrefix(name, pluginName) {
-			out, err := os.Create(destPath)
-			if err != nil {
-				return fmt.Errorf("create: %w", err)
-			}
-			if _, err := io.Copy(out, tr); err != nil {
-				out.Close()
-				return fmt.Errorf("write: %w", err)
-			}
-			out.Close()
-			return nil
+		data, err := io.ReadAll(tr)
+		if err != nil {
+			return fmt.Errorf("read %s: %w", name, err)
+		}
+
+		// Preferred: exact RPC binary name (e.g. "redis").
+		if name == pluginName {
+			return os.WriteFile(destPath, data, 0755)
+		}
+		if anyFile == nil && name != "" && !strings.HasPrefix(name, ".") {
+			anyFile = data
 		}
 	}
 
-	return fmt.Errorf("no .so file for %q found in archive", pluginName)
+	if anyFile != nil {
+		return os.WriteFile(destPath, anyFile, 0755)
+	}
+	return fmt.Errorf("no plugin binary %q found in archive", pluginName)
 }
 
 func findEntry(index *pluginapi.PluginIndex, name string) *pluginapi.IndexEntry {
@@ -812,9 +824,10 @@ func updateInfoPanel(core *ui.CoreView, data [][]string) {
 		if strings.Contains(row[4], "Up to date") || strings.Contains(row[4], "Update") {
 			installed++
 			name := row[1]
-			soPath := pluginapi.PluginSOPath(name)
-			if info, err := os.Stat(soPath); err == nil {
-				totalSize += info.Size()
+			if path, ok := pluginapi.InstalledPluginPath(name); ok {
+				if info, err := os.Stat(path); err == nil {
+					totalSize += info.Size()
+				}
 			}
 		}
 		if strings.Contains(row[4], "Update available") {

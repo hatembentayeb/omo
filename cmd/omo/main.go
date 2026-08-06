@@ -74,7 +74,17 @@ func main() {
 	// Global key bindings
 	// Tab cycles: plugins list → main content → actions → plugins list
 	// Shift+Tab cycles in reverse
+	// Ctrl+t opens target/instance selector for the active RPC plugin
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyCtrlT {
+			// Don't intercept while a modal page is open.
+			if front, _ := pages.GetFrontPage(); front != "" && front != "main" {
+				return event
+			}
+			omoHost.SelectTarget()
+			return nil
+		}
+
 		if event.Key() == tcell.KeyTab {
 			focus := app.GetFocus()
 			switch {
