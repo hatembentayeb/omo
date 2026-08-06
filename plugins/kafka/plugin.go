@@ -1,4 +1,4 @@
-package main
+package kafka
 
 import (
 	"time"
@@ -9,25 +9,29 @@ import (
 	"github.com/rivo/tview"
 )
 
-// KafkaPlugin represents the Kafka management plugin
-type KafkaPlugin struct {
+// Plugin is the Kafka management plugin (host-embedded UI).
+type Plugin struct {
 	Name        string
 	Description string
 	kafkaView   *KafkaView
 }
 
-// Start initializes the plugin and returns the main UI component
-func (p *KafkaPlugin) Start(app *tview.Application) tview.Primitive {
+// New returns a Kafka plugin ready for host embedding.
+func New() *Plugin {
+	return &Plugin{
+		Name:        "Kafka Manager",
+		Description: "Manage Kafka brokers, topics, and consumers",
+	}
+}
+
+// Start initializes the plugin and returns the main UI component.
+func (p *Plugin) Start(app *tview.Application) tview.Primitive {
 	pluginapi.Log().Info("starting plugin")
 	pages := tview.NewPages()
 
-	// Initialize the Kafka view
 	p.kafkaView = NewKafkaView(app, pages)
-
-	// Get the main UI component
 	mainUI := p.kafkaView.GetMainUI()
 
-	// Add keyboard handling for Ctrl+T to open cluster selector
 	pages.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyCtrlT {
 			if p.kafkaView != nil {
@@ -39,15 +43,13 @@ func (p *KafkaPlugin) Start(app *tview.Application) tview.Primitive {
 	})
 
 	pages.AddPage("kafka", mainUI, true, true)
-
-	// Set initial focus
 	app.SetFocus(p.kafkaView.cores.GetTable())
 
 	return pages
 }
 
 // GetMetadata returns plugin metadata.
-func (p *KafkaPlugin) GetMetadata() pluginapi.PluginMetadata {
+func (p *Plugin) GetMetadata() pluginapi.PluginMetadata {
 	return pluginapi.PluginMetadata{
 		Name:        "kafka",
 		Version:     "2.0.0",
@@ -61,30 +63,15 @@ func (p *KafkaPlugin) GetMetadata() pluginapi.PluginMetadata {
 	}
 }
 
-// GetMetadata is exported for legacy loaders.
-func GetMetadata() pluginapi.PluginMetadata {
-	return pluginapi.PluginMetadata{
-		Name:        "kafka",
-		Version:     "2.0.0",
-		Description: "Manage Kafka brokers, topics, and consumers",
-		Author:      "HATMAN",
-		License:     "MIT",
-		Tags:        []string{"messaging", "streaming", "broker"},
-		Arch:        []string{"amd64", "arm64"},
-		LastUpdated: time.Now(),
-		URL:         "https://github.com/hatembentayeb/ohmyops-v2/plugins/kafka",
-	}
-}
-
-// Stop cleans up resources used by the plugin
-func (p *KafkaPlugin) Stop() {
+// Stop cleans up resources used by the plugin.
+func (p *Plugin) Stop() {
 	if p.kafkaView != nil {
 		p.kafkaView.Stop()
 	}
 }
 
-// OhmyopsPlugin is exported as a variable to be loaded by the main application
-var OhmyopsPlugin KafkaPlugin
+// OhmyopsPlugin is exported for native .so loaders.
+var OhmyopsPlugin Plugin
 
 func init() {
 	OhmyopsPlugin.Name = "Kafka Manager"

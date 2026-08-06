@@ -1,4 +1,4 @@
-package main
+package argocd
 
 import (
 	"github.com/gdamore/tcell/v2"

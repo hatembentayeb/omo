@@ -1,4 +1,4 @@
-package main
+package rabbitmq
 
 import (
 	"time"
@@ -9,23 +9,29 @@ import (
 	"github.com/rivo/tview"
 )
 
-// RabbitMQPlugin represents the RabbitMQ management plugin
-type RabbitMQPlugin struct {
+// Plugin is the RabbitMQ management plugin (host-embedded UI).
+type Plugin struct {
 	Name        string
 	Description string
 	rmqView     *RabbitMQView
 }
 
-// Start initializes the plugin and returns the main UI component
-func (p *RabbitMQPlugin) Start(app *tview.Application) tview.Primitive {
+// New returns a RabbitMQ plugin ready for host embedding.
+func New() *Plugin {
+	return &Plugin{
+		Name:        "RabbitMQ Manager",
+		Description: "Manage RabbitMQ queues, exchanges, bindings, and connections",
+	}
+}
+
+// Start initializes the plugin and returns the main UI component.
+func (p *Plugin) Start(app *tview.Application) tview.Primitive {
 	pluginapi.Log().Info("starting plugin")
 	pages := tview.NewPages()
 
 	p.rmqView = NewRabbitMQView(app, pages)
-
 	mainUI := p.rmqView.GetMainUI()
 
-	// Add keyboard handling for Ctrl+T to open instance selector
 	pages.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyCtrlT {
 			if p.rmqView != nil {
@@ -37,15 +43,13 @@ func (p *RabbitMQPlugin) Start(app *tview.Application) tview.Primitive {
 	})
 
 	pages.AddPage("rabbitmq", mainUI, true, true)
-
-	// Set initial focus
 	app.SetFocus(p.rmqView.cores.GetTable())
 
 	return pages
 }
 
 // GetMetadata returns plugin metadata.
-func (p *RabbitMQPlugin) GetMetadata() pluginapi.PluginMetadata {
+func (p *Plugin) GetMetadata() pluginapi.PluginMetadata {
 	return pluginapi.PluginMetadata{
 		Name:        "rabbitmq",
 		Version:     "1.0.0",
@@ -59,30 +63,15 @@ func (p *RabbitMQPlugin) GetMetadata() pluginapi.PluginMetadata {
 	}
 }
 
-// GetMetadata is exported for legacy loaders.
-func GetMetadata() pluginapi.PluginMetadata {
-	return pluginapi.PluginMetadata{
-		Name:        "rabbitmq",
-		Version:     "1.0.0",
-		Description: "Manage RabbitMQ queues, exchanges, bindings, and connections",
-		Author:      "HATMAN",
-		License:     "MIT",
-		Tags:        []string{"messaging", "broker", "amqp"},
-		Arch:        []string{"amd64", "arm64"},
-		LastUpdated: time.Now(),
-		URL:         "https://github.com/ohmyops/omo-rabbitmq",
-	}
-}
-
-// Stop cleans up resources used by the plugin
-func (p *RabbitMQPlugin) Stop() {
+// Stop cleans up resources used by the plugin.
+func (p *Plugin) Stop() {
 	if p.rmqView != nil {
 		p.rmqView.Stop()
 	}
 }
 
-// OhmyopsPlugin is exported as a variable to be loaded by the main application
-var OhmyopsPlugin RabbitMQPlugin
+// OhmyopsPlugin is exported for native .so loaders.
+var OhmyopsPlugin Plugin
 
 func init() {
 	OhmyopsPlugin.Name = "RabbitMQ Manager"

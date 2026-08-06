@@ -10,7 +10,8 @@ description: >-
 
 # OMO RPC Plugin Migration
 
-Reference implementation: `plugins/redis` (`Service` + `service_views.go` + `cmd/redis`).
+Reference implementation: any plugin under `plugins/*/service.go` (redis was the pilot).
+All shipped plugins are in `RPC_PLUGINS` in the Makefile.
 Host UI is shared — do **not** reimplement CoreView inside the plugin process.
 
 ## Architecture (required)

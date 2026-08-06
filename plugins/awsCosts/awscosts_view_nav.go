@@ -1,4 +1,4 @@
-package main
+package awscosts
 
 import (
 	"omo/pkg/ui"

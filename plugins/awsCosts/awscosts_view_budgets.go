@@ -1,4 +1,4 @@
-package main
+package awscosts
 
 import (
 	"fmt"

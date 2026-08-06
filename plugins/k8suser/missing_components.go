@@ -1,4 +1,4 @@
-package main
+package k8suser
 
 import (
 	"omo/pkg/ui"

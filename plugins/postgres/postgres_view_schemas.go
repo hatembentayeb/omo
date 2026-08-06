@@ -1,4 +1,4 @@
-package main
+package postgres
 
 import (
 	"omo/pkg/ui"

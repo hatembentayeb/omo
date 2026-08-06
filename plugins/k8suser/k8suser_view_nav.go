@@ -1,4 +1,4 @@
-package main
+package k8suser
 
 const (
 	k8sViewRoot  = "k8suser"

@@ -2,7 +2,6 @@ package host
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -399,28 +398,20 @@ func resolvePluginConfig(pluginName string) (map[string]string, error) {
 }
 
 func entryToSettings(entry *pluginapi.SecretEntry) map[string]string {
-	port := "6379"
-	database := "0"
-	if entry.CustomAttributes != nil {
-		if v := entry.CustomAttributes["port"]; v != "" {
-			port = v
-		}
-		if v := entry.CustomAttributes["database"]; v != "" {
-			database = v
-		}
-	}
-	if _, err := strconv.Atoi(port); err != nil {
-		port = "6379"
-	}
-	if _, err := strconv.Atoi(database); err != nil {
-		database = "0"
-	}
-	return map[string]string{
+	settings := map[string]string{
 		"name":     entry.Title,
 		"host":     entry.URL,
-		"port":     port,
+		"url":      entry.URL,
 		"username": entry.UserName,
 		"password": entry.Password,
-		"database": database,
+		"notes":    entry.Notes,
 	}
+	if entry.CustomAttributes != nil {
+		for k, v := range entry.CustomAttributes {
+			settings[k] = v
+		}
+	}
+	// Pass attributes through as-is. Each plugin's Configure applies its own
+	// defaults (redis db index, postgres db name, rabbitmq ports, etc.).
+	return settings
 }
