@@ -8,8 +8,11 @@ on:
       - '**.go'
       - 'go.mod'
       - 'go.sum'
+      - 'Makefile'
+      - 'plugins.meta.yaml'
+      - 'scripts/generate-index.sh'
+      - '.github/workflows/release.yml'
 
-# Permissions needed for creating releases
 permissions:
   contents: write
 
@@ -37,11 +40,6 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "Version: $VERSION"
 
-      - name: Set up cross-compilation tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-mingw-w64 gcc-aarch64-linux-gnu
-
       - name: Install yq
         run: |
           sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
@@ -55,13 +53,13 @@ jobs:
           mkdir -p dist
           LDFLAGS="-X main.Version=${{ env.VERSION }}"
           # Linux
-          GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/omo-${{ env.VERSION }}-linux-amd64 ./cmd/omo
-          GOOS=linux GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/omo-${{ env.VERSION }}-linux-arm64 ./cmd/omo
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/omo-${{ env.VERSION }}-linux-amd64 ./cmd/omo
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/omo-${{ env.VERSION }}-linux-arm64 ./cmd/omo
           # macOS (Intel + Apple Silicon)
-          GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/omo-${{ env.VERSION }}-darwin-amd64 ./cmd/omo
-          GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/omo-${{ env.VERSION }}-darwin-arm64 ./cmd/omo
+          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/omo-${{ env.VERSION }}-darwin-amd64 ./cmd/omo
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/omo-${{ env.VERSION }}-darwin-arm64 ./cmd/omo
           # Windows
-          GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/omo-${{ env.VERSION }}-windows-amd64.exe ./cmd/omo
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/omo-${{ env.VERSION }}-windows-amd64.exe ./cmd/omo
           # Compress binaries
           cd dist
           for file in *; do
@@ -70,27 +68,45 @@ jobs:
           done
           cd ..
 
-      - name: Build RPC plugins for Linux (amd64 + arm64)
+      - name: Build RPC plugins
         run: |
+          set -euo pipefail
           mkdir -p dist/plugins/staging
-          for plugin_dir in plugins/*; do
-            if [ ! -d "$plugin_dir" ]; then
-              continue
-            fi
-            plugin_name=$(basename "$plugin_dir")
+
+          # Source of truth: plugins.meta.yaml (must match Makefile RPC_PLUGINS).
+          # Strip quotes for compatibility across yq v3/v4.
+          mapfile -t PLUGINS < <(yq '.plugins | keys | .[]' plugins.meta.yaml | tr -d '"')
+          if [ ${#PLUGINS[@]} -eq 0 ]; then
+            echo "ERROR: no plugins listed in plugins.meta.yaml" >&2
+            exit 1
+          fi
+
+          # Same platforms the package manager resolves via runtime.GOOS/GOARCH.
+          TARGETS=(
+            "linux/amd64"
+            "linux/arm64"
+            "darwin/amd64"
+            "darwin/arm64"
+            "windows/amd64"
+          )
+
+          for plugin_name in "${PLUGINS[@]}"; do
             cmd_path="./plugins/${plugin_name}/cmd/${plugin_name}"
             if [ ! -d "$cmd_path" ]; then
-              echo "SKIP $plugin_name (no cmd/${plugin_name})"
-              continue
+              echo "ERROR: missing RPC entrypoint $cmd_path" >&2
+              exit 1
             fi
-            for arch in amd64 arm64; do
-              echo "Building RPC plugin: $plugin_name (linux-$arch)"
-              stage="dist/plugins/staging/${plugin_name}-linux-${arch}"
+            for target in "${TARGETS[@]}"; do
+              os="${target%/*}"
+              arch="${target#*/}"
+              echo "Building RPC plugin: $plugin_name ($os-$arch)"
+              stage="dist/plugins/staging/${plugin_name}-${os}-${arch}"
               mkdir -p "$stage"
-              CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build \
+              # Archive member must be named <plugin> so extractPluginFromTarGz finds it.
+              CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build \
                 -o "${stage}/${plugin_name}" \
                 "$cmd_path"
-              tar -C "$stage" -czf "dist/plugins/${plugin_name}-${{ env.VERSION }}-linux-${arch}.tar.gz" "${plugin_name}"
+              tar -C "$stage" -czf "dist/plugins/${plugin_name}-${{ env.VERSION }}-${os}-${arch}.tar.gz" "${plugin_name}"
               rm -rf "$stage"
             done
           done

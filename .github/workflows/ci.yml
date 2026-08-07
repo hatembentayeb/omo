@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  pull_request:
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Makefile'
+      - 'plugins.meta.yaml'
+      - 'scripts/**'
+      - '.github/workflows/**'
+  push:
+    branches:
+      - feat/**
+      - fix/**
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Makefile'
+      - 'plugins.meta.yaml'
+      - 'scripts/**'
+      - '.github/workflows/**'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          check-latest: true
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Tidy modules
+        run: go mod tidy
+
+      - name: Build host
+        run: CGO_ENABLED=0 go build -o /tmp/omo ./cmd/omo
+
+      - name: Build all RPC plugins
+        run: |
+          set -euo pipefail
+          mapfile -t PLUGINS < <(yq '.plugins | keys | .[]' plugins.meta.yaml | tr -d '"')
+          for plugin_name in "${PLUGINS[@]}"; do
+            cmd_path="./plugins/${plugin_name}/cmd/${plugin_name}"
+            if [ ! -d "$cmd_path" ]; then
+              echo "ERROR: missing RPC entrypoint $cmd_path" >&2
+              exit 1
+            fi
+            echo "Building $plugin_name"
+            CGO_ENABLED=0 go build -o "/tmp/omo-plugin-${plugin_name}" "$cmd_path"
+          done
+
+      - name: Cross-compile sample RPC plugin (linux/darwin/windows)
+        run: |
+          set -euo pipefail
+          sample=redis
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do
+            os="${target%/*}"
+            arch="${target#*/}"
+            echo "cross $sample $os/$arch"
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build \
+              -o "/tmp/omo-${sample}-${os}-${arch}" \
+              "./plugins/${sample}/cmd/${sample}"
+          done

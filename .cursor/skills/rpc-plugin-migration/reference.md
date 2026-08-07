@@ -38,8 +38,11 @@ RPC_PLUGINS := redis docker …   # all plugins
 
 Install path: `~/.omo/plugins/<name>/<name>` (executable).
 
-CI (`.github/workflows/release.yml`) builds `./plugins/<name>/cmd/<name>` into
-`{name}-{VERSION}-linux-{amd64,arm64}.tar.gz` (binary named `<name>` inside).
+CI (`.github/workflows/release.yml`) builds `./plugins/<name>/cmd/<name>` with
+`CGO_ENABLED=0` for linux/darwin/windows into
+`{name}-{VERSION}-{os}-{arch}.tar.gz` (archive member named `<name>`).
+`scripts/generate-index.sh` writes checksums for each platform.
+PR builds use `.github/workflows/ci.yml`.
 Package Manager extracts to `PluginBinPath`.
 
 ## Logs
