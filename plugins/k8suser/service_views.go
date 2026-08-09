@@ -74,32 +74,24 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 
 func (s *Service) k8sViewUsersLocked() (pluginrpc.ViewData, error) {
 	if s.client.CurrentContext == "" {
-		return ui.Decorate(pluginrpc.StatusErrorView(
-			k8sViewUsers, "K8s Users", s.baseInfo("No context configured"),
-			"not configured", "Configure kubeconfig/context via host secrets",
-		), usersActions()...), nil
+		return ui.StatusError(k8sViewUsers, "K8s Users", s.baseInfo("No context configured"),
+			"not configured", "Configure kubeconfig/context via host secrets", usersActions()...), nil
 	}
 
 	users, err := s.client.GetUsers()
 	if err != nil {
-		return ui.Decorate(pluginrpc.StatusErrorView(
-			k8sViewUsers, "K8s Users", s.baseInfo(err.Error()),
-			"error", err.Error(),
-		), usersActions()...), nil
+		return ui.StatusError(k8sViewUsers, "K8s Users", s.baseInfo(err.Error()),
+			"error", err.Error(), usersActions()...), nil
 	}
 
 	rows := make([][]string, 0, len(users))
 	for _, u := range users {
 		rows = append(rows, []string{u.Username, u.CertExpiry, u.Namespace, u.Roles})
 	}
-	if len(rows) == 0 {
-		rows = [][]string{{"No certificate-based users found", "Use create_user", "", ""}}
-	}
+	rows = pluginrpc.EnsureRows(rows, []string{"No certificate-based users found", "Use create_user", "", ""})
 
-	return ui.Decorate(pluginrpc.Table(
-		k8sViewUsers, "K8s Users", s.baseInfo(fmt.Sprintf("Users: %d", len(users))), "ok",
-		[]string{"Username", "Certificate Expiry", "Namespaces", "Roles"}, rows, "Username",
-	), usersActions()...), nil
+	return ui.OK(k8sViewUsers, "K8s Users", s.baseInfo(fmt.Sprintf("Users: %d", len(users))),
+		[]string{"Username", "Certificate Expiry", "Namespaces", "Roles"}, rows, "Username", usersActions()...), nil
 }
 
 func (s *Service) k8sViewRolesLocked() (pluginrpc.ViewData, error) {
@@ -107,10 +99,8 @@ func (s *Service) k8sViewRolesLocked() (pluginrpc.ViewData, error) {
 	if err != nil {
 		return pluginrpc.ViewData{}, err
 	}
-	return ui.Decorate(pluginrpc.Table(
-		k8sViewRoles, "K8s Roles", s.baseInfo(fmt.Sprintf("Roles: %d", len(rows))), "ok",
-		[]string{"Name", "Namespace", "Resources"}, rows, "Name",
-	), rolesActions()...), nil
+	return ui.OK(k8sViewRoles, "K8s Roles", s.baseInfo(fmt.Sprintf("Roles: %d", len(rows))),
+		[]string{"Name", "Namespace", "Resources"}, rows, "Name", rolesActions()...), nil
 }
 
 func (s *Service) fetchRolesLocked() ([][]string, error) {

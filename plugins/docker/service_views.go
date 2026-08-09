@@ -112,11 +112,7 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	s.currentView = viewID
 
 	if s.client == nil || !s.client.IsConnected() {
-		return ui.Decorate(pluginrpc.StatusErrorView(
-			viewID, "Docker Manager",
-			"[yellow]Docker Manager[white]\nStatus: Not Connected",
-			"not connected", "not connected — Configure with a docker host",
-		)), nil
+		return ui.NotConnected(viewID, "Docker Manager", "not connected — Configure with a docker host"), nil
 	}
 
 	switch viewID {
@@ -142,22 +138,8 @@ func (s *Service) viewContainersLocked() (pluginrpc.ViewData, error) {
 	if err != nil {
 		return pluginrpc.ViewData{}, err
 	}
-	rows := make([][]string, 0, len(list))
-	for i := range list {
-		rows = append(rows, list[i].GetTableRow())
-	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "-", "-", "No containers", "-"})
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         viewContainers,
-		Title:        "Docker Containers",
-		Info:         s.baseInfo(fmt.Sprintf("Containers: %d", len(list))),
-		Status:       "connected",
-		Headers:      []string{"ID", "Name", "Image", "State", "Status", "Ports"},
-		Rows:         rows,
-		SelectionKey: "ID",
-	}, containersActions()...), nil
+	rows := pluginrpc.EnsureRows(pluginrpc.MapRows(list, func(c DockerContainer) []string { return c.GetTableRow() }), []string{"-", "-", "-", "-", "No containers", "-"})
+	return ui.Connected(viewContainers, "Docker Containers", s.baseInfo(fmt.Sprintf("Containers: %d", len(list))), []string{"ID", "Name", "Image", "State", "Status", "Ports"}, rows, "ID", containersActions()...), nil
 }
 
 func (s *Service) viewImagesLocked() (pluginrpc.ViewData, error) {
@@ -165,22 +147,8 @@ func (s *Service) viewImagesLocked() (pluginrpc.ViewData, error) {
 	if err != nil {
 		return pluginrpc.ViewData{}, err
 	}
-	rows := make([][]string, 0, len(list))
-	for i := range list {
-		rows = append(rows, list[i].GetTableRow())
-	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "-", "-", "No images"})
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         viewImages,
-		Title:        "Docker Images",
-		Info:         s.baseInfo(fmt.Sprintf("Images: %d", len(list))),
-		Status:       "connected",
-		Headers:      []string{"ID", "Repository", "Tag", "Size", "Created"},
-		Rows:         rows,
-		SelectionKey: "ID",
-	}, imagesActions()...), nil
+	rows := pluginrpc.EnsureRows(pluginrpc.MapRows(list, func(img DockerImage) []string { return img.GetTableRow() }), []string{"-", "-", "-", "-", "No images"})
+	return ui.Connected(viewImages, "Docker Images", s.baseInfo(fmt.Sprintf("Images: %d", len(list))), []string{"ID", "Repository", "Tag", "Size", "Created"}, rows, "ID", imagesActions()...), nil
 }
 
 func (s *Service) viewNetworksLocked() (pluginrpc.ViewData, error) {
@@ -196,18 +164,8 @@ func (s *Service) viewNetworksLocked() (pluginrpc.ViewData, error) {
 		}
 		rows = append(rows, []string{id, n.Name, n.Driver, n.Scope, n.Subnet, n.Gateway})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "-", "-", "-", "No networks"})
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         viewNetworks,
-		Title:        "Docker Networks",
-		Info:         s.baseInfo(fmt.Sprintf("Networks: %d", len(list))),
-		Status:       "connected",
-		Headers:      []string{"ID", "Name", "Driver", "Scope", "Subnet", "Gateway"},
-		Rows:         rows,
-		SelectionKey: "ID",
-	}, networksActions()...), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "-", "-", "No networks"})
+	return ui.Connected(viewNetworks, "Docker Networks", s.baseInfo(fmt.Sprintf("Networks: %d", len(list))), []string{"ID", "Name", "Driver", "Scope", "Subnet", "Gateway"}, rows, "ID", networksActions()...), nil
 }
 
 func (s *Service) viewVolumesLocked() (pluginrpc.ViewData, error) {
@@ -223,18 +181,8 @@ func (s *Service) viewVolumesLocked() (pluginrpc.ViewData, error) {
 		}
 		rows = append(rows, []string{v.Name, v.Driver, v.Mountpoint, v.Scope, created})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "-", "-", "No volumes"})
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         viewVolumes,
-		Title:        "Docker Volumes",
-		Info:         s.baseInfo(fmt.Sprintf("Volumes: %d", len(list))),
-		Status:       "connected",
-		Headers:      []string{"Name", "Driver", "Mountpoint", "Scope", "Created"},
-		Rows:         rows,
-		SelectionKey: "Name",
-	}, volumesActions()...), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "-", "No volumes"})
+	return ui.Connected(viewVolumes, "Docker Volumes", s.baseInfo(fmt.Sprintf("Volumes: %d", len(list))), []string{"Name", "Driver", "Mountpoint", "Scope", "Created"}, rows, "Name", volumesActions()...), nil
 }
 
 func (s *Service) viewStatsLocked() (pluginrpc.ViewData, error) {
@@ -246,18 +194,8 @@ func (s *Service) viewStatsLocked() (pluginrpc.ViewData, error) {
 	for _, st := range stats {
 		rows = append(rows, []string{st.Name, st.CPUPercent, st.MemoryUsage, st.MemoryPercent, st.NetIO, st.BlockIO, st.PIDs})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "-", "-", "-", "-", "No running containers"})
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         viewStats,
-		Title:        "Docker Stats",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"Container", "CPU %", "Memory", "Mem %", "Net I/O", "Block I/O", "PIDs"},
-		Rows:         rows,
-		SelectionKey: "Container",
-	}), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "-", "-", "-", "No running containers"})
+	return ui.Connected(viewStats, "Docker Stats", s.baseInfo(""), []string{"Container", "CPU %", "Memory", "Mem %", "Net I/O", "Block I/O", "PIDs"}, rows, "Container"), nil
 }
 
 func (s *Service) viewComposeLocked() (pluginrpc.ViewData, error) {
@@ -275,18 +213,8 @@ func (s *Service) viewComposeLocked() (pluginrpc.ViewData, error) {
 			p.ConfigFile,
 		})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "0", "0", "No compose projects"})
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         viewCompose,
-		Title:        "Docker Compose",
-		Info:         s.baseInfo(fmt.Sprintf("Projects: %d", len(projects))),
-		Status:       "connected",
-		Headers:      []string{"Project", "Status", "Services", "Running", "Config"},
-		Rows:         rows,
-		SelectionKey: "Project",
-	}, composeActions()...), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "0", "0", "No compose projects"})
+	return ui.Connected(viewCompose, "Docker Compose", s.baseInfo(fmt.Sprintf("Projects: %d", len(projects))), []string{"Project", "Status", "Services", "Running", "Config"}, rows, "Project", composeActions()...), nil
 }
 
 func (s *Service) viewSystemLocked() (pluginrpc.ViewData, error) {
@@ -311,13 +239,5 @@ func (s *Service) viewSystemLocked() (pluginrpc.ViewData, error) {
 		{"Root Dir", info.DockerRootDir},
 		{"Swarm", info.SwarmStatus},
 	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         viewSystem,
-		Title:        "Docker System",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"Property", "Value"},
-		Rows:         rows,
-		SelectionKey: "Property",
-	}, systemActions()...), nil
+	return ui.Connected(viewSystem, "Docker System", s.baseInfo(""), []string{"Property", "Value"}, rows, "Property", systemActions()...), nil
 }

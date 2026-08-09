@@ -49,6 +49,31 @@ func (u ViewUI) Decorate(view ViewData, actions ...KeyBinding) ViewData {
 	return Decorate(view, views, more, help, actions...)
 }
 
+// Table builds a decorated table view with an explicit status.
+func (u ViewUI) Table(viewID, title, info, status string, headers []string, rows [][]string, sel string, actions ...KeyBinding) ViewData {
+	return u.Decorate(Table(viewID, title, info, status, headers, rows, sel), actions...)
+}
+
+// Connected builds a decorated table with status "connected".
+func (u ViewUI) Connected(viewID, title, info string, headers []string, rows [][]string, sel string, actions ...KeyBinding) ViewData {
+	return u.Table(viewID, title, info, "connected", headers, rows, sel, actions...)
+}
+
+// OK builds a decorated table with status "ok".
+func (u ViewUI) OK(viewID, title, info string, headers []string, rows [][]string, sel string, actions ...KeyBinding) ViewData {
+	return u.Table(viewID, title, info, "ok", headers, rows, sel, actions...)
+}
+
+// StatusError decorates a Status/Detail error table.
+func (u ViewUI) StatusError(viewID, title, info, status, detail string, actions ...KeyBinding) ViewData {
+	return u.Decorate(StatusErrorView(viewID, title, info, status, detail), actions...)
+}
+
+// NotConnected is the standard yellow disconnect panel.
+func (u ViewUI) NotConnected(viewID, brand, detail string, actions ...KeyBinding) ViewData {
+	return u.StatusError(viewID, brand, NotConnectedInfo(brand, detail), "not connected", detail, actions...)
+}
+
 // Decorate wires Views / overflow KeyBindings / Actions / HelpSections onto a view
 // snapshot. moreViews may be nil when all views fit on digits 0-9.
 func Decorate(view ViewData, views, moreViews []KeyBinding, help []HelpSection, actions ...KeyBinding) ViewData {
@@ -66,6 +91,15 @@ func FormatInfo(base, extra string) string {
 		return base
 	}
 	return base + "\n" + extra
+}
+
+// NotConnectedInfo builds the standard yellow "Not Connected" info panel.
+func NotConnectedInfo(brand, detail string) string {
+	msg := "[yellow]" + brand + "[white]\nStatus: Not Connected"
+	if detail == "" {
+		return msg
+	}
+	return msg + "\n" + detail
 }
 
 // Table builds a standard selectable table ViewData.
@@ -101,6 +135,20 @@ func EnsureRows(rows [][]string, placeholder []string) [][]string {
 	return rows
 }
 
+// DashRow builds a placeholder row of cols cells with message in the last cell
+// (or msgCol when msgCol >= 0).
+func DashRow(cols int, message string) []string {
+	row := make([]string, cols)
+	for i := range row {
+		row[i] = "-"
+	}
+	if cols == 0 {
+		return row
+	}
+	row[cols-1] = message
+	return row
+}
+
 // SortedKVRows returns alphabetically sorted key/value table rows.
 func SortedKVRows(m map[string]string) [][]string {
 	keys := make([]string, 0, len(m))
@@ -115,7 +163,16 @@ func SortedKVRows(m map[string]string) [][]string {
 	return rows
 }
 
-// Truncate shortens s to max runes with an ellipsis when needed.
+// MapRows maps items to table rows.
+func MapRows[T any](items []T, fn func(T) []string) [][]string {
+	rows := make([][]string, 0, len(items))
+	for _, item := range items {
+		rows = append(rows, fn(item))
+	}
+	return rows
+}
+
+// Truncate shortens s to max bytes with an ellipsis when needed.
 func Truncate(s string, max int) string {
 	if max <= 0 || len(s) <= max {
 		return s

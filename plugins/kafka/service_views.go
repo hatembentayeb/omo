@@ -87,11 +87,7 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	s.currentView = viewID
 
 	if err := s.ensureConnectedLocked(); err != nil {
-		return ui.Decorate(pluginrpc.StatusErrorView(
-			viewID, "Kafka Manager",
-			"[yellow]Kafka Manager[white]\nStatus: Not Connected\n"+err.Error(),
-			"not connected", err.Error(),
-		)), nil
+		return ui.NotConnected(viewID, "Kafka Manager", err.Error()), nil
 	}
 
 	switch viewID {
@@ -125,18 +121,8 @@ func (s *Service) viewBrokersLocked() (pluginrpc.ViewData, error) {
 			controller,
 		})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"No brokers found", "", ""})
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         kafkaViewBrokers,
-		Title:        "Kafka Brokers",
-		Info:         s.baseInfo(fmt.Sprintf("Brokers: %d", len(brokers))),
-		Status:       "connected",
-		Headers:      []string{"ID", "Address", "Controller"},
-		Rows:         rows,
-		SelectionKey: "ID",
-	}, brokersActions()...), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"No brokers found", "", ""})
+	return ui.Connected(kafkaViewBrokers, "Kafka Brokers", s.baseInfo(fmt.Sprintf("Brokers: %d", len(brokers))), []string{"ID", "Address", "Controller"}, rows, "ID", brokersActions()...), nil
 }
 
 func (s *Service) viewTopicsLocked() (pluginrpc.ViewData, error) {
@@ -157,18 +143,8 @@ func (s *Service) viewTopicsLocked() (pluginrpc.ViewData, error) {
 			internal,
 		})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"No topics found", "", "", ""})
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         kafkaViewTopics,
-		Title:        "Kafka Topics",
-		Info:         s.baseInfo(fmt.Sprintf("Topics: %d", len(topics))),
-		Status:       "connected",
-		Headers:      []string{"Name", "Partitions", "Replication", "Internal"},
-		Rows:         rows,
-		SelectionKey: "Name",
-	}, topicsActions()...), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"No topics found", "", "", ""})
+	return ui.Connected(kafkaViewTopics, "Kafka Topics", s.baseInfo(fmt.Sprintf("Topics: %d", len(topics))), []string{"Name", "Partitions", "Replication", "Internal"}, rows, "Name", topicsActions()...), nil
 }
 
 func (s *Service) viewConsumersLocked() (pluginrpc.ViewData, error) {
@@ -186,31 +162,13 @@ func (s *Service) viewConsumersLocked() (pluginrpc.ViewData, error) {
 			group.ProtocolType,
 		})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"No consumer groups found", "", "", "", ""})
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         kafkaViewConsumers,
-		Title:        "Kafka Consumers",
-		Info:         s.baseInfo(fmt.Sprintf("Consumer Groups: %d", len(groups))),
-		Status:       "connected",
-		Headers:      []string{"Group ID", "State", "Members", "Protocol", "Protocol Type"},
-		Rows:         rows,
-		SelectionKey: "Group ID",
-	}, consumersActions()...), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"No consumer groups found", "", "", "", ""})
+	return ui.Connected(kafkaViewConsumers, "Kafka Consumers", s.baseInfo(fmt.Sprintf("Consumer Groups: %d", len(groups))), []string{"Group ID", "State", "Members", "Protocol", "Protocol Type"}, rows, "Group ID", consumersActions()...), nil
 }
 
 func (s *Service) viewPartitionsLocked() (pluginrpc.ViewData, error) {
 	if s.selectedTopic == "" {
-		return ui.Decorate(pluginrpc.ViewData{
-			View:         kafkaViewPartitions,
-			Title:        "Kafka Partitions",
-			Info:         s.baseInfo(""),
-			Status:       "connected",
-			Headers:      []string{"Partition", "Leader", "Replicas", "ISR", "Oldest", "Newest", "Messages"},
-			Rows:         [][]string{{"No topic selected", "Press 1 then P on a topic", "", "", "", "", ""}},
-			SelectionKey: "Partition",
-		}), nil
+		return ui.Connected(kafkaViewPartitions, "Kafka Partitions", s.baseInfo(""), []string{"Partition", "Leader", "Replicas", "ISR", "Oldest", "Newest", "Messages"}, [][]string{{"No topic selected", "Press 1 then P on a topic", "", "", "", "", ""}}, "Partition"), nil
 	}
 	partitions, err := s.client.GetTopicPartitions(s.selectedTopic)
 	if err != nil {
@@ -232,31 +190,13 @@ func (s *Service) viewPartitionsLocked() (pluginrpc.ViewData, error) {
 			formatLargeNumber(messages),
 		})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"No partitions found", "", "", "", "", "", ""})
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         kafkaViewPartitions,
-		Title:        "Kafka Partitions",
-		Info:         s.baseInfo(fmt.Sprintf("Partitions: %d", len(partitions))),
-		Status:       "connected",
-		Headers:      []string{"Partition", "Leader", "Replicas", "ISR", "Oldest", "Newest", "Messages"},
-		Rows:         rows,
-		SelectionKey: "Partition",
-	}, partitionsActions()...), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"No partitions found", "", "", "", "", "", ""})
+	return ui.Connected(kafkaViewPartitions, "Kafka Partitions", s.baseInfo(fmt.Sprintf("Partitions: %d", len(partitions))), []string{"Partition", "Leader", "Replicas", "ISR", "Oldest", "Newest", "Messages"}, rows, "Partition", partitionsActions()...), nil
 }
 
 func (s *Service) viewMessagesLocked() (pluginrpc.ViewData, error) {
 	if s.selectedTopic == "" {
-		return ui.Decorate(pluginrpc.ViewData{
-			View:         kafkaViewMessages,
-			Title:        "Kafka Messages",
-			Info:         s.baseInfo(""),
-			Status:       "connected",
-			Headers:      []string{"Partition", "Offset", "Key", "Value", "Timestamp"},
-			Rows:         [][]string{{"No topic selected", "Press 1 then M on a topic", "", "", ""}},
-			SelectionKey: "Offset",
-		}), nil
+		return ui.Connected(kafkaViewMessages, "Kafka Messages", s.baseInfo(""), []string{"Partition", "Offset", "Key", "Value", "Timestamp"}, [][]string{{"No topic selected", "Press 1 then M on a topic", "", "", ""}}, "Offset"), nil
 	}
 	messages, err := s.client.ConsumeMessages(s.selectedTopic, 100)
 	if err != nil {
@@ -286,16 +226,6 @@ func (s *Service) viewMessagesLocked() (pluginrpc.ViewData, error) {
 			ts,
 		})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"No messages found", "", "", "", ""})
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         kafkaViewMessages,
-		Title:        "Kafka Messages",
-		Info:         s.baseInfo(fmt.Sprintf("Messages: %d (latest)", len(messages))),
-		Status:       "connected",
-		Headers:      []string{"Partition", "Offset", "Key", "Value", "Timestamp"},
-		Rows:         rows,
-		SelectionKey: "Offset",
-	}, messagesActions()...), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"No messages found", "", "", "", ""})
+	return ui.Connected(kafkaViewMessages, "Kafka Messages", s.baseInfo(fmt.Sprintf("Messages: %d (latest)", len(messages))), []string{"Partition", "Offset", "Key", "Value", "Timestamp"}, rows, "Offset", messagesActions()...), nil
 }

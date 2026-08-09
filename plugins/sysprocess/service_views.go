@@ -107,36 +107,15 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 }
 
 func (s *Service) viewProcessesLocked() (pluginrpc.ViewData, error) {
-	rows := make([][]string, 0, len(s.processes))
-	for _, p := range s.processes {
-		rows = append(rows, p.GetTableRow())
-	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "-", "0", "0", "-", "-", "No processes"})
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         viewProcesses,
-		Title:        "User Processes",
-		Info:         s.baseInfo(""),
-		Status:       "ok",
-		Headers:      []string{"PID", "Name", "User", "CPU%", "Mem%", "Source", "Status", "Started"},
-		Rows:         rows,
-		SelectionKey: "PID",
-	}, processesActions()...), nil
+	rows := pluginrpc.MapRows(s.processes, func(p *UserProcess) []string { return p.GetTableRow() })
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "0", "0", "-", "-", "No processes"})
+	return ui.OK(viewProcesses, "User Processes", s.baseInfo(""), []string{"PID", "Name", "User", "CPU%", "Mem%", "Source", "Status", "Started"}, rows, "PID", processesActions()...), nil
 }
 
 func (s *Service) viewDetailsLocked() (pluginrpc.ViewData, error) {
 	p := s.detailsProcess
 	if p == nil {
-		return ui.Decorate(pluginrpc.ViewData{
-			View:         viewDetails,
-			Title:        "Why Is This Running?",
-			Info:         s.baseInfo(""),
-			Status:       "ok",
-			Headers:      []string{"Property", "Value"},
-			Rows:         [][]string{{"", "[yellow]No process selected. Press 0 and select one, then W."}},
-			SelectionKey: "Property",
-		}), nil
+		return ui.OK(viewDetails, "Why Is This Running?", s.baseInfo(""), []string{"Property", "Value"}, [][]string{{"", "[yellow]No process selected. Press 0 and select one, then W."}}, "Property"), nil
 	}
 
 	var data [][]string
@@ -194,15 +173,7 @@ func (s *Service) viewDetailsLocked() (pluginrpc.ViewData, error) {
 		}
 	}
 
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         viewDetails,
-		Title:        "Why Is This Running?",
-		Info:         s.baseInfo(fmt.Sprintf("PID %d", p.PID)),
-		Status:       "ok",
-		Headers:      []string{"Property", "Value"},
-		Rows:         data,
-		SelectionKey: "Property",
-	}), nil
+	return ui.OK(viewDetails, "Why Is This Running?", s.baseInfo(fmt.Sprintf("PID %d", p.PID)), []string{"Property", "Value"}, data, "Property"), nil
 }
 
 func (s *Service) viewPortsLocked() (pluginrpc.ViewData, error) {
@@ -265,15 +236,7 @@ func (s *Service) viewPortsLocked() (pluginrpc.ViewData, error) {
 	if len(data) == 0 {
 		data = append(data, []string{"-", "-", "-", "No listening ports", "-"})
 	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         viewPorts,
-		Title:        "Listening Ports",
-		Info:         s.baseInfo(""),
-		Status:       "ok",
-		Headers:      []string{"PID", "Name", "User", "Address", "Source"},
-		Rows:         data,
-		SelectionKey: "PID",
-	}, portsActions()...), nil
+	return ui.OK(viewPorts, "Listening Ports", s.baseInfo(""), []string{"PID", "Name", "User", "Address", "Source"}, data, "PID", portsActions()...), nil
 }
 
 func (s *Service) viewWarningsLocked() (pluginrpc.ViewData, error) {
@@ -295,15 +258,7 @@ func (s *Service) viewWarningsLocked() (pluginrpc.ViewData, error) {
 	if len(data) == 0 {
 		data = append(data, []string{"", "", "[green]No warnings — all processes look healthy", ""})
 	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         viewWarnings,
-		Title:        "Process Warnings",
-		Info:         s.baseInfo(""),
-		Status:       "ok",
-		Headers:      []string{"PID", "Name", "Warning", "Details"},
-		Rows:         data,
-		SelectionKey: "PID",
-	}, warningsActions()...), nil
+	return ui.OK(viewWarnings, "Process Warnings", s.baseInfo(""), []string{"PID", "Name", "Warning", "Details"}, data, "PID", warningsActions()...), nil
 }
 
 func (s *Service) viewMetricsLocked() (pluginrpc.ViewData, error) {
@@ -369,15 +324,7 @@ func (s *Service) viewMetricsLocked() (pluginrpc.ViewData, error) {
 	data = append(data, []string{"", ""})
 	data = append(data, []string{"User Processes", fmt.Sprintf("%d", len(s.processes))})
 
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         viewMetrics,
-		Title:        "System Metrics",
-		Info:         s.baseInfo(""),
-		Status:       "ok",
-		Headers:      []string{"Metric", "Value"},
-		Rows:         data,
-		SelectionKey: "Metric",
-	}), nil
+	return ui.OK(viewMetrics, "System Metrics", s.baseInfo(""), []string{"Metric", "Value"}, data, "Metric"), nil
 }
 
 func (s *Service) viewDiskLocked() (pluginrpc.ViewData, error) {
@@ -398,18 +345,8 @@ func (s *Service) viewDiskLocked() (pluginrpc.ViewData, error) {
 		}
 		rows = append(rows, []string{sizeStr, name})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"", "[yellow]No entries[white]"})
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         viewDisk,
-		Title:        "Disk Usage (ncdu)",
-		Info:         s.baseInfo("Path: " + truncateString(s.diskPath, 50)),
-		Status:       "ok",
-		Headers:      []string{"Size", "Name"},
-		Rows:         rows,
-		SelectionKey: "Name",
-	}, diskActions()...), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"", "[yellow]No entries[white]"})
+	return ui.OK(viewDisk, "Disk Usage (ncdu)", s.baseInfo("Path: "+truncateString(s.diskPath, 50)), []string{"Size", "Name"}, rows, "Name", diskActions()...), nil
 }
 
 // scanDirectoryEntries lists path contents with sizes (sync; may be slow on large trees).

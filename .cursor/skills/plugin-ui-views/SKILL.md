@@ -53,13 +53,13 @@ func (s *Service) okView(viewID, title, extra string, headers []string, rows [][
 }
 ```
 
-Shared helpers live in `pkg/pluginrpc/decorate.go`: `ViewUI`, `Decorate`, `HelpWithGlobal`, `Table`, `StatusErrorView`, `FormatInfo`, `EnsureRows`, `SortedKVRows`.
+Shared helpers live in `pkg/pluginrpc/decorate.go`: `ViewUI`, `Connected` / `OK` / `Table` / `StatusError` / `NotConnected`, `HelpWithGlobal`, `FormatInfo`, `EnsureRows`, `MapRows`, `SortedKVRows`.
 
 Each view builder:
 
 ```go
-return s.okView(viewFoo, "...", "", headers, rows, "Col", fooActions()...)
-// or: return ui.Decorate(pluginrpc.Table(...), fooActions()...), nil
+return ui.Connected(viewFoo, "...", s.baseInfo(""), headers, rows, "Col", fooActions()...), nil
+// disconnect: return ui.NotConnected(viewID, "Brand Manager", err.Error()), nil
 ```
 
 Views with no actions: omit the variadic actions.

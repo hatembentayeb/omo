@@ -122,11 +122,7 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	s.currentView = viewID
 
 	if s.account == nil || !s.client.HasAccount() {
-		return ui.Decorate(pluginrpc.StatusErrorView(
-			viewID, "GitHub Manager",
-			"[yellow]GitHub Manager[white]\nStatus: Not Connected\nHost must Configure with token",
-			"not connected", "not configured",
-		)), nil
+		return ui.NotConnected(viewID, "GitHub Manager", "not configured"), nil
 	}
 
 	switch viewID {
@@ -191,18 +187,8 @@ func (s *Service) viewReposLocked() (pluginrpc.ViewData, error) {
 			"[gray]" + updated,
 		}
 	}
-	if len(rows) == 0 {
-		rows = [][]string{{"-", "No repositories", "-", "-", "-", "-", "-"}}
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         viewRepos,
-		Title:        "Repositories",
-		Info:         s.baseInfo(fmt.Sprintf("Repos: %d · Enter/P selects repo", len(repos))),
-		Status:       "connected",
-		Headers:      []string{"Name", "Description", "Language", "Stars", "Visibility", "Default Branch", "Updated"},
-		Rows:         rows,
-		SelectionKey: "Name",
-	}, repositoriesActions()...), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "No repositories", "-", "-", "-", "-", "-"})
+	return ui.Connected(viewRepos, "Repositories", s.baseInfo(fmt.Sprintf("Repos: %d · Enter/P selects repo", len(repos))), []string{"Name", "Description", "Language", "Stars", "Visibility", "Default Branch", "Updated"}, rows, "Name", repositoriesActions()...), nil
 }
 
 func (s *Service) requireRepo() error {
@@ -220,22 +206,9 @@ func (s *Service) viewPRsLocked() (pluginrpc.ViewData, error) {
 	if err != nil {
 		return pluginrpc.ViewData{}, err
 	}
-	rows := make([][]string, len(prs))
-	for i, pr := range prs {
-		rows[i] = pr.GetTableRow()
-	}
-	if len(rows) == 0 {
-		rows = [][]string{{"-", "No pull requests", "-", "-", "-", "-", "-", "-", "-"}}
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         viewPRs,
-		Title:        "Pull Requests",
-		Info:         s.baseInfo(fmt.Sprintf("Filter: %s · Count: %d", s.prState, len(prs))),
-		Status:       "connected",
-		Headers:      []string{"#", "Title", "State", "Author", "Branch", "Base", "Changes", "Labels", "Age"},
-		Rows:         rows,
-		SelectionKey: "#",
-	}, prsActions()...), nil
+	rows := pluginrpc.MapRows(prs, func(pr PullRequest) []string { return pr.GetTableRow() })
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "No pull requests", "-", "-", "-", "-", "-", "-", "-"})
+	return ui.Connected(viewPRs, "Pull Requests", s.baseInfo(fmt.Sprintf("Filter: %s · Count: %d", s.prState, len(prs))), []string{"#", "Title", "State", "Author", "Branch", "Base", "Changes", "Labels", "Age"}, rows, "#", prsActions()...), nil
 }
 
 func (s *Service) viewWorkflowsLocked() (pluginrpc.ViewData, error) {
@@ -246,22 +219,9 @@ func (s *Service) viewWorkflowsLocked() (pluginrpc.ViewData, error) {
 	if err != nil {
 		return pluginrpc.ViewData{}, err
 	}
-	rows := make([][]string, len(wfs))
-	for i, w := range wfs {
-		rows[i] = w.GetTableRow()
-	}
-	if len(rows) == 0 {
-		rows = [][]string{{"-", "No workflows", "-", "-", "-"}}
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         viewWorkflows,
-		Title:        "Workflows",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"ID", "Name", "Path", "State", "Updated"},
-		Rows:         rows,
-		SelectionKey: "ID",
-	}, workflowsActions()...), nil
+	rows := pluginrpc.MapRows(wfs, func(w Workflow) []string { return w.GetTableRow() })
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "No workflows", "-", "-", "-"})
+	return ui.Connected(viewWorkflows, "Workflows", s.baseInfo(""), []string{"ID", "Name", "Path", "State", "Updated"}, rows, "ID", workflowsActions()...), nil
 }
 
 func (s *Service) viewRunsLocked() (pluginrpc.ViewData, error) {
@@ -272,22 +232,9 @@ func (s *Service) viewRunsLocked() (pluginrpc.ViewData, error) {
 	if err != nil {
 		return pluginrpc.ViewData{}, err
 	}
-	rows := make([][]string, len(runs))
-	for i, r := range runs {
-		rows[i] = r.GetTableRow()
-	}
-	if len(rows) == 0 {
-		rows = [][]string{{"-", "No runs", "-", "-", "-", "-", "-", "-"}}
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         viewRuns,
-		Title:        "Workflow Runs",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"ID", "Workflow", "Status", "Branch", "Event", "Actor", "Duration", "Age"},
-		Rows:         rows,
-		SelectionKey: "ID",
-	}, runsActions()...), nil
+	rows := pluginrpc.MapRows(runs, func(r WorkflowRun) []string { return r.GetTableRow() })
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "No runs", "-", "-", "-", "-", "-", "-"})
+	return ui.Connected(viewRuns, "Workflow Runs", s.baseInfo(""), []string{"ID", "Workflow", "Status", "Branch", "Event", "Actor", "Duration", "Age"}, rows, "ID", runsActions()...), nil
 }
 
 func (s *Service) viewVariablesLocked() (pluginrpc.ViewData, error) {
@@ -298,22 +245,9 @@ func (s *Service) viewVariablesLocked() (pluginrpc.ViewData, error) {
 	if err != nil {
 		return pluginrpc.ViewData{}, err
 	}
-	rows := make([][]string, len(vars))
-	for i, v := range vars {
-		rows[i] = v.GetTableRow()
-	}
-	if len(rows) == 0 {
-		rows = [][]string{{"-", "-", "No variables"}}
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         viewEnvVars,
-		Title:        "Variables",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"Name", "Value", "Updated"},
-		Rows:         rows,
-		SelectionKey: "Name",
-	}, variablesActions()...), nil
+	rows := pluginrpc.MapRows(vars, func(v EnvVariable) []string { return v.GetTableRow() })
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "No variables"})
+	return ui.Connected(viewEnvVars, "Variables", s.baseInfo(""), []string{"Name", "Value", "Updated"}, rows, "Name", variablesActions()...), nil
 }
 
 func (s *Service) viewSecretsLocked() (pluginrpc.ViewData, error) {
@@ -324,22 +258,9 @@ func (s *Service) viewSecretsLocked() (pluginrpc.ViewData, error) {
 	if err != nil {
 		return pluginrpc.ViewData{}, err
 	}
-	rows := make([][]string, len(secrets))
-	for i, sec := range secrets {
-		rows[i] = sec.GetTableRow()
-	}
-	if len(rows) == 0 {
-		rows = [][]string{{"-", "-", "No secrets"}}
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         viewSecrets,
-		Title:        "Secrets",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"Name", "Value", "Updated"},
-		Rows:         rows,
-		SelectionKey: "Name",
-	}, secretsActions()...), nil
+	rows := pluginrpc.MapRows(secrets, func(sec RepoSecret) []string { return sec.GetTableRow() })
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "No secrets"})
+	return ui.Connected(viewSecrets, "Secrets", s.baseInfo(""), []string{"Name", "Value", "Updated"}, rows, "Name", secretsActions()...), nil
 }
 
 func (s *Service) viewBranchesLocked() (pluginrpc.ViewData, error) {
@@ -350,22 +271,9 @@ func (s *Service) viewBranchesLocked() (pluginrpc.ViewData, error) {
 	if err != nil {
 		return pluginrpc.ViewData{}, err
 	}
-	rows := make([][]string, len(branches))
-	for i, b := range branches {
-		rows[i] = b.GetTableRow()
-	}
-	if len(rows) == 0 {
-		rows = [][]string{{"-", "-", "-"}}
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         viewBranches,
-		Title:        "Branches",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"Name", "SHA", "Protected"},
-		Rows:         rows,
-		SelectionKey: "Name",
-	}, branchesActions()...), nil
+	rows := pluginrpc.MapRows(branches, func(b Branch) []string { return b.GetTableRow() })
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-"})
+	return ui.Connected(viewBranches, "Branches", s.baseInfo(""), []string{"Name", "SHA", "Protected"}, rows, "Name", branchesActions()...), nil
 }
 
 func (s *Service) viewReleasesLocked() (pluginrpc.ViewData, error) {
@@ -376,20 +284,7 @@ func (s *Service) viewReleasesLocked() (pluginrpc.ViewData, error) {
 	if err != nil {
 		return pluginrpc.ViewData{}, err
 	}
-	rows := make([][]string, len(releases))
-	for i, r := range releases {
-		rows[i] = r.GetTableRow()
-	}
-	if len(rows) == 0 {
-		rows = [][]string{{"-", "-", "-", "-", "-", "-"}}
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         viewReleases,
-		Title:        "Releases",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"Tag", "Name", "Status", "Author", "Assets", "Published"},
-		Rows:         rows,
-		SelectionKey: "Tag",
-	}, releasesActions()...), nil
+	rows := pluginrpc.MapRows(releases, func(r Release) []string { return r.GetTableRow() })
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "-", "-", "-"})
+	return ui.Connected(viewReleases, "Releases", s.baseInfo(""), []string{"Tag", "Name", "Status", "Author", "Assets", "Published"}, rows, "Tag", releasesActions()...), nil
 }

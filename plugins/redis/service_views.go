@@ -86,10 +86,6 @@ func (s *Service) baseInfo(extra string) string {
 	return pluginrpc.FormatInfo(msg, extra)
 }
 
-func (s *Service) okView(viewID, title, extra string, headers []string, rows [][]string, sel string, actions ...pluginrpc.KeyBinding) (pluginrpc.ViewData, error) {
-	return ui.Decorate(pluginrpc.Table(viewID, title, s.baseInfo(extra), "connected", headers, rows, sel), actions...), nil
-}
-
 func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	if viewID == "" {
 		viewID = viewKeys
@@ -97,11 +93,7 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	s.currentView = viewID
 
 	if err := s.ensureConnectedLocked(); err != nil {
-		return ui.Decorate(pluginrpc.StatusErrorView(
-			viewID, "Redis Manager",
-			"[yellow]Redis Manager[white]\nStatus: Not Connected\n"+err.Error(),
-			"not connected", err.Error(),
-		)), nil
+		return ui.NotConnected(viewID, "Redis Manager", err.Error()), nil
 	}
 
 	switch viewID {
@@ -141,7 +133,7 @@ func (s *Service) viewKeysLocked() (pluginrpc.ViewData, error) {
 	if err != nil {
 		return pluginrpc.ViewData{}, err
 	}
-	return s.okView(viewKeys, "Redis Keys", fmt.Sprintf("Keys loaded: %d", len(rows)), []string{"Key", "Type", "TTL", "Size"}, rows, "Key", keysActions()...)
+	return ui.Connected(viewKeys, "Redis Keys", s.baseInfo(fmt.Sprintf("Keys loaded: %d", len(rows))), []string{"Key", "Type", "TTL", "Size"}, rows, "Key", keysActions()...), nil
 }
 
 func (s *Service) viewInfoLocked() (pluginrpc.ViewData, error) {
@@ -160,7 +152,7 @@ func (s *Service) viewInfoLocked() (pluginrpc.ViewData, error) {
 			rows = append(rows, []string{field, value})
 		}
 	}
-	return s.okView(viewInfo, "Redis Server Info", "", []string{"Property", "Value"}, rows, "Property")
+	return ui.Connected(viewInfo, "Redis Server Info", s.baseInfo(""), []string{"Property", "Value"}, rows, "Property"), nil
 }
 
 func (s *Service) viewSlowlogLocked() (pluginrpc.ViewData, error) {
@@ -178,10 +170,8 @@ func (s *Service) viewSlowlogLocked() (pluginrpc.ViewData, error) {
 			entry.Client,
 		})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "-", "No slowlog entries", "-"})
-	}
-	return s.okView(viewSlowlog, "Redis Slowlog", "", []string{"ID", "Timestamp", "Duration", "Command", "Client"}, rows, "ID")
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "No slowlog entries", "-"})
+	return ui.Connected(viewSlowlog, "Redis Slowlog", s.baseInfo(""), []string{"ID", "Timestamp", "Duration", "Command", "Client"}, rows, "ID"), nil
 }
 
 func (s *Service) viewStatsLocked() (pluginrpc.ViewData, error) {
@@ -203,7 +193,7 @@ func (s *Service) viewStatsLocked() (pluginrpc.ViewData, error) {
 	if ks := parseKeyspace(infoMap); ks != "" {
 		rows = append(rows, []string{"keyspace", ks})
 	}
-	return s.okView(viewStats, "Redis Stats", "", []string{"Metric", "Value"}, rows, "Metric")
+	return ui.Connected(viewStats, "Redis Stats", s.baseInfo(""), []string{"Metric", "Value"}, rows, "Metric"), nil
 }
 
 func (s *Service) viewClientsLocked() (pluginrpc.ViewData, error) {
@@ -218,10 +208,8 @@ func (s *Service) viewClientsLocked() (pluginrpc.ViewData, error) {
 			client.Idle, client.Flags, client.DB, client.Cmd,
 		})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "-", "-", "-", "-", "-", "No clients"})
-	}
-	return s.okView(viewClients, "Redis Clients", "", []string{"ID", "Addr", "Name", "Age", "Idle", "Flags", "DB", "Cmd"}, rows, "ID")
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "-", "-", "-", "-", "No clients"})
+	return ui.Connected(viewClients, "Redis Clients", s.baseInfo(""), []string{"ID", "Addr", "Name", "Age", "Idle", "Flags", "DB", "Cmd"}, rows, "ID"), nil
 }
 
 func (s *Service) viewConfigLocked() (pluginrpc.ViewData, error) {
@@ -230,7 +218,7 @@ func (s *Service) viewConfigLocked() (pluginrpc.ViewData, error) {
 		return pluginrpc.ViewData{}, err
 	}
 	rows := pluginrpc.EnsureRows(pluginrpc.SortedKVRows(config), []string{"-", "No config entries"})
-	return s.okView(viewConfig, "Redis Config", "", []string{"Config", "Value"}, rows, "Config")
+	return ui.Connected(viewConfig, "Redis Config", s.baseInfo(""), []string{"Config", "Value"}, rows, "Config"), nil
 }
 
 func (s *Service) viewMemoryLocked() (pluginrpc.ViewData, error) {
@@ -239,7 +227,7 @@ func (s *Service) viewMemoryLocked() (pluginrpc.ViewData, error) {
 		return pluginrpc.ViewData{}, err
 	}
 	rows := pluginrpc.SortedKVRows(stats)
-	return s.okView(viewMemory, "Redis Memory", "", []string{"Metric", "Value"}, rows, "Metric", memoryActions()...)
+	return ui.Connected(viewMemory, "Redis Memory", s.baseInfo(""), []string{"Metric", "Value"}, rows, "Metric", memoryActions()...), nil
 }
 
 func (s *Service) viewPersistenceLocked() (pluginrpc.ViewData, error) {
@@ -256,7 +244,7 @@ func (s *Service) viewSectionLocked(viewID, title, section string) (pluginrpc.Vi
 		return pluginrpc.ViewData{}, err
 	}
 	rows := pluginrpc.SortedKVRows(infoMap)
-	return s.okView(viewID, title, "", []string{"Property", "Value"}, rows, "Property")
+	return ui.Connected(viewID, title, s.baseInfo(""), []string{"Property", "Value"}, rows, "Property"), nil
 }
 
 func (s *Service) viewPubSubLocked() (pluginrpc.ViewData, error) {
@@ -272,10 +260,8 @@ func (s *Service) viewPubSubLocked() (pluginrpc.ViewData, error) {
 		}
 		rows = append(rows, []string{ch.Channel, fmt.Sprintf("%d", ch.Subscribers), channelType})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "0", "No active channels"})
-	}
-	return s.okView(viewPubSub, "Redis PubSub", "Enter=peek messages", []string{"Channel", "Subscribers", "Type"}, rows, "Channel", pubsubActions()...)
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "0", "No active channels"})
+	return ui.Connected(viewPubSub, "Redis PubSub", s.baseInfo("Enter=peek messages"), []string{"Channel", "Subscribers", "Type"}, rows, "Channel", pubsubActions()...), nil
 }
 
 func (s *Service) viewKeyAnalysisLocked() (pluginrpc.ViewData, error) {
@@ -305,10 +291,8 @@ func (s *Service) viewKeyAnalysisLocked() (pluginrpc.ViewData, error) {
 			sampleStr,
 		})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "0", "-", "-", "No keys found"})
-	}
-	return s.okView(viewKeyAnalysis, "Redis Key Analysis", "", []string{"Pattern", "Count", "Types", "Avg TTL", "Sample Keys"}, rows, "Pattern")
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "0", "-", "-", "No keys found"})
+	return ui.Connected(viewKeyAnalysis, "Redis Key Analysis", s.baseInfo(""), []string{"Pattern", "Count", "Types", "Avg TTL", "Sample Keys"}, rows, "Pattern"), nil
 }
 
 func (s *Service) viewDatabasesLocked() (pluginrpc.ViewData, error) {
@@ -336,10 +320,8 @@ func (s *Service) viewDatabasesLocked() (pluginrpc.ViewData, error) {
 			ttlStr,
 		})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "0", "0", "No databases with keys"})
-	}
-	return s.okView(viewDatabases, "Redis Databases", "", []string{"DB", "Keys", "Expires", "Avg TTL"}, rows, "DB", databasesActions()...)
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "0", "0", "No databases with keys"})
+	return ui.Connected(viewDatabases, "Redis Databases", s.baseInfo(""), []string{"DB", "Keys", "Expires", "Avg TTL"}, rows, "DB", databasesActions()...), nil
 }
 
 func (s *Service) viewCommandStatsLocked() (pluginrpc.ViewData, error) {
@@ -359,10 +341,8 @@ func (s *Service) viewCommandStatsLocked() (pluginrpc.ViewData, error) {
 			fmt.Sprintf("%.2f", stat.UsecPerCall),
 		})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "0", "0", "No command stats"})
-	}
-	return s.okView(viewCmdStats, "Redis Command Stats", "", []string{"Command", "Calls", "Total Time (μs)", "Avg Time (μs)"}, rows, "Command")
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "0", "0", "No command stats"})
+	return ui.Connected(viewCmdStats, "Redis Command Stats", s.baseInfo(""), []string{"Command", "Calls", "Total Time (μs)", "Avg Time (μs)"}, rows, "Command"), nil
 }
 
 func (s *Service) viewLatencyLocked() (pluginrpc.ViewData, error) {
@@ -378,10 +358,8 @@ func (s *Service) viewLatencyLocked() (pluginrpc.ViewData, error) {
 			fmt.Sprintf("%d", event.Latency),
 		})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "No latency events recorded"})
-	}
-	return s.okView(viewLatency, "Redis Latency", "", []string{"Event", "Timestamp", "Latency (ms)"}, rows, "Event")
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "No latency events recorded"})
+	return ui.Connected(viewLatency, "Redis Latency", s.baseInfo(""), []string{"Event", "Timestamp", "Latency (ms)"}, rows, "Event"), nil
 }
 
 func (s *Service) peekPubSubLocked(channel string) (string, error) {

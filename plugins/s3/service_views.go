@@ -151,23 +151,11 @@ func (s *Service) baseInfo(extra string) string {
 }
 
 func (s *Service) disconnectedView(viewID string, err error) pluginrpc.ViewData {
-	return ui.Decorate(pluginrpc.StatusErrorView(
-		viewID, "S3 Manager",
-		"[yellow]S3 Manager[white]\nStatus: Not Connected\n"+err.Error(),
-		"not connected", err.Error(),
-	), actionsForView(viewID)...)
+	return ui.NotConnected(viewID, "S3 Manager", err.Error(), actionsForView(viewID)...)
 }
 
 func (s *Service) needBucketView(viewID string) pluginrpc.ViewData {
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         viewID,
-		Title:        "S3 — " + viewID,
-		Info:         s.baseInfo("Select a bucket first (view 0)"),
-		Status:       "connected",
-		Headers:      []string{"Status", "Hint"},
-		Rows:         [][]string{{"No bucket selected", "Press 0 or E to pick a bucket"}},
-		SelectionKey: "Status",
-	}, noBucketActions()...)
+	return ui.Connected(viewID, "S3 — "+viewID, s.baseInfo("Select a bucket first (view 0)"), []string{"Status", "Hint"}, [][]string{{"No bucket selected", "Press 0 or E to pick a bucket"}}, "Status", noBucketActions()...)
 }
 
 func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
@@ -207,18 +195,8 @@ func (s *Service) viewBucketsLocked() (pluginrpc.ViewData, error) {
 	for _, b := range buckets {
 		rows = append(rows, []string{b.Name, b.CreationDate, b.Region})
 	}
-	if len(rows) == 0 {
-		rows = [][]string{{"(no buckets)", "", ""}}
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         s3ViewBuckets,
-		Title:        "S3 Buckets",
-		Info:         s.baseInfo(fmt.Sprintf("Buckets: %d", len(buckets))),
-		Status:       "connected",
-		Headers:      []string{"Name", "Created", "Region"},
-		Rows:         rows,
-		SelectionKey: "Name",
-	}, bucketsActions()...), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"(no buckets)", "", ""})
+	return ui.Connected(s3ViewBuckets, "S3 Buckets", s.baseInfo(fmt.Sprintf("Buckets: %d", len(buckets))), []string{"Name", "Created", "Region"}, rows, "Name", bucketsActions()...), nil
 }
 
 func (s *Service) viewObjectsLocked() (pluginrpc.ViewData, error) {
@@ -233,18 +211,8 @@ func (s *Service) viewObjectsLocked() (pluginrpc.ViewData, error) {
 	for _, o := range objects {
 		rows = append(rows, []string{o.Name, o.Size, o.LastModified, o.StorageClass})
 	}
-	if len(rows) == 0 {
-		rows = [][]string{{"(empty)", "", "", ""}}
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         s3ViewObjects,
-		Title:        "S3 Objects",
-		Info:         s.baseInfo(fmt.Sprintf("Entries: %d", len(objects))),
-		Status:       "connected",
-		Headers:      []string{"Name", "Size", "Last Modified", "Storage Class"},
-		Rows:         rows,
-		SelectionKey: "Name",
-	}, objectsActions()...), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"(empty)", "", "", ""})
+	return ui.Connected(s3ViewObjects, "S3 Objects", s.baseInfo(fmt.Sprintf("Entries: %d", len(objects))), []string{"Name", "Size", "Last Modified", "Storage Class"}, rows, "Name", objectsActions()...), nil
 }
 
 func (s *Service) viewOverviewLocked() (pluginrpc.ViewData, error) {
@@ -265,15 +233,7 @@ func (s *Service) viewOverviewLocked() (pluginrpc.ViewData, error) {
 		{"Prefix", emptyDash(ov.PrefixSampled)},
 		{"URI", fmt.Sprintf("s3://%s/%s", s.currentBucket, s.currentPrefix)},
 	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         s3ViewOverview,
-		Title:        "S3 Bucket Overview",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"Property", "Value"},
-		Rows:         rows,
-		SelectionKey: "Property",
-	}, overviewActions()...), nil
+	return ui.Connected(s3ViewOverview, "S3 Bucket Overview", s.baseInfo(""), []string{"Property", "Value"}, rows, "Property", overviewActions()...), nil
 }
 
 func (s *Service) viewVersionsLocked() (pluginrpc.ViewData, error) {
@@ -282,33 +242,15 @@ func (s *Service) viewVersionsLocked() (pluginrpc.ViewData, error) {
 	}
 	versions, err := s.client.ListObjectVersions(s.currentBucket, s.currentPrefix)
 	if err != nil {
-		return ui.Decorate(pluginrpc.ViewData{
-			View:         s3ViewVersions,
-			Title:        "S3 Versions",
-			Info:         s.baseInfo(err.Error()),
-			Status:       "connected",
-			Headers:      []string{"Key", "Version", "Latest", "Size", "Modified"},
-			Rows:         [][]string{{"(error)", err.Error(), "", "", ""}},
-			SelectionKey: "Key",
-		}, versionsActions()...), nil
+		return ui.Connected(s3ViewVersions, "S3 Versions", s.baseInfo(err.Error()), []string{"Key", "Version", "Latest", "Size", "Modified"}, [][]string{{"(error)", err.Error(), "", "", ""}}, "Key", versionsActions()...), nil
 	}
 	rows := make([][]string, 0, len(versions))
 	for _, v := range versions {
 		// Keep full VersionID in the Version column so Info/actions stay accurate.
 		rows = append(rows, []string{v.Key, v.VersionID, v.IsLatest, v.Size, v.LastModified})
 	}
-	if len(rows) == 0 {
-		rows = [][]string{{"(none)", "", "", "", ""}}
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         s3ViewVersions,
-		Title:        "S3 Object Versions",
-		Info:         s.baseInfo(fmt.Sprintf("Versions: %d (max 200)", len(versions))),
-		Status:       "connected",
-		Headers:      []string{"Key", "Version", "Latest", "Size", "Modified"},
-		Rows:         rows,
-		SelectionKey: "Key",
-	}, versionsActions()...), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"(none)", "", "", "", ""})
+	return ui.Connected(s3ViewVersions, "S3 Object Versions", s.baseInfo(fmt.Sprintf("Versions: %d (max 200)", len(versions))), []string{"Key", "Version", "Latest", "Size", "Modified"}, rows, "Key", versionsActions()...), nil
 }
 
 func (s *Service) viewACLLocked() (pluginrpc.ViewData, error) {
@@ -317,30 +259,14 @@ func (s *Service) viewACLLocked() (pluginrpc.ViewData, error) {
 	}
 	owner, grants, err := s.client.GetBucketACL(s.currentBucket)
 	if err != nil {
-		return ui.Decorate(pluginrpc.ViewData{
-			View:         s3ViewACL,
-			Title:        "S3 Bucket ACL",
-			Info:         s.baseInfo(err.Error()),
-			Status:       "connected",
-			Headers:      []string{"Grantee", "Type", "Permission"},
-			Rows:         [][]string{{"(error)", err.Error(), ""}},
-			SelectionKey: "Grantee",
-		}, aclActions()...), nil
+		return ui.Connected(s3ViewACL, "S3 Bucket ACL", s.baseInfo(err.Error()), []string{"Grantee", "Type", "Permission"}, [][]string{{"(error)", err.Error(), ""}}, "Grantee", aclActions()...), nil
 	}
 	rows := make([][]string, 0, len(grants)+1)
 	rows = append(rows, []string{"(owner) " + owner, "Owner", "FULL_CONTROL"})
 	for _, g := range grants {
 		rows = append(rows, []string{g.Grantee, g.Type, g.Permission})
 	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         s3ViewACL,
-		Title:        "S3 Bucket ACL",
-		Info:         s.baseInfo(fmt.Sprintf("Grants: %d", len(grants))),
-		Status:       "connected",
-		Headers:      []string{"Grantee", "Type", "Permission"},
-		Rows:         rows,
-		SelectionKey: "Grantee",
-	}, aclActions()...), nil
+	return ui.Connected(s3ViewACL, "S3 Bucket ACL", s.baseInfo(fmt.Sprintf("Grants: %d", len(grants))), []string{"Grantee", "Type", "Permission"}, rows, "Grantee", aclActions()...), nil
 }
 
 func (s *Service) viewLifecycleLocked() (pluginrpc.ViewData, error) {
@@ -353,32 +279,14 @@ func (s *Service) viewLifecycleLocked() (pluginrpc.ViewData, error) {
 		if strings.Contains(msg, "NoSuchLifecycleConfiguration") || strings.Contains(msg, "Lifecycle") {
 			msg = "No lifecycle configuration"
 		}
-		return ui.Decorate(pluginrpc.ViewData{
-			View:         s3ViewLifecycle,
-			Title:        "S3 Lifecycle",
-			Info:         s.baseInfo(msg),
-			Status:       "connected",
-			Headers:      []string{"ID", "Status", "Prefix", "Summary"},
-			Rows:         [][]string{{"(none)", "", "", msg}},
-			SelectionKey: "ID",
-		}, lifecycleActions()...), nil
+		return ui.Connected(s3ViewLifecycle, "S3 Lifecycle", s.baseInfo(msg), []string{"ID", "Status", "Prefix", "Summary"}, [][]string{{"(none)", "", "", msg}}, "ID", lifecycleActions()...), nil
 	}
 	rows := make([][]string, 0, len(rules))
 	for _, r := range rules {
 		rows = append(rows, []string{r.ID, r.Status, emptyDash(r.Prefix), r.Summary})
 	}
-	if len(rows) == 0 {
-		rows = [][]string{{"(none)", "", "", ""}}
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         s3ViewLifecycle,
-		Title:        "S3 Lifecycle",
-		Info:         s.baseInfo(fmt.Sprintf("Rules: %d", len(rules))),
-		Status:       "connected",
-		Headers:      []string{"ID", "Status", "Prefix", "Summary"},
-		Rows:         rows,
-		SelectionKey: "ID",
-	}, lifecycleActions()...), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"(none)", "", "", ""})
+	return ui.Connected(s3ViewLifecycle, "S3 Lifecycle", s.baseInfo(fmt.Sprintf("Rules: %d", len(rules))), []string{"ID", "Status", "Prefix", "Summary"}, rows, "ID", lifecycleActions()...), nil
 }
 
 func (s *Service) viewUploadsLocked() (pluginrpc.ViewData, error) {
@@ -393,18 +301,8 @@ func (s *Service) viewUploadsLocked() (pluginrpc.ViewData, error) {
 	for _, u := range uploads {
 		rows = append(rows, []string{u.Key, shortID(u.UploadID), u.Initiated, u.UploadID})
 	}
-	if len(rows) == 0 {
-		rows = [][]string{{"(none)", "", "", ""}}
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         s3ViewUploads,
-		Title:        "S3 Multipart Uploads",
-		Info:         s.baseInfo(fmt.Sprintf("Incomplete: %d", len(uploads))),
-		Status:       "connected",
-		Headers:      []string{"Key", "Upload ID", "Initiated", "Full Upload ID"},
-		Rows:         rows,
-		SelectionKey: "Key",
-	}, uploadsActions()...), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"(none)", "", "", ""})
+	return ui.Connected(s3ViewUploads, "S3 Multipart Uploads", s.baseInfo(fmt.Sprintf("Incomplete: %d", len(uploads))), []string{"Key", "Upload ID", "Initiated", "Full Upload ID"}, rows, "Key", uploadsActions()...), nil
 }
 
 func emptyDash(s string) string {

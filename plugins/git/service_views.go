@@ -113,11 +113,7 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	s.currentView = viewID
 
 	if s.currentPath == "" && viewID != viewRepos {
-		return ui.Decorate(pluginrpc.StatusErrorView(
-			viewID, "Git Manager",
-			"[yellow]Git Manager[white]\nNo repository configured",
-			"not configured", "Configure with a KeePass path attribute",
-		)), nil
+		return ui.StatusError(viewID, "Git Manager", "[yellow]Git Manager[white]\nNo repository configured", "not configured", "Configure with a KeePass path attribute"), nil
 	}
 
 	switch viewID {
@@ -167,18 +163,8 @@ func (s *Service) viewReposLocked() (pluginrpc.ViewData, error) {
 			repo.LastCommit,
 		})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "-", "0", "0", "0", "No repositories configured"})
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         viewRepos,
-		Title:        "Git Repositories",
-		Info:         s.baseInfo(fmt.Sprintf("Repos: %d", len(s.repos))),
-		Status:       "ok",
-		Headers:      []string{"Repository", "Branch", "Status", "Modified", "Staged", "Untracked", "Last Commit"},
-		Rows:         rows,
-		SelectionKey: "Repository",
-	}, reposActions()...), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "0", "0", "0", "No repositories configured"})
+	return ui.OK(viewRepos, "Git Repositories", s.baseInfo(fmt.Sprintf("Repos: %d", len(s.repos))), []string{"Repository", "Branch", "Status", "Modified", "Staged", "Untracked", "Last Commit"}, rows, "Repository", reposActions()...), nil
 }
 
 func (s *Service) viewStatusLocked() (pluginrpc.ViewData, error) {
@@ -191,18 +177,8 @@ func (s *Service) viewStatusLocked() (pluginrpc.ViewData, error) {
 		// File first so host selectionPayload key=row[0] is the path.
 		rows = append(rows, []string{f.Path, f.Status, f.Type})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"Working tree clean", "-", "-"})
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         viewStatus,
-		Title:        "Git Status",
-		Info:         s.baseInfo(""),
-		Status:       "ok",
-		Headers:      []string{"File", "Status", "Type"},
-		Rows:         rows,
-		SelectionKey: "File",
-	}, statusActions()...), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"Working tree clean", "-", "-"})
+	return ui.OK(viewStatus, "Git Status", s.baseInfo(""), []string{"File", "Status", "Type"}, rows, "File", statusActions()...), nil
 }
 
 func (s *Service) viewCommitsLocked() (pluginrpc.ViewData, error) {
@@ -214,18 +190,8 @@ func (s *Service) viewCommitsLocked() (pluginrpc.ViewData, error) {
 	for _, c := range commits {
 		rows = append(rows, []string{c.Hash, c.Author, c.Date, c.Message})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "-", "No commits"})
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         viewCommits,
-		Title:        "Git Commits",
-		Info:         s.baseInfo(""),
-		Status:       "ok",
-		Headers:      []string{"Hash", "Author", "Date", "Message"},
-		Rows:         rows,
-		SelectionKey: "Hash",
-	}, commitsActions()...), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "No commits"})
+	return ui.OK(viewCommits, "Git Commits", s.baseInfo(""), []string{"Hash", "Author", "Date", "Message"}, rows, "Hash", commitsActions()...), nil
 }
 
 func (s *Service) viewBranchesLocked() (pluginrpc.ViewData, error) {
@@ -247,18 +213,8 @@ func (s *Service) viewBranchesLocked() (pluginrpc.ViewData, error) {
 			fmt.Sprintf("%d", b.Behind),
 		})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "", "-", "0", "0"})
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         viewBranches,
-		Title:        "Git Branches",
-		Info:         s.baseInfo(""),
-		Status:       "ok",
-		Headers:      []string{"Branch", "Current", "Tracking", "Ahead", "Behind"},
-		Rows:         rows,
-		SelectionKey: "Branch",
-	}, branchesActions()...), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "", "-", "0", "0"})
+	return ui.OK(viewBranches, "Git Branches", s.baseInfo(""), []string{"Branch", "Current", "Tracking", "Ahead", "Behind"}, rows, "Branch", branchesActions()...), nil
 }
 
 func (s *Service) viewRemotesLocked() (pluginrpc.ViewData, error) {
@@ -270,18 +226,8 @@ func (s *Service) viewRemotesLocked() (pluginrpc.ViewData, error) {
 	for _, r := range remotes {
 		rows = append(rows, []string{r.Name, r.FetchURL, r.PushURL})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "No remotes"})
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         viewRemotes,
-		Title:        "Git Remotes",
-		Info:         s.baseInfo(""),
-		Status:       "ok",
-		Headers:      []string{"Remote", "Fetch URL", "Push URL"},
-		Rows:         rows,
-		SelectionKey: "Remote",
-	}, remotesActions()...), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "No remotes"})
+	return ui.OK(viewRemotes, "Git Remotes", s.baseInfo(""), []string{"Remote", "Fetch URL", "Push URL"}, rows, "Remote", remotesActions()...), nil
 }
 
 func (s *Service) viewStashLocked() (pluginrpc.ViewData, error) {
@@ -293,18 +239,8 @@ func (s *Service) viewStashLocked() (pluginrpc.ViewData, error) {
 	for _, e := range entries {
 		rows = append(rows, []string{e.Index, e.Branch, e.Message})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "No stash entries"})
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         viewStash,
-		Title:        "Git Stash",
-		Info:         s.baseInfo(""),
-		Status:       "ok",
-		Headers:      []string{"Index", "Branch", "Message"},
-		Rows:         rows,
-		SelectionKey: "Index",
-	}, stashActions()...), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "No stash entries"})
+	return ui.OK(viewStash, "Git Stash", s.baseInfo(""), []string{"Index", "Branch", "Message"}, rows, "Index", stashActions()...), nil
 }
 
 func (s *Service) viewTagsLocked() (pluginrpc.ViewData, error) {
@@ -320,16 +256,6 @@ func (s *Service) viewTagsLocked() (pluginrpc.ViewData, error) {
 		}
 		rows = append(rows, []string{t.Name, typ, t.Date, t.Message})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "-", "No tags"})
-	}
-	return ui.Decorate(pluginrpc.ViewData{
-		View:         viewTags,
-		Title:        "Git Tags",
-		Info:         s.baseInfo(""),
-		Status:       "ok",
-		Headers:      []string{"Tag", "Type", "Date", "Message"},
-		Rows:         rows,
-		SelectionKey: "Tag",
-	}, tagsActions()...), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "No tags"})
+	return ui.OK(viewTags, "Git Tags", s.baseInfo(""), []string{"Tag", "Type", "Date", "Message"}, rows, "Tag", tagsActions()...), nil
 }
