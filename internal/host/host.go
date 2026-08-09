@@ -21,6 +21,7 @@ type Host struct {
 	MainFrame       *tview.Frame
 	MainUI          *tview.Grid
 	PluginsList     *tview.List
+	ActionsList     *tview.List
 	activePluginIdx int
 	rpcManager      *PluginManager
 	PluginsDir      string
@@ -47,6 +48,7 @@ func New(app *tview.Application, pages *tview.Pages, logger *pluginapi.Logger, v
 		version:         version,
 	}
 	h.rpcManager = newPluginManager(app, pages, h.log)
+	h.rpcManager.SetActionsHook(h.UpdatePluginActions)
 	return h
 }
 
@@ -142,14 +144,35 @@ func (h *Host) LogoView() tview.Primitive {
 	return tv
 }
 
-// ActionsView returns a selectable list for refresh/package-manager actions.
+// ActionsView returns the host sidebar list (Refresh Plugins / Package Manager).
 func (h *Host) ActionsView() *tview.List {
 	list := tview.NewList().ShowSecondaryText(false)
 	list.SetMainTextColor(tcell.ColorAqua)
 	list.SetBackgroundColor(tcell.ColorDefault)
-	list.AddItem("  ↻ Refresh Plugins", "", 0, func() { h.RefreshPlugins() })
-	list.AddItem("  ⬡ Package Manager", "", 0, func() { h.OpenPackageManager() })
+	h.ActionsList = list
+	h.resetHostActions()
 	return list
+}
+
+// UpdatePluginActions is a no-op for the sidebar: host actions stay fixed.
+// Per-view plugin actions are shown in the former logs column (Keys panel).
+func (h *Host) UpdatePluginActions(_ []pluginrpc.KeyBinding, _ func(string)) {
+	if h.ActionsList == nil {
+		return
+	}
+	// Keep sidebar stable — do not swap in plugin actions.
+	if h.ActionsList.GetItemCount() == 0 {
+		h.resetHostActions()
+	}
+}
+
+func (h *Host) resetHostActions() {
+	if h.ActionsList == nil {
+		return
+	}
+	h.ActionsList.Clear()
+	h.ActionsList.AddItem("  ↻ Refresh Plugins", "", 0, func() { h.RefreshPlugins() })
+	h.ActionsList.AddItem("  ⬡ Package Manager", "", 0, func() { h.OpenPackageManager() })
 }
 
 // RefreshPlugins reloads the plugins list.

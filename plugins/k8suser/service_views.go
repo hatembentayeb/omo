@@ -8,19 +8,57 @@ import (
 	"omo/pkg/pluginrpc"
 )
 
-func k8sNavBindings() []pluginrpc.KeyBinding {
+func viewNavBindings() []pluginrpc.KeyBinding {
 	return []pluginrpc.KeyBinding{
-		{Key: "U", Label: "Users", Action: "goto_users"},
-		{Key: "M", Label: "Roles", Action: "goto_roles"},
+		{Key: "0", Label: "Users", Action: "goto_users"},
+		{Key: "1", Label: "Roles", Action: "goto_roles"},
 	}
 }
 
-func withK8sNav(extra ...pluginrpc.KeyBinding) []pluginrpc.KeyBinding {
-	out := make([]pluginrpc.KeyBinding, 0, len(extra)+len(k8sNavBindings())+1)
-	out = append(out, pluginrpc.KeyBinding{Key: "R", Label: "Refresh", Action: "refresh"})
-	out = append(out, extra...)
-	out = append(out, k8sNavBindings()...)
-	return out
+func usersActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "C", Label: "Create User", Action: "create_user"},
+		{Key: "D", Label: "Delete", Action: "delete"},
+		{Key: "A", Label: "Assign Role", Action: "assign_role"},
+		{Key: "V", Label: "Details", Action: "view_details"},
+		{Key: "T", Label: "Test Access", Action: "test_access"},
+		{Key: "K", Label: "Connection Cmd", Action: "connection_command"},
+		{Key: "X", Label: "Set Context", Action: "set_context"},
+	}
+}
+
+func rolesActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "C", Label: "Create Role", Action: "create_role"},
+		{Key: "D", Label: "Delete", Action: "delete"},
+		{Key: "V", Label: "Details", Action: "view_details"},
+	}
+}
+
+func helpSections() []pluginrpc.HelpSection {
+	return []pluginrpc.HelpSection{
+		{Title: "Views (0-1)", Bindings: viewNavBindings()},
+		{Title: "Users", Bindings: usersActions()},
+		{Title: "Roles", Bindings: rolesActions()},
+		{
+			Title: "Global",
+			Bindings: []pluginrpc.KeyBinding{
+				{Key: "R", Label: "Refresh"},
+				{Key: "?", Label: "Help (this screen)"},
+				{Key: "/", Label: "Filter"},
+				{Key: "^t", Label: "Switch target"},
+				{Key: "ESC", Label: "Back / home"},
+			},
+		},
+	}
+}
+
+func decorate(view pluginrpc.ViewData, actions ...pluginrpc.KeyBinding) pluginrpc.ViewData {
+	view.ViewBindings = viewNavBindings()
+	view.KeyBindings = nil
+	view.Actions = actions
+	view.HelpSections = helpSections()
+	return view
 }
 
 func (s *Service) baseInfo(extra string) string {
@@ -52,32 +90,26 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 
 func (s *Service) k8sViewUsersLocked() (pluginrpc.ViewData, error) {
 	if s.client.CurrentContext == "" {
-		return pluginrpc.ViewData{
+		return decorate(pluginrpc.ViewData{
 			View:    k8sViewUsers,
 			Title:   "K8s Users",
 			Info:    s.baseInfo("No context configured"),
 			Status:  "not configured",
 			Headers: []string{"Status", "Detail"},
 			Rows:    [][]string{{"error", "Configure kubeconfig/context via host secrets"}},
-			KeyBindings: withK8sNav(
-				pluginrpc.KeyBinding{Key: "C", Label: "Create User", Action: "create_user"},
-			),
-		}, nil
+		}, usersActions()...), nil
 	}
 
 	users, err := s.client.GetUsers()
 	if err != nil {
-		return pluginrpc.ViewData{
+		return decorate(pluginrpc.ViewData{
 			View:    k8sViewUsers,
 			Title:   "K8s Users",
 			Info:    s.baseInfo(err.Error()),
 			Status:  "error",
 			Headers: []string{"Status", "Detail"},
 			Rows:    [][]string{{"error", err.Error()}},
-			KeyBindings: withK8sNav(
-				pluginrpc.KeyBinding{Key: "C", Label: "Create User", Action: "create_user"},
-			),
-		}, nil
+		}, usersActions()...), nil
 	}
 
 	rows := make([][]string, 0, len(users))
@@ -88,7 +120,7 @@ func (s *Service) k8sViewUsersLocked() (pluginrpc.ViewData, error) {
 		rows = [][]string{{"No certificate-based users found", "Use create_user", "", ""}}
 	}
 
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         k8sViewUsers,
 		Title:        "K8s Users",
 		Info:         s.baseInfo(fmt.Sprintf("Users: %d", len(users))),
@@ -96,15 +128,7 @@ func (s *Service) k8sViewUsersLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Username", "Certificate Expiry", "Namespaces", "Roles"},
 		Rows:         rows,
 		SelectionKey: "Username",
-		KeyBindings: withK8sNav(
-			pluginrpc.KeyBinding{Key: "C", Label: "Create User", Action: "create_user"},
-			pluginrpc.KeyBinding{Key: "D", Label: "Delete", Action: "delete"},
-			pluginrpc.KeyBinding{Key: "A", Label: "Assign Role", Action: "assign_role"},
-			pluginrpc.KeyBinding{Key: "V", Label: "Details", Action: "view_details"},
-			pluginrpc.KeyBinding{Key: "T", Label: "Test Access", Action: "test_access"},
-			pluginrpc.KeyBinding{Key: "K", Label: "Connection Cmd", Action: "connection_command"},
-		),
-	}, nil
+	}, usersActions()...), nil
 }
 
 func (s *Service) k8sViewRolesLocked() (pluginrpc.ViewData, error) {
@@ -112,7 +136,7 @@ func (s *Service) k8sViewRolesLocked() (pluginrpc.ViewData, error) {
 	if err != nil {
 		return pluginrpc.ViewData{}, err
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         k8sViewRoles,
 		Title:        "K8s Roles",
 		Info:         s.baseInfo(fmt.Sprintf("Roles: %d", len(rows))),
@@ -120,12 +144,7 @@ func (s *Service) k8sViewRolesLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Name", "Namespace", "Resources"},
 		Rows:         rows,
 		SelectionKey: "Name",
-		KeyBindings: withK8sNav(
-			pluginrpc.KeyBinding{Key: "C", Label: "Create Role", Action: "create_role"},
-			pluginrpc.KeyBinding{Key: "D", Label: "Delete", Action: "delete"},
-			pluginrpc.KeyBinding{Key: "V", Label: "Details", Action: "view_details"},
-		),
-	}, nil
+	}, rolesActions()...), nil
 }
 
 func (s *Service) fetchRolesLocked() ([][]string, error) {

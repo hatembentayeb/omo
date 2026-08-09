@@ -8,22 +8,76 @@ import (
 	"omo/pkg/pluginrpc"
 )
 
-func navBindings() []pluginrpc.KeyBinding {
+func viewNavBindings() []pluginrpc.KeyBinding {
 	return []pluginrpc.KeyBinding{
-		{Key: "B", Label: "Brokers", Action: "goto_brokers"},
-		{Key: "T", Label: "Topics", Action: "goto_topics"},
-		{Key: "G", Label: "Consumers", Action: "goto_consumers"},
-		{Key: "P", Label: "Partitions", Action: "goto_partitions"},
-		{Key: "M", Label: "Messages", Action: "goto_messages"},
+		{Key: "0", Label: "Brokers", Action: "goto_brokers"},
+		{Key: "1", Label: "Topics", Action: "goto_topics"},
+		{Key: "2", Label: "Consumers", Action: "goto_consumers"},
+		{Key: "3", Label: "Partitions", Action: "goto_partitions"},
+		{Key: "4", Label: "Messages", Action: "goto_messages"},
 	}
 }
 
-func withNav(extra ...pluginrpc.KeyBinding) []pluginrpc.KeyBinding {
-	out := make([]pluginrpc.KeyBinding, 0, len(extra)+len(navBindings())+1)
-	out = append(out, pluginrpc.KeyBinding{Key: "R", Label: "Refresh", Action: "refresh"})
-	out = append(out, extra...)
-	out = append(out, navBindings()...)
-	return out
+func brokersActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "I", Label: "Info", Action: "info"},
+	}
+}
+
+func topicsActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "I", Label: "Info", Action: "info"},
+		{Key: "P", Label: "Partitions", Action: "show_partitions"},
+		{Key: "M", Label: "Messages", Action: "show_messages"},
+	}
+}
+
+func consumersActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "I", Label: "Info", Action: "info"},
+		{Key: "O", Label: "Offsets", Action: "view_offsets"},
+	}
+}
+
+func partitionsActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "I", Label: "Info", Action: "info"},
+	}
+}
+
+func messagesActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "I", Label: "Info", Action: "view_message"},
+	}
+}
+
+func helpSections() []pluginrpc.HelpSection {
+	return []pluginrpc.HelpSection{
+		{Title: "Views (0-4)", Bindings: viewNavBindings()},
+		{Title: "Brokers", Bindings: brokersActions()},
+		{Title: "Topics", Bindings: topicsActions()},
+		{Title: "Consumers", Bindings: consumersActions()},
+		{Title: "Partitions", Bindings: partitionsActions()},
+		{Title: "Messages", Bindings: messagesActions()},
+		{
+			Title: "Global",
+			Bindings: []pluginrpc.KeyBinding{
+				{Key: "R", Label: "Refresh"},
+				{Key: "?", Label: "Help (this screen)"},
+				{Key: "/", Label: "Filter"},
+				{Key: "^t", Label: "Switch target"},
+				{Key: "ESC", Label: "Back / home"},
+			},
+		},
+	}
+}
+
+func decorate(view pluginrpc.ViewData, actions ...pluginrpc.KeyBinding) pluginrpc.ViewData {
+	view.ViewBindings = viewNavBindings()
+	view.KeyBindings = nil
+	view.Actions = actions
+	view.HelpSections = helpSections()
+	return view
 }
 
 func (s *Service) baseInfo(extra string) string {
@@ -96,7 +150,7 @@ func (s *Service) viewBrokersLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"No brokers found", "", ""})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         kafkaViewBrokers,
 		Title:        "Kafka Brokers",
 		Info:         s.baseInfo(fmt.Sprintf("Brokers: %d", len(brokers))),
@@ -104,10 +158,7 @@ func (s *Service) viewBrokersLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"ID", "Address", "Controller"},
 		Rows:         rows,
 		SelectionKey: "ID",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "I", Label: "Info", Action: "info"},
-		),
-	}, nil
+	}, brokersActions()...), nil
 }
 
 func (s *Service) viewTopicsLocked() (pluginrpc.ViewData, error) {
@@ -131,7 +182,7 @@ func (s *Service) viewTopicsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"No topics found", "", "", ""})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         kafkaViewTopics,
 		Title:        "Kafka Topics",
 		Info:         s.baseInfo(fmt.Sprintf("Topics: %d", len(topics))),
@@ -139,12 +190,7 @@ func (s *Service) viewTopicsLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Name", "Partitions", "Replication", "Internal"},
 		Rows:         rows,
 		SelectionKey: "Name",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "I", Label: "Info", Action: "info"},
-			pluginrpc.KeyBinding{Key: "P", Label: "Partitions", Action: "show_partitions"},
-			pluginrpc.KeyBinding{Key: "M", Label: "Messages", Action: "show_messages"},
-		),
-	}, nil
+	}, topicsActions()...), nil
 }
 
 func (s *Service) viewConsumersLocked() (pluginrpc.ViewData, error) {
@@ -165,7 +211,7 @@ func (s *Service) viewConsumersLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"No consumer groups found", "", "", "", ""})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         kafkaViewConsumers,
 		Title:        "Kafka Consumers",
 		Info:         s.baseInfo(fmt.Sprintf("Consumer Groups: %d", len(groups))),
@@ -173,25 +219,20 @@ func (s *Service) viewConsumersLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Group ID", "State", "Members", "Protocol", "Protocol Type"},
 		Rows:         rows,
 		SelectionKey: "Group ID",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "I", Label: "Info", Action: "info"},
-			pluginrpc.KeyBinding{Key: "O", Label: "Offsets", Action: "view_offsets"},
-		),
-	}, nil
+	}, consumersActions()...), nil
 }
 
 func (s *Service) viewPartitionsLocked() (pluginrpc.ViewData, error) {
 	if s.selectedTopic == "" {
-		return pluginrpc.ViewData{
+		return decorate(pluginrpc.ViewData{
 			View:         kafkaViewPartitions,
 			Title:        "Kafka Partitions",
 			Info:         s.baseInfo(""),
 			Status:       "connected",
 			Headers:      []string{"Partition", "Leader", "Replicas", "ISR", "Oldest", "Newest", "Messages"},
-			Rows:         [][]string{{"No topic selected", "Press T then P on a topic", "", "", "", "", ""}},
+			Rows:         [][]string{{"No topic selected", "Press 1 then P on a topic", "", "", "", "", ""}},
 			SelectionKey: "Partition",
-			KeyBindings:  withNav(),
-		}, nil
+		}), nil
 	}
 	partitions, err := s.client.GetTopicPartitions(s.selectedTopic)
 	if err != nil {
@@ -216,7 +257,7 @@ func (s *Service) viewPartitionsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"No partitions found", "", "", "", "", "", ""})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         kafkaViewPartitions,
 		Title:        "Kafka Partitions",
 		Info:         s.baseInfo(fmt.Sprintf("Partitions: %d", len(partitions))),
@@ -224,24 +265,20 @@ func (s *Service) viewPartitionsLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Partition", "Leader", "Replicas", "ISR", "Oldest", "Newest", "Messages"},
 		Rows:         rows,
 		SelectionKey: "Partition",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "I", Label: "Info", Action: "info"},
-		),
-	}, nil
+	}, partitionsActions()...), nil
 }
 
 func (s *Service) viewMessagesLocked() (pluginrpc.ViewData, error) {
 	if s.selectedTopic == "" {
-		return pluginrpc.ViewData{
+		return decorate(pluginrpc.ViewData{
 			View:         kafkaViewMessages,
 			Title:        "Kafka Messages",
 			Info:         s.baseInfo(""),
 			Status:       "connected",
 			Headers:      []string{"Partition", "Offset", "Key", "Value", "Timestamp"},
-			Rows:         [][]string{{"No topic selected", "Press T then M on a topic", "", "", ""}},
+			Rows:         [][]string{{"No topic selected", "Press 1 then M on a topic", "", "", ""}},
 			SelectionKey: "Offset",
-			KeyBindings:  withNav(),
-		}, nil
+		}), nil
 	}
 	messages, err := s.client.ConsumeMessages(s.selectedTopic, 100)
 	if err != nil {
@@ -274,7 +311,7 @@ func (s *Service) viewMessagesLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"No messages found", "", "", "", ""})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         kafkaViewMessages,
 		Title:        "Kafka Messages",
 		Info:         s.baseInfo(fmt.Sprintf("Messages: %d (latest)", len(messages))),
@@ -282,8 +319,5 @@ func (s *Service) viewMessagesLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Partition", "Offset", "Key", "Value", "Timestamp"},
 		Rows:         rows,
 		SelectionKey: "Offset",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "I", Label: "Info", Action: "view_message"},
-		),
-	}, nil
+	}, messagesActions()...), nil
 }

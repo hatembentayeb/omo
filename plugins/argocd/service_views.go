@@ -7,21 +7,82 @@ import (
 	"omo/pkg/pluginrpc"
 )
 
-func argocdNavBindings() []pluginrpc.KeyBinding {
+func viewNavBindings() []pluginrpc.KeyBinding {
 	return []pluginrpc.KeyBinding{
-		{Key: "A", Label: "Applications", Action: "goto_applications"},
-		{Key: "P", Label: "Projects", Action: "goto_projects"},
-		{Key: "U", Label: "Accounts", Action: "goto_accounts"},
-		{Key: "G", Label: "RBAC", Action: "goto_rbac"},
+		{Key: "0", Label: "Applications", Action: "goto_applications"},
+		{Key: "1", Label: "Projects", Action: "goto_projects"},
+		{Key: "2", Label: "Accounts", Action: "goto_accounts"},
+		{Key: "3", Label: "RBAC", Action: "goto_rbac"},
 	}
 }
 
-func withArgoNav(extra ...pluginrpc.KeyBinding) []pluginrpc.KeyBinding {
-	out := make([]pluginrpc.KeyBinding, 0, len(extra)+len(argocdNavBindings())+1)
-	out = append(out, pluginrpc.KeyBinding{Key: "R", Label: "Refresh", Action: "refresh"})
-	out = append(out, extra...)
-	out = append(out, argocdNavBindings()...)
-	return out
+func moreViewBindings() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "P", Label: "Policies", Action: "goto_rbac_policies"},
+		{Key: "G", Label: "Groups", Action: "goto_rbac_groups"},
+	}
+}
+
+func applicationsActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "S", Label: "Sync", Action: "sync"},
+		{Key: "F", Label: "Refresh App", Action: "refresh_app"},
+		{Key: "D", Label: "Delete", Action: "delete"},
+		{Key: "V", Label: "Details", Action: "view_details"},
+	}
+}
+
+func projectsActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "C", Label: "Create", Action: "create_project"},
+		{Key: "D", Label: "Delete", Action: "delete"},
+		{Key: "V", Label: "Details", Action: "view_details"},
+	}
+}
+
+func accountsActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "C", Label: "Create", Action: "create_account"},
+		{Key: "T", Label: "Create Token", Action: "create_token"},
+		{Key: "D", Label: "Delete", Action: "delete"},
+		{Key: "V", Label: "Details", Action: "view_details"},
+	}
+}
+
+func rbacActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "V", Label: "Details", Action: "view_details"},
+	}
+}
+
+func helpSections() []pluginrpc.HelpSection {
+	return []pluginrpc.HelpSection{
+		{Title: "Views (0-3)", Bindings: viewNavBindings()},
+		{Title: "More Views", Bindings: moreViewBindings()},
+		{Title: "Applications", Bindings: applicationsActions()},
+		{Title: "Projects", Bindings: projectsActions()},
+		{Title: "Accounts", Bindings: accountsActions()},
+		{Title: "RBAC", Bindings: rbacActions()},
+		{
+			Title: "Global",
+			Bindings: []pluginrpc.KeyBinding{
+				{Key: "R", Label: "Refresh"},
+				{Key: "?", Label: "Help (this screen)"},
+				{Key: "/", Label: "Filter"},
+				{Key: "^t", Label: "Switch target"},
+				{Key: "ESC", Label: "Back / home"},
+			},
+		},
+	}
+}
+
+// decorate: Views column = 0-3, overflow KeyBindings = RBAC subviews, Actions = this view only.
+func decorate(view pluginrpc.ViewData, actions ...pluginrpc.KeyBinding) pluginrpc.ViewData {
+	view.ViewBindings = viewNavBindings()
+	view.KeyBindings = moreViewBindings()
+	view.Actions = actions
+	view.HelpSections = helpSections()
+	return view
 }
 
 func (s *Service) baseInfo(extra string) string {
@@ -46,17 +107,14 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	needsAPI := viewID == viewApplications || viewID == viewProjects || viewID == viewAccounts
 	if needsAPI {
 		if err := s.ensureConnectedLocked(); err != nil {
-			return pluginrpc.ViewData{
+			return decorate(pluginrpc.ViewData{
 				View:    viewID,
 				Title:   "ArgoCD Manager",
 				Info:    "[yellow]ArgoCD Manager[white]\nStatus: Not Connected\n" + err.Error(),
 				Status:  "not connected",
 				Headers: []string{"Status", "Detail"},
 				Rows:    [][]string{{"error", err.Error()}},
-				KeyBindings: []pluginrpc.KeyBinding{
-					{Key: "R", Label: "Refresh", Action: "refresh"},
-				},
-			}, nil
+			}), nil
 		}
 	}
 
@@ -99,7 +157,7 @@ func (s *Service) viewApplicationsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = [][]string{{"No applications found", "", "", ""}}
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewApplications,
 		Title:        "Applications",
 		Info:         s.baseInfo(fmt.Sprintf("Applications: %d", len(apps))),
@@ -107,13 +165,7 @@ func (s *Service) viewApplicationsLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Name", "Project", "Health", "Sync Status"},
 		Rows:         rows,
 		SelectionKey: "Name",
-		KeyBindings: withArgoNav(
-			pluginrpc.KeyBinding{Key: "S", Label: "Sync", Action: "sync"},
-			pluginrpc.KeyBinding{Key: "F", Label: "Refresh App", Action: "refresh_app"},
-			pluginrpc.KeyBinding{Key: "D", Label: "Delete", Action: "delete"},
-			pluginrpc.KeyBinding{Key: "V", Label: "Details", Action: "view_details"},
-		),
-	}, nil
+	}, applicationsActions()...), nil
 }
 
 func (s *Service) viewProjectsLocked() (pluginrpc.ViewData, error) {
@@ -133,7 +185,7 @@ func (s *Service) viewProjectsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = [][]string{{"No projects found", "", "", ""}}
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewProjects,
 		Title:        "Projects",
 		Info:         s.baseInfo(fmt.Sprintf("Projects: %d", len(projects))),
@@ -141,12 +193,7 @@ func (s *Service) viewProjectsLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Name", "Destinations", "Repositories", "Roles"},
 		Rows:         rows,
 		SelectionKey: "Name",
-		KeyBindings: withArgoNav(
-			pluginrpc.KeyBinding{Key: "C", Label: "Create", Action: "create_project"},
-			pluginrpc.KeyBinding{Key: "D", Label: "Delete", Action: "delete"},
-			pluginrpc.KeyBinding{Key: "V", Label: "Details", Action: "view_details"},
-		),
-	}, nil
+	}, projectsActions()...), nil
 }
 
 func (s *Service) viewAccountsLocked() (pluginrpc.ViewData, error) {
@@ -174,7 +221,7 @@ func (s *Service) viewAccountsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = [][]string{{"No accounts found", "", "", ""}}
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewAccounts,
 		Title:        "Accounts",
 		Info:         s.baseInfo(fmt.Sprintf("Accounts: %d", len(accounts))),
@@ -182,45 +229,29 @@ func (s *Service) viewAccountsLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Name", "Capabilities", "Enabled", "Tokens"},
 		Rows:         rows,
 		SelectionKey: "Name",
-		KeyBindings: withArgoNav(
-			pluginrpc.KeyBinding{Key: "C", Label: "Create", Action: "create_account"},
-			pluginrpc.KeyBinding{Key: "T", Label: "Create Token", Action: "create_token"},
-			pluginrpc.KeyBinding{Key: "D", Label: "Delete", Action: "delete"},
-			pluginrpc.KeyBinding{Key: "V", Label: "Details", Action: "view_details"},
-		),
-	}, nil
+	}, accountsActions()...), nil
 }
 
 func (s *Service) viewRBACLocked(viewID string) (pluginrpc.ViewData, error) {
 	if err := s.ensureConnectedLocked(); err != nil {
-		return pluginrpc.ViewData{
+		return decorate(pluginrpc.ViewData{
 			View:    viewID,
 			Title:   "RBAC",
 			Info:    s.baseInfo(err.Error()),
 			Status:  "error",
 			Headers: []string{"Status", "Detail"},
 			Rows:    [][]string{{"error", err.Error()}},
-			KeyBindings: withArgoNav(
-				pluginrpc.KeyBinding{Key: "1", Label: "Accounts", Action: "goto_rbac"},
-				pluginrpc.KeyBinding{Key: "2", Label: "Policies", Action: "goto_rbac_policies"},
-				pluginrpc.KeyBinding{Key: "3", Label: "Groups", Action: "goto_rbac_groups"},
-			),
-		}, nil
+		}), nil
 	}
 	if s.k8sClient == nil {
-		return pluginrpc.ViewData{
+		return decorate(pluginrpc.ViewData{
 			View:    viewID,
 			Title:   "RBAC",
 			Info:    s.baseInfo("No kubeconfig configured"),
 			Status:  "unavailable",
 			Headers: []string{"Status", "Detail"},
 			Rows:    [][]string{{"unavailable", "Add kubeconfig or kubeconfig_path to KeePass entry"}},
-			KeyBindings: withArgoNav(
-				pluginrpc.KeyBinding{Key: "1", Label: "Accounts", Action: "goto_rbac"},
-				pluginrpc.KeyBinding{Key: "2", Label: "Policies", Action: "goto_rbac_policies"},
-				pluginrpc.KeyBinding{Key: "3", Label: "Groups", Action: "goto_rbac_groups"},
-			),
-		}, nil
+		}), nil
 	}
 
 	argoCM, err := s.k8sClient.GetConfigMap("argocd-cm")
@@ -234,13 +265,6 @@ func (s *Service) viewRBACLocked(viewID string) (pluginrpc.ViewData, error) {
 	s.rbacData.Accounts = ParseArgoCM(argoCM)
 	s.rbacData.Policies, s.rbacData.Groups, s.rbacData.DefaultPolicy = ParseRBACCM(rbacCM)
 
-	nav := withArgoNav(
-		pluginrpc.KeyBinding{Key: "1", Label: "Accounts", Action: "goto_rbac"},
-		pluginrpc.KeyBinding{Key: "2", Label: "Policies", Action: "goto_rbac_policies"},
-		pluginrpc.KeyBinding{Key: "3", Label: "Groups", Action: "goto_rbac_groups"},
-		pluginrpc.KeyBinding{Key: "V", Label: "Details", Action: "view_details"},
-	)
-
 	switch viewID {
 	case viewRBACPolicies:
 		rows := make([][]string, 0, len(s.rbacData.Policies))
@@ -250,7 +274,7 @@ func (s *Service) viewRBACLocked(viewID string) (pluginrpc.ViewData, error) {
 		if len(rows) == 0 {
 			rows = [][]string{{"No policy rules found", "", "", "", ""}}
 		}
-		return pluginrpc.ViewData{
+		return decorate(pluginrpc.ViewData{
 			View:         viewRBACPolicies,
 			Title:        "RBAC Policies",
 			Info:         s.baseInfo(fmt.Sprintf("Policies: %d", len(s.rbacData.Policies))),
@@ -258,8 +282,7 @@ func (s *Service) viewRBACLocked(viewID string) (pluginrpc.ViewData, error) {
 			Headers:      []string{"Subject", "Resource", "Action", "Object", "Effect"},
 			Rows:         rows,
 			SelectionKey: "Subject",
-			KeyBindings:  nav,
-		}, nil
+		}, rbacActions()...), nil
 
 	case viewRBACGroups:
 		rows := make([][]string, 0, len(s.rbacData.Groups))
@@ -269,7 +292,7 @@ func (s *Service) viewRBACLocked(viewID string) (pluginrpc.ViewData, error) {
 		if len(rows) == 0 {
 			rows = [][]string{{"No group bindings found", ""}}
 		}
-		return pluginrpc.ViewData{
+		return decorate(pluginrpc.ViewData{
 			View:         viewRBACGroups,
 			Title:        "RBAC Groups",
 			Info:         s.baseInfo(fmt.Sprintf("Groups: %d", len(s.rbacData.Groups))),
@@ -277,8 +300,7 @@ func (s *Service) viewRBACLocked(viewID string) (pluginrpc.ViewData, error) {
 			Headers:      []string{"User", "Role"},
 			Rows:         rows,
 			SelectionKey: "User",
-			KeyBindings:  nav,
-		}, nil
+		}, rbacActions()...), nil
 
 	default:
 		rows := make([][]string, 0, len(s.rbacData.Accounts))
@@ -296,7 +318,7 @@ func (s *Service) viewRBACLocked(viewID string) (pluginrpc.ViewData, error) {
 		if len(rows) == 0 {
 			rows = [][]string{{"No accounts found in argocd-cm", "", ""}}
 		}
-		return pluginrpc.ViewData{
+		return decorate(pluginrpc.ViewData{
 			View:         viewRBAC,
 			Title:        "RBAC Accounts",
 			Info:         s.baseInfo(fmt.Sprintf("RBAC accounts: %d", len(s.rbacData.Accounts))),
@@ -304,7 +326,6 @@ func (s *Service) viewRBACLocked(viewID string) (pluginrpc.ViewData, error) {
 			Headers:      []string{"Name", "Capabilities", "Enabled"},
 			Rows:         rows,
 			SelectionKey: "Name",
-			KeyBindings:  nav,
-		}, nil
+		}, rbacActions()...), nil
 	}
 }

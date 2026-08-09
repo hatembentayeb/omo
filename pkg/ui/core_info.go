@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 )
 
 // SetInfoText updates the content of the info panel
@@ -19,31 +18,15 @@ func (c *CoreView) SetInfoTitle(title string) *CoreView {
 	return c
 }
 
-// Log adds a new message to the log panel.
-// Safe from any goroutine, including from inside QueueUpdate/QueueUpdateDraw.
-// The update is queued on a separate goroutine so we never block the tview
-// event loop waiting for itself (which deadlocks).
+// Log is retained for callers; the on-screen logs panel was removed.
+// Messages are discarded (host file logging remains elsewhere).
 func (c *CoreView) Log(message string) *CoreView {
-	if c.app == nil || c.logPanel == nil {
-		return c
-	}
-	timestamp := time.Now().Format("15:04:05")
-	line := fmt.Sprintf("[gray::d]%s[-] %s", timestamp, message)
-	go c.app.QueueUpdate(func() {
-		content := c.logPanel.GetText(false)
-		if content != "" {
-			content += "\n"
-		}
-		content += line
-		c.logPanel.SetText(content)
-		c.logPanel.ScrollToEnd()
-	})
+	_ = message
 	return c
 }
 
-// ClearLogs clears all log messages
+// ClearLogs is a no-op; the on-screen logs panel was removed.
 func (c *CoreView) ClearLogs() *CoreView {
-	c.logPanel.SetText("")
 	return c
 }
 

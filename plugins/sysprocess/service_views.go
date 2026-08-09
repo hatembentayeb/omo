@@ -19,22 +19,72 @@ import (
 	"github.com/shirou/gopsutil/v3/process"
 )
 
-func navBindings() []pluginrpc.KeyBinding {
+func viewNavBindings() []pluginrpc.KeyBinding {
 	return []pluginrpc.KeyBinding{
-		{Key: "P", Label: "Processes", Action: "goto_processes"},
-		{Key: "L", Label: "Ports", Action: "goto_ports"},
-		{Key: "G", Label: "Warnings", Action: "goto_warnings"},
-		{Key: "S", Label: "Metrics", Action: "goto_metrics"},
-		{Key: "D", Label: "Disk", Action: "goto_disk"},
+		{Key: "0", Label: "Processes", Action: "goto_processes"},
+		{Key: "1", Label: "Ports", Action: "goto_ports"},
+		{Key: "2", Label: "Warnings", Action: "goto_warnings"},
+		{Key: "3", Label: "Metrics", Action: "goto_metrics"},
+		{Key: "4", Label: "Disk", Action: "goto_disk"},
 	}
 }
 
-func withNav(extra ...pluginrpc.KeyBinding) []pluginrpc.KeyBinding {
-	out := make([]pluginrpc.KeyBinding, 0, len(extra)+len(navBindings())+1)
-	out = append(out, pluginrpc.KeyBinding{Key: "R", Label: "Refresh", Action: "refresh"})
-	out = append(out, extra...)
-	out = append(out, navBindings()...)
-	return out
+func processesActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "W", Label: "Why Running?", Action: "details"},
+		{Key: "K", Label: "Kill", Action: "kill"},
+		{Key: "T", Label: "Sort CPU", Action: "sort_cpu"},
+		{Key: "M", Label: "Sort Mem", Action: "sort_mem"},
+	}
+}
+
+func portsActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "W", Label: "Why Running?", Action: "details"},
+		{Key: "K", Label: "Kill", Action: "kill"},
+		{Key: "J", Label: "Jump", Action: "jump_to_process"},
+	}
+}
+
+func warningsActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "W", Label: "Why Running?", Action: "details"},
+	}
+}
+
+func diskActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "E", Label: "Open", Action: "disk_open"},
+		{Key: "U", Label: "Up", Action: "disk_up"},
+	}
+}
+
+func helpSections() []pluginrpc.HelpSection {
+	return []pluginrpc.HelpSection{
+		{Title: "Views (0-4)", Bindings: viewNavBindings()},
+		{Title: "Processes", Bindings: processesActions()},
+		{Title: "Ports", Bindings: portsActions()},
+		{Title: "Warnings", Bindings: warningsActions()},
+		{Title: "Disk", Bindings: diskActions()},
+		{
+			Title: "Global",
+			Bindings: []pluginrpc.KeyBinding{
+				{Key: "R", Label: "Refresh"},
+				{Key: "?", Label: "Help (this screen)"},
+				{Key: "/", Label: "Filter"},
+				{Key: "^t", Label: "Switch target"},
+				{Key: "ESC", Label: "Back / home"},
+			},
+		},
+	}
+}
+
+func decorate(view pluginrpc.ViewData, actions ...pluginrpc.KeyBinding) pluginrpc.ViewData {
+	view.ViewBindings = viewNavBindings()
+	view.KeyBindings = nil
+	view.Actions = actions
+	view.HelpSections = helpSections()
+	return view
 }
 
 func (s *Service) baseInfo(extra string) string {
@@ -80,7 +130,7 @@ func (s *Service) viewProcessesLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"-", "-", "-", "0", "0", "-", "-", "No processes"})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewProcesses,
 		Title:        "User Processes",
 		Info:         s.baseInfo(""),
@@ -88,28 +138,21 @@ func (s *Service) viewProcessesLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"PID", "Name", "User", "CPU%", "Mem%", "Source", "Status", "Started"},
 		Rows:         rows,
 		SelectionKey: "PID",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "W", Label: "Why Running?", Action: "details"},
-			pluginrpc.KeyBinding{Key: "K", Label: "Kill", Action: "kill"},
-			pluginrpc.KeyBinding{Key: "T", Label: "Sort CPU", Action: "sort_cpu"},
-			pluginrpc.KeyBinding{Key: "M", Label: "Sort Mem", Action: "sort_mem"},
-		),
-	}, nil
+	}, processesActions()...), nil
 }
 
 func (s *Service) viewDetailsLocked() (pluginrpc.ViewData, error) {
 	p := s.detailsProcess
 	if p == nil {
-		return pluginrpc.ViewData{
+		return decorate(pluginrpc.ViewData{
 			View:         viewDetails,
 			Title:        "Why Is This Running?",
 			Info:         s.baseInfo(""),
 			Status:       "ok",
 			Headers:      []string{"Property", "Value"},
-			Rows:         [][]string{{"", "[yellow]No process selected. Press P and select one, then W."}},
+			Rows:         [][]string{{"", "[yellow]No process selected. Press 0 and select one, then W."}},
 			SelectionKey: "Property",
-			KeyBindings:  withNav(),
-		}, nil
+		}), nil
 	}
 
 	var data [][]string
@@ -167,7 +210,7 @@ func (s *Service) viewDetailsLocked() (pluginrpc.ViewData, error) {
 		}
 	}
 
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewDetails,
 		Title:        "Why Is This Running?",
 		Info:         s.baseInfo(fmt.Sprintf("PID %d", p.PID)),
@@ -175,8 +218,7 @@ func (s *Service) viewDetailsLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Property", "Value"},
 		Rows:         data,
 		SelectionKey: "Property",
-		KeyBindings:  withNav(),
-	}, nil
+	}), nil
 }
 
 func (s *Service) viewPortsLocked() (pluginrpc.ViewData, error) {
@@ -239,7 +281,7 @@ func (s *Service) viewPortsLocked() (pluginrpc.ViewData, error) {
 	if len(data) == 0 {
 		data = append(data, []string{"-", "-", "-", "No listening ports", "-"})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewPorts,
 		Title:        "Listening Ports",
 		Info:         s.baseInfo(""),
@@ -247,12 +289,7 @@ func (s *Service) viewPortsLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"PID", "Name", "User", "Address", "Source"},
 		Rows:         data,
 		SelectionKey: "PID",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "W", Label: "Why Running?", Action: "details"},
-			pluginrpc.KeyBinding{Key: "K", Label: "Kill", Action: "kill"},
-			pluginrpc.KeyBinding{Key: "J", Label: "Jump", Action: "jump_to_process"},
-		),
-	}, nil
+	}, portsActions()...), nil
 }
 
 func (s *Service) viewWarningsLocked() (pluginrpc.ViewData, error) {
@@ -274,7 +311,7 @@ func (s *Service) viewWarningsLocked() (pluginrpc.ViewData, error) {
 	if len(data) == 0 {
 		data = append(data, []string{"", "", "[green]No warnings — all processes look healthy", ""})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewWarnings,
 		Title:        "Process Warnings",
 		Info:         s.baseInfo(""),
@@ -282,10 +319,7 @@ func (s *Service) viewWarningsLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"PID", "Name", "Warning", "Details"},
 		Rows:         data,
 		SelectionKey: "PID",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "W", Label: "Why Running?", Action: "details"},
-		),
-	}, nil
+	}, warningsActions()...), nil
 }
 
 func (s *Service) viewMetricsLocked() (pluginrpc.ViewData, error) {
@@ -351,7 +385,7 @@ func (s *Service) viewMetricsLocked() (pluginrpc.ViewData, error) {
 	data = append(data, []string{"", ""})
 	data = append(data, []string{"User Processes", fmt.Sprintf("%d", len(s.processes))})
 
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewMetrics,
 		Title:        "System Metrics",
 		Info:         s.baseInfo(""),
@@ -359,8 +393,7 @@ func (s *Service) viewMetricsLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Metric", "Value"},
 		Rows:         data,
 		SelectionKey: "Metric",
-		KeyBindings:  withNav(),
-	}, nil
+	}), nil
 }
 
 func (s *Service) viewDiskLocked() (pluginrpc.ViewData, error) {
@@ -384,7 +417,7 @@ func (s *Service) viewDiskLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"", "[yellow]No entries[white]"})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewDisk,
 		Title:        "Disk Usage (ncdu)",
 		Info:         s.baseInfo("Path: " + truncateString(s.diskPath, 50)),
@@ -392,11 +425,7 @@ func (s *Service) viewDiskLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Size", "Name"},
 		Rows:         rows,
 		SelectionKey: "Name",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "E", Label: "Open", Action: "disk_open"},
-			pluginrpc.KeyBinding{Key: "U", Label: "Up", Action: "disk_up"},
-		),
-	}, nil
+	}, diskActions()...), nil
 }
 
 // scanDirectoryEntries lists path contents with sizes (sync; may be slow on large trees).

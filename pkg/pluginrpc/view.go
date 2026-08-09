@@ -19,6 +19,12 @@ type KeyBinding struct {
 	Action string
 }
 
+// HelpSection is one titled group in the "?" help modal (usually a view).
+type HelpSection struct {
+	Title    string
+	Bindings []KeyBinding
+}
+
 // ViewData is the host-renderable plugin UI snapshot.
 type ViewData struct {
 	View         string // current view id (e.g. "keys", "info")
@@ -28,7 +34,14 @@ type ViewData struct {
 	Headers      []string
 	Rows         [][]string
 	SelectionKey string
-	KeyBindings  []KeyBinding
+	// ViewBindings are digit/view switches shown in the middle header column (0-9).
+	ViewBindings []KeyBinding
+	// KeyBindings are expanded shortcuts shown in the right header column (former logs).
+	KeyBindings []KeyBinding
+	// Actions are per-view operations for the host sidebar only (current view).
+	Actions []KeyBinding
+	// HelpSections drive the "?" modal, grouped by view / topic.
+	HelpSections []HelpSection
 	LogLines     []string
 }
 

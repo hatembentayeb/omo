@@ -9,18 +9,24 @@ import (
 	"omo/pkg/pluginrpc"
 )
 
-func navBindings() []pluginrpc.KeyBinding {
+// Primary views on digit keys 0-9. Remaining views use letter shortcuts and appear in "?".
+func viewNavBindings() []pluginrpc.KeyBinding {
 	return []pluginrpc.KeyBinding{
-		{Key: "K", Label: "Keys", Action: "goto_keys"},
-		{Key: "I", Label: "Server Info", Action: "goto_info"},
-		{Key: "L", Label: "Slowlog", Action: "goto_slowlog"},
-		{Key: "T", Label: "Stats", Action: "goto_stats"},
-		{Key: "C", Label: "Clients", Action: "goto_clients"},
-		{Key: "G", Label: "Config", Action: "goto_config"},
-		{Key: "M", Label: "Memory", Action: "goto_memory"},
-		{Key: "P", Label: "Persistence", Action: "goto_persistence"},
-		{Key: "Y", Label: "Replication", Action: "goto_replication"},
-		{Key: "B", Label: "PubSub", Action: "goto_pubsub"},
+		{Key: "0", Label: "Keys", Action: "goto_keys"},
+		{Key: "1", Label: "Info", Action: "goto_info"},
+		{Key: "2", Label: "Slowlog", Action: "goto_slowlog"},
+		{Key: "3", Label: "Stats", Action: "goto_stats"},
+		{Key: "4", Label: "Clients", Action: "goto_clients"},
+		{Key: "5", Label: "Config", Action: "goto_config"},
+		{Key: "6", Label: "Memory", Action: "goto_memory"},
+		{Key: "7", Label: "Persist", Action: "goto_persistence"},
+		{Key: "8", Label: "Repl", Action: "goto_replication"},
+		{Key: "9", Label: "PubSub", Action: "goto_pubsub"},
+	}
+}
+
+func moreViewBindings() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
 		{Key: "A", Label: "Key Analysis", Action: "goto_keyanalysis"},
 		{Key: "W", Label: "Databases", Action: "goto_databases"},
 		{Key: "X", Label: "Cmd Stats", Action: "goto_commandstats"},
@@ -28,12 +34,66 @@ func navBindings() []pluginrpc.KeyBinding {
 	}
 }
 
-func withNav(extra ...pluginrpc.KeyBinding) []pluginrpc.KeyBinding {
-	out := make([]pluginrpc.KeyBinding, 0, len(extra)+len(navBindings())+1)
-	out = append(out, pluginrpc.KeyBinding{Key: "R", Label: "Refresh", Action: "refresh"})
-	out = append(out, extra...)
-	out = append(out, navBindings()...)
-	return out
+func keysActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "D", Label: "Del Key", Action: "delete"},
+		{Key: "F", Label: "Flush DB", Action: "flush"},
+		{Key: "N", Label: "New Key", Action: "create_key"},
+		{Key: "E", Label: "View Key", Action: "view_key"},
+		{Key: "S", Label: "DB Select", Action: "select_db"},
+	}
+}
+
+func memoryActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "D", Label: "Memory Doctor", Action: "memory_doctor"},
+	}
+}
+
+func pubsubActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "U", Label: "Publish", Action: "publish"},
+		{Key: "E", Label: "Peek Msgs", Action: "subscribe"},
+	}
+}
+
+func databasesActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "S", Label: "Switch DB", Action: "select_db"},
+	}
+}
+
+func helpSections() []pluginrpc.HelpSection {
+	return []pluginrpc.HelpSection{
+		{Title: "Views (0-9)", Bindings: viewNavBindings()},
+		{Title: "More Views", Bindings: moreViewBindings()},
+		{Title: "Keys", Bindings: keysActions()},
+		{Title: "Memory", Bindings: memoryActions()},
+		{Title: "PubSub", Bindings: pubsubActions()},
+		{Title: "Databases", Bindings: databasesActions()},
+		{
+			Title: "Global",
+			Bindings: []pluginrpc.KeyBinding{
+				{Key: "R", Label: "Refresh"},
+				{Key: "?", Label: "Help (this screen)"},
+				{Key: "/", Label: "Filter"},
+				{Key: "^t", Label: "Switch target"},
+				{Key: "ESC", Label: "Back / home"},
+			},
+		},
+	}
+}
+
+// decorate splits UI roles:
+//   - ViewBindings → middle Views column (0-9)
+//   - Actions → former logs / Actions column (this view only)
+//   - more views (A/W/X/Z) → silent binds + "?" help only
+func decorate(view pluginrpc.ViewData, actions ...pluginrpc.KeyBinding) pluginrpc.ViewData {
+	view.ViewBindings = viewNavBindings()
+	view.KeyBindings = moreViewBindings()
+	view.Actions = actions
+	view.HelpSections = helpSections()
+	return view
 }
 
 func (s *Service) baseInfo(extra string) string {
@@ -102,7 +162,7 @@ func (s *Service) viewKeysLocked() (pluginrpc.ViewData, error) {
 	if err != nil {
 		return pluginrpc.ViewData{}, err
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewKeys,
 		Title:        "Redis Keys",
 		Info:         s.baseInfo(fmt.Sprintf("Keys loaded: %d", len(rows))),
@@ -110,14 +170,7 @@ func (s *Service) viewKeysLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Key", "Type", "TTL", "Size"},
 		Rows:         rows,
 		SelectionKey: "Key",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "D", Label: "Del Key", Action: "delete"},
-			pluginrpc.KeyBinding{Key: "F", Label: "Flush DB", Action: "flush"},
-			pluginrpc.KeyBinding{Key: "N", Label: "New Key", Action: "create_key"},
-			pluginrpc.KeyBinding{Key: "E", Label: "View Key", Action: "view_key"},
-			pluginrpc.KeyBinding{Key: "S", Label: "DB Select", Action: "select_db"},
-		),
-	}, nil
+	}, keysActions()...), nil
 }
 
 func (s *Service) viewInfoLocked() (pluginrpc.ViewData, error) {
@@ -136,7 +189,7 @@ func (s *Service) viewInfoLocked() (pluginrpc.ViewData, error) {
 			rows = append(rows, []string{field, value})
 		}
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewInfo,
 		Title:        "Redis Server Info",
 		Info:         s.baseInfo(""),
@@ -144,8 +197,7 @@ func (s *Service) viewInfoLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Property", "Value"},
 		Rows:         rows,
 		SelectionKey: "Property",
-		KeyBindings:  withNav(),
-	}, nil
+	}), nil
 }
 
 func (s *Service) viewSlowlogLocked() (pluginrpc.ViewData, error) {
@@ -166,7 +218,7 @@ func (s *Service) viewSlowlogLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"-", "-", "-", "No slowlog entries", "-"})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewSlowlog,
 		Title:        "Redis Slowlog",
 		Info:         s.baseInfo(""),
@@ -174,8 +226,7 @@ func (s *Service) viewSlowlogLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"ID", "Timestamp", "Duration", "Command", "Client"},
 		Rows:         rows,
 		SelectionKey: "ID",
-		KeyBindings:  withNav(),
-	}, nil
+	}), nil
 }
 
 func (s *Service) viewStatsLocked() (pluginrpc.ViewData, error) {
@@ -197,7 +248,7 @@ func (s *Service) viewStatsLocked() (pluginrpc.ViewData, error) {
 	if ks := parseKeyspace(infoMap); ks != "" {
 		rows = append(rows, []string{"keyspace", ks})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewStats,
 		Title:        "Redis Stats",
 		Info:         s.baseInfo(""),
@@ -205,8 +256,7 @@ func (s *Service) viewStatsLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Metric", "Value"},
 		Rows:         rows,
 		SelectionKey: "Metric",
-		KeyBindings:  withNav(),
-	}, nil
+	}), nil
 }
 
 func (s *Service) viewClientsLocked() (pluginrpc.ViewData, error) {
@@ -224,7 +274,7 @@ func (s *Service) viewClientsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"-", "-", "-", "-", "-", "-", "-", "No clients"})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewClients,
 		Title:        "Redis Clients",
 		Info:         s.baseInfo(""),
@@ -232,8 +282,7 @@ func (s *Service) viewClientsLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"ID", "Addr", "Name", "Age", "Idle", "Flags", "DB", "Cmd"},
 		Rows:         rows,
 		SelectionKey: "ID",
-		KeyBindings:  withNav(),
-	}, nil
+	}), nil
 }
 
 func (s *Service) viewConfigLocked() (pluginrpc.ViewData, error) {
@@ -253,7 +302,7 @@ func (s *Service) viewConfigLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"-", "No config entries"})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewConfig,
 		Title:        "Redis Config",
 		Info:         s.baseInfo(""),
@@ -261,8 +310,7 @@ func (s *Service) viewConfigLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Config", "Value"},
 		Rows:         rows,
 		SelectionKey: "Config",
-		KeyBindings:  withNav(),
-	}, nil
+	}), nil
 }
 
 func (s *Service) viewMemoryLocked() (pluginrpc.ViewData, error) {
@@ -279,7 +327,7 @@ func (s *Service) viewMemoryLocked() (pluginrpc.ViewData, error) {
 	for _, key := range keys {
 		rows = append(rows, []string{key, stats[key]})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewMemory,
 		Title:        "Redis Memory",
 		Info:         s.baseInfo(""),
@@ -287,10 +335,7 @@ func (s *Service) viewMemoryLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Metric", "Value"},
 		Rows:         rows,
 		SelectionKey: "Metric",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "D", Label: "Memory Doctor", Action: "memory_doctor"},
-		),
-	}, nil
+	}, memoryActions()...), nil
 }
 
 func (s *Service) viewPersistenceLocked() (pluginrpc.ViewData, error) {
@@ -315,7 +360,7 @@ func (s *Service) viewSectionLocked(viewID, title, section string) (pluginrpc.Vi
 	for _, key := range keys {
 		rows = append(rows, []string{key, infoMap[key]})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewID,
 		Title:        title,
 		Info:         s.baseInfo(""),
@@ -323,8 +368,7 @@ func (s *Service) viewSectionLocked(viewID, title, section string) (pluginrpc.Vi
 		Headers:      []string{"Property", "Value"},
 		Rows:         rows,
 		SelectionKey: "Property",
-		KeyBindings:  withNav(),
-	}, nil
+	}), nil
 }
 
 func (s *Service) viewPubSubLocked() (pluginrpc.ViewData, error) {
@@ -343,19 +387,15 @@ func (s *Service) viewPubSubLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"-", "0", "No active channels"})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewPubSub,
 		Title:        "Redis PubSub",
-		Info:         s.baseInfo("Enter=peek messages · U=publish"),
+		Info:         s.baseInfo("Enter=peek messages"),
 		Status:       "connected",
 		Headers:      []string{"Channel", "Subscribers", "Type"},
 		Rows:         rows,
 		SelectionKey: "Channel",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "U", Label: "Publish", Action: "publish"},
-			pluginrpc.KeyBinding{Key: "E", Label: "Peek Msgs", Action: "subscribe"},
-		),
-	}, nil
+	}, pubsubActions()...), nil
 }
 
 func (s *Service) viewKeyAnalysisLocked() (pluginrpc.ViewData, error) {
@@ -391,7 +431,7 @@ func (s *Service) viewKeyAnalysisLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"-", "0", "-", "-", "No keys found"})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewKeyAnalysis,
 		Title:        "Redis Key Analysis",
 		Info:         s.baseInfo(""),
@@ -399,8 +439,7 @@ func (s *Service) viewKeyAnalysisLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Pattern", "Count", "Types", "Avg TTL", "Sample Keys"},
 		Rows:         rows,
 		SelectionKey: "Pattern",
-		KeyBindings:  withNav(),
-	}, nil
+	}), nil
 }
 
 func (s *Service) viewDatabasesLocked() (pluginrpc.ViewData, error) {
@@ -431,7 +470,7 @@ func (s *Service) viewDatabasesLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"-", "0", "0", "No databases with keys"})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewDatabases,
 		Title:        "Redis Databases",
 		Info:         s.baseInfo(""),
@@ -439,10 +478,7 @@ func (s *Service) viewDatabasesLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"DB", "Keys", "Expires", "Avg TTL"},
 		Rows:         rows,
 		SelectionKey: "DB",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "S", Label: "Switch DB", Action: "select_db"},
-		),
-	}, nil
+	}, databasesActions()...), nil
 }
 
 func (s *Service) viewCommandStatsLocked() (pluginrpc.ViewData, error) {
@@ -465,7 +501,7 @@ func (s *Service) viewCommandStatsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"-", "0", "0", "No command stats"})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewCmdStats,
 		Title:        "Redis Command Stats",
 		Info:         s.baseInfo(""),
@@ -473,8 +509,7 @@ func (s *Service) viewCommandStatsLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Command", "Calls", "Total Time (μs)", "Avg Time (μs)"},
 		Rows:         rows,
 		SelectionKey: "Command",
-		KeyBindings:  withNav(),
-	}, nil
+	}), nil
 }
 
 func (s *Service) viewLatencyLocked() (pluginrpc.ViewData, error) {
@@ -493,7 +528,7 @@ func (s *Service) viewLatencyLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"-", "-", "No latency events recorded"})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewLatency,
 		Title:        "Redis Latency",
 		Info:         s.baseInfo(""),
@@ -501,8 +536,7 @@ func (s *Service) viewLatencyLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Event", "Timestamp", "Latency (ms)"},
 		Rows:         rows,
 		SelectionKey: "Event",
-		KeyBindings:  withNav(),
-	}, nil
+	}), nil
 }
 
 func (s *Service) peekPubSubLocked(channel string) (string, error) {
@@ -517,14 +551,14 @@ func (s *Service) peekPubSubLocked(channel string) (string, error) {
 	for len(msgs) < 20 {
 		select {
 		case msg := <-sub.Messages:
-			msgs = append(msgs, fmt.Sprintf("[%s] %s", msg.Timestamp.Format("15:04:05"), msg.Payload))
+			msgs = append(msgs, msg.Payload)
 		case <-deadline:
 			goto done
 		}
 	}
 done:
 	if len(msgs) == 0 {
-		return fmt.Sprintf("Subscribed to %q for 2s — no messages received.\nPublish with U, or use another client.", channel), nil
+		return "(no messages in 2s)", nil
 	}
-	return fmt.Sprintf("Channel: %s\n\n%s", channel, strings.Join(msgs, "\n")), nil
+	return strings.Join(msgs, "\n"), nil
 }

@@ -2,6 +2,7 @@ package s3
 
 import (
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -13,17 +14,18 @@ import (
 
 // S3Client wraps AWS S3 API access without UI dependencies.
 type S3Client struct {
-	client  *s3.S3
-	profile string
-	region  string
-	access  string
-	secret  string
-	endpoint string
+	client       *s3.S3
+	profile      string
+	region       string
+	access       string
+	secret       string
+	endpoint     string
+	regionCache  map[string]string
 }
 
 // NewS3Client creates an empty S3 client; call Connect before use.
 func NewS3Client() *S3Client {
-	return &S3Client{}
+	return &S3Client{regionCache: map[string]string{}}
 }
 
 // Connect establishes an S3 session using profile and/or static credentials.
@@ -57,20 +59,19 @@ func (c *S3Client) Connect(profile, region, accessKey, secretKey, endpoint strin
 	c.access = accessKey
 	c.secret = secretKey
 	c.endpoint = endpoint
+	c.regionCache = map[string]string{}
 	return nil
 }
 
-// IsConnected reports whether a session exists.
 func (c *S3Client) IsConnected() bool {
 	return c != nil && c.client != nil
 }
 
-// Disconnect clears the current session.
 func (c *S3Client) Disconnect() {
 	c.client = nil
+	c.regionCache = map[string]string{}
 }
 
-// createClientForRegion builds an S3 client for a specific region.
 func (c *S3Client) createClientForRegion(region string) *s3.S3 {
 	return CreateS3ClientForRegion(c.profile, region, c.access, c.secret, c.endpoint)
 }
@@ -103,11 +104,29 @@ func CreateS3ClientForRegion(profile, region, accessKey, secretKey, endpoint str
 	return s3.New(sess)
 }
 
-// GetBucketRegion looks up the region for a bucket (requires us-east-1 client).
-func GetBucketRegion(profile, fallbackRegion, accessKey, secretKey, endpoint, bucketName string) (string, error) {
-	usEastClient := CreateS3ClientForRegion(profile, "us-east-1", accessKey, secretKey, endpoint)
+func (c *S3Client) bucketClient(bucket string) (*s3.S3, string, error) {
+	if !c.IsConnected() {
+		return nil, "", fmt.Errorf("s3 client not connected")
+	}
+	region, err := c.BucketRegion(bucket)
+	if err != nil {
+		region = c.region
+	}
+	client := c.createClientForRegion(region)
+	if client == nil {
+		return nil, "", fmt.Errorf("error creating S3 client for region %s", region)
+	}
+	return client, region, nil
+}
+
+// BucketRegion looks up (and caches) the region for a bucket.
+func (c *S3Client) BucketRegion(bucketName string) (string, error) {
+	if r, ok := c.regionCache[bucketName]; ok {
+		return r, nil
+	}
+	usEastClient := CreateS3ClientForRegion(c.profile, "us-east-1", c.access, c.secret, c.endpoint)
 	if usEastClient == nil {
-		return fallbackRegion, fmt.Errorf("failed to create us-east-1 client for region lookup")
+		return c.region, fmt.Errorf("failed to create us-east-1 client for region lookup")
 	}
 	result, err := usEastClient.GetBucketLocation(&s3.GetBucketLocationInput{
 		Bucket: aws.String(bucketName),
@@ -115,10 +134,12 @@ func GetBucketRegion(profile, fallbackRegion, accessKey, secretKey, endpoint, bu
 	if err != nil {
 		return "unknown", err
 	}
-	if result.LocationConstraint == nil || *result.LocationConstraint == "" {
-		return "us-east-1", nil
+	region := "us-east-1"
+	if result.LocationConstraint != nil && *result.LocationConstraint != "" {
+		region = *result.LocationConstraint
 	}
-	return *result.LocationConstraint, nil
+	c.regionCache[bucketName] = region
+	return region, nil
 }
 
 // BucketRow is a serializable bucket listing row.
@@ -140,7 +161,7 @@ func (c *S3Client) ListBuckets() ([]BucketRow, error) {
 	rows := make([]BucketRow, 0, len(result.Buckets))
 	for _, bucket := range result.Buckets {
 		name := aws.StringValue(bucket.Name)
-		region, err := GetBucketRegion(c.profile, c.region, c.access, c.secret, c.endpoint, name)
+		region, err := c.BucketRegion(name)
 		if err != nil {
 			region = "unknown"
 		}
@@ -164,16 +185,9 @@ type ObjectRow struct {
 
 // ListObjects lists objects under bucket/prefix (delimiter=/).
 func (c *S3Client) ListObjects(bucket, prefix string) ([]ObjectRow, error) {
-	if !c.IsConnected() {
-		return nil, fmt.Errorf("s3 client not connected")
-	}
-	region, err := GetBucketRegion(c.profile, c.region, c.access, c.secret, c.endpoint, bucket)
+	client, _, err := c.bucketClient(bucket)
 	if err != nil {
-		region = c.region
-	}
-	client := c.createClientForRegion(region)
-	if client == nil {
-		return nil, fmt.Errorf("error creating S3 client for region %s", region)
+		return nil, err
 	}
 
 	input := &s3.ListObjectsV2Input{
@@ -238,4 +252,454 @@ func formatS3ObjectRow(obj *s3.Object, prefix string) *ObjectRow {
 		storageClass = *obj.StorageClass
 	}
 	return &ObjectRow{Name: name, Size: size, LastModified: lastModified, StorageClass: storageClass}
+}
+
+// CreateBucket creates a bucket in the configured region.
+func (c *S3Client) CreateBucket(name, region string) error {
+	if !c.IsConnected() {
+		return fmt.Errorf("s3 client not connected")
+	}
+	if region == "" {
+		region = c.region
+	}
+	client := c.createClientForRegion(region)
+	if client == nil {
+		return fmt.Errorf("failed to create client for region %s", region)
+	}
+	input := &s3.CreateBucketInput{Bucket: aws.String(name)}
+	if region != "" && region != "us-east-1" {
+		input.CreateBucketConfiguration = &s3.CreateBucketConfiguration{
+			LocationConstraint: aws.String(region),
+		}
+	}
+	_, err := client.CreateBucket(input)
+	if err == nil {
+		c.regionCache[name] = region
+	}
+	return err
+}
+
+// DeleteBucket deletes an empty bucket.
+func (c *S3Client) DeleteBucket(name string) error {
+	client, _, err := c.bucketClient(name)
+	if err != nil {
+		return err
+	}
+	_, err = client.DeleteBucket(&s3.DeleteBucketInput{Bucket: aws.String(name)})
+	delete(c.regionCache, name)
+	return err
+}
+
+// DeleteObject deletes a single object key.
+func (c *S3Client) DeleteObject(bucket, key string) error {
+	client, _, err := c.bucketClient(bucket)
+	if err != nil {
+		return err
+	}
+	_, err = client.DeleteObject(&s3.DeleteObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	})
+	return err
+}
+
+// PutEmptyObject creates a zero-byte object (used for "folders").
+func (c *S3Client) PutEmptyObject(bucket, key string) error {
+	client, _, err := c.bucketClient(bucket)
+	if err != nil {
+		return err
+	}
+	_, err = client.PutObject(&s3.PutObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+		Body:   strings.NewReader(""),
+	})
+	return err
+}
+
+// ObjectInfo holds HeadObject details.
+type ObjectInfo struct {
+	Key          string
+	Size         string
+	ContentType  string
+	ETag         string
+	LastModified string
+	StorageClass string
+	Metadata     map[string]string
+}
+
+// HeadObject returns metadata for an object.
+func (c *S3Client) HeadObject(bucket, key string) (*ObjectInfo, error) {
+	client, _, err := c.bucketClient(bucket)
+	if err != nil {
+		return nil, err
+	}
+	out, err := client.HeadObject(&s3.HeadObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return nil, err
+	}
+	info := &ObjectInfo{
+		Key:          key,
+		ContentType:  aws.StringValue(out.ContentType),
+		ETag:         aws.StringValue(out.ETag),
+		StorageClass: aws.StringValue(out.StorageClass),
+		Metadata:     map[string]string{},
+	}
+	if out.ContentLength != nil {
+		info.Size = formatSize(*out.ContentLength)
+	}
+	if out.LastModified != nil {
+		info.LastModified = out.LastModified.Format(time.RFC3339)
+	}
+	if info.StorageClass == "" {
+		info.StorageClass = "STANDARD"
+	}
+	for k, v := range out.Metadata {
+		info.Metadata[k] = aws.StringValue(v)
+	}
+	return info, nil
+}
+
+// PresignGet returns a time-limited GET URL.
+func (c *S3Client) PresignGet(bucket, key string, expiry time.Duration) (string, error) {
+	client, _, err := c.bucketClient(bucket)
+	if err != nil {
+		return "", err
+	}
+	req, _ := client.GetObjectRequest(&s3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	})
+	return req.Presign(expiry)
+}
+
+// BucketOverview aggregates common bucket configuration.
+type BucketOverview struct {
+	Region              string
+	Versioning          string
+	Encryption          string
+	PublicAccessBlock   string
+	ObjectCountApprox   string
+	TotalSizeApprox     string
+	PrefixSampled       string
+}
+
+// GetBucketOverview fetches config + a quick listing sample for size/count.
+func (c *S3Client) GetBucketOverview(bucket, prefix string) (*BucketOverview, error) {
+	client, region, err := c.bucketClient(bucket)
+	if err != nil {
+		return nil, err
+	}
+	ov := &BucketOverview{Region: region, PrefixSampled: prefix}
+
+	if out, err := client.GetBucketVersioning(&s3.GetBucketVersioningInput{Bucket: aws.String(bucket)}); err == nil {
+		status := aws.StringValue(out.Status)
+		if status == "" {
+			status = "Disabled"
+		}
+		ov.Versioning = status
+	} else {
+		ov.Versioning = "n/a: " + err.Error()
+	}
+
+	if out, err := client.GetBucketEncryption(&s3.GetBucketEncryptionInput{Bucket: aws.String(bucket)}); err == nil {
+		rules := out.ServerSideEncryptionConfiguration
+		if rules != nil && len(rules.Rules) > 0 && rules.Rules[0].ApplyServerSideEncryptionByDefault != nil {
+			ov.Encryption = aws.StringValue(rules.Rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm)
+		} else {
+			ov.Encryption = "none"
+		}
+	} else {
+		ov.Encryption = "none / n/a"
+	}
+
+	if out, err := client.GetPublicAccessBlock(&s3.GetPublicAccessBlockInput{Bucket: aws.String(bucket)}); err == nil && out.PublicAccessBlockConfiguration != nil {
+		cfg := out.PublicAccessBlockConfiguration
+		ov.PublicAccessBlock = fmt.Sprintf("BlockPublicAcls=%v IgnorePublicAcls=%v BlockPublicPolicy=%v RestrictPublicBuckets=%v",
+			aws.BoolValue(cfg.BlockPublicAcls), aws.BoolValue(cfg.IgnorePublicAcls),
+			aws.BoolValue(cfg.BlockPublicPolicy), aws.BoolValue(cfg.RestrictPublicBuckets))
+	} else {
+		ov.PublicAccessBlock = "not set / n/a"
+	}
+
+	var count int64
+	var total int64
+	truncated := false
+	input := &s3.ListObjectsV2Input{
+		Bucket:  aws.String(bucket),
+		MaxKeys: aws.Int64(1000),
+	}
+	if prefix != "" {
+		input.Prefix = aws.String(prefix)
+	}
+	err = client.ListObjectsV2Pages(input, func(page *s3.ListObjectsV2Output, last bool) bool {
+		for _, obj := range page.Contents {
+			count++
+			if obj.Size != nil {
+				total += *obj.Size
+			}
+		}
+		if aws.BoolValue(page.IsTruncated) && count >= 5000 {
+			truncated = true
+			return false
+		}
+		return !last
+	})
+	if err != nil {
+		ov.ObjectCountApprox = "error: " + err.Error()
+		ov.TotalSizeApprox = "n/a"
+	} else {
+		suffix := ""
+		if truncated {
+			suffix = "+"
+		}
+		ov.ObjectCountApprox = fmt.Sprintf("%d%s", count, suffix)
+		ov.TotalSizeApprox = formatSize(total) + suffix
+	}
+	return ov, nil
+}
+
+// VersionRow is one object version listing row.
+type VersionRow struct {
+	Key          string
+	VersionID    string
+	IsLatest     string
+	Size         string
+	LastModified string
+	StorageClass string
+}
+
+// ListObjectVersions lists versions under a prefix (max 200).
+func (c *S3Client) ListObjectVersions(bucket, prefix string) ([]VersionRow, error) {
+	client, _, err := c.bucketClient(bucket)
+	if err != nil {
+		return nil, err
+	}
+	input := &s3.ListObjectVersionsInput{
+		Bucket:  aws.String(bucket),
+		MaxKeys: aws.Int64(200),
+	}
+	if prefix != "" {
+		input.Prefix = aws.String(prefix)
+	}
+	out, err := client.ListObjectVersions(input)
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]VersionRow, 0, len(out.Versions))
+	for _, v := range out.Versions {
+		size := ""
+		if v.Size != nil {
+			size = formatSize(*v.Size)
+		}
+		mod := ""
+		if v.LastModified != nil {
+			mod = v.LastModified.Format(time.RFC3339)
+		}
+		latest := "no"
+		if aws.BoolValue(v.IsLatest) {
+			latest = "yes"
+		}
+		storage := aws.StringValue(v.StorageClass)
+		if storage == "" {
+			storage = "STANDARD"
+		}
+		rows = append(rows, VersionRow{
+			Key:          aws.StringValue(v.Key),
+			VersionID:    aws.StringValue(v.VersionId),
+			IsLatest:     latest,
+			Size:         size,
+			LastModified: mod,
+			StorageClass: storage,
+		})
+	}
+	return rows, nil
+}
+
+// ACLRow is one ACL grant.
+type ACLRow struct {
+	Grantee string
+	Type    string
+	Permission string
+}
+
+// GetBucketACL returns bucket ACL grants.
+func (c *S3Client) GetBucketACL(bucket string) (owner string, rows []ACLRow, err error) {
+	client, _, err := c.bucketClient(bucket)
+	if err != nil {
+		return "", nil, err
+	}
+	out, err := client.GetBucketAcl(&s3.GetBucketAclInput{Bucket: aws.String(bucket)})
+	if err != nil {
+		return "", nil, err
+	}
+	if out.Owner != nil {
+		owner = aws.StringValue(out.Owner.DisplayName)
+		if owner == "" {
+			owner = aws.StringValue(out.Owner.ID)
+		}
+	}
+	for _, g := range out.Grants {
+		row := ACLRow{Permission: aws.StringValue(g.Permission)}
+		if g.Grantee != nil {
+			row.Type = aws.StringValue(g.Grantee.Type)
+			row.Grantee = aws.StringValue(g.Grantee.DisplayName)
+			if row.Grantee == "" {
+				row.Grantee = aws.StringValue(g.Grantee.ID)
+			}
+			if row.Grantee == "" {
+				row.Grantee = aws.StringValue(g.Grantee.URI)
+			}
+			if row.Grantee == "" {
+				row.Grantee = aws.StringValue(g.Grantee.EmailAddress)
+			}
+		}
+		rows = append(rows, row)
+	}
+	return owner, rows, nil
+}
+
+// LifecycleRow is one lifecycle rule summary.
+type LifecycleRow struct {
+	ID     string
+	Status string
+	Prefix string
+	Summary string
+}
+
+// ListLifecycleRules returns bucket lifecycle configuration.
+func (c *S3Client) ListLifecycleRules(bucket string) ([]LifecycleRow, error) {
+	client, _, err := c.bucketClient(bucket)
+	if err != nil {
+		return nil, err
+	}
+	out, err := client.GetBucketLifecycleConfiguration(&s3.GetBucketLifecycleConfigurationInput{
+		Bucket: aws.String(bucket),
+	})
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]LifecycleRow, 0, len(out.Rules))
+	for _, rule := range out.Rules {
+		prefix := ""
+		if rule.Filter != nil && rule.Filter.Prefix != nil {
+			prefix = aws.StringValue(rule.Filter.Prefix)
+		} else if rule.Prefix != nil {
+			prefix = aws.StringValue(rule.Prefix)
+		}
+		var parts []string
+		if rule.Expiration != nil && rule.Expiration.Days != nil {
+			parts = append(parts, fmt.Sprintf("expire %dd", *rule.Expiration.Days))
+		}
+		for _, t := range rule.Transitions {
+			days := int64(0)
+			if t.Days != nil {
+				days = *t.Days
+			}
+			parts = append(parts, fmt.Sprintf("→%s %dd", aws.StringValue(t.StorageClass), days))
+		}
+		if rule.AbortIncompleteMultipartUpload != nil && rule.AbortIncompleteMultipartUpload.DaysAfterInitiation != nil {
+			parts = append(parts, fmt.Sprintf("abort MPU %dd", *rule.AbortIncompleteMultipartUpload.DaysAfterInitiation))
+		}
+		summary := strings.Join(parts, ", ")
+		if summary == "" {
+			summary = "-"
+		}
+		rows = append(rows, LifecycleRow{
+			ID:      aws.StringValue(rule.ID),
+			Status:  aws.StringValue(rule.Status),
+			Prefix:  prefix,
+			Summary: summary,
+		})
+	}
+	return rows, nil
+}
+
+// MultipartRow is an incomplete multipart upload.
+type MultipartRow struct {
+	Key       string
+	UploadID  string
+	Initiated string
+}
+
+// ListMultipartUploads lists incomplete multipart uploads.
+func (c *S3Client) ListMultipartUploads(bucket, prefix string) ([]MultipartRow, error) {
+	client, _, err := c.bucketClient(bucket)
+	if err != nil {
+		return nil, err
+	}
+	input := &s3.ListMultipartUploadsInput{
+		Bucket:  aws.String(bucket),
+		MaxUploads: aws.Int64(100),
+	}
+	if prefix != "" {
+		input.Prefix = aws.String(prefix)
+	}
+	out, err := client.ListMultipartUploads(input)
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]MultipartRow, 0, len(out.Uploads))
+	for _, u := range out.Uploads {
+		initiated := ""
+		if u.Initiated != nil {
+			initiated = u.Initiated.Format(time.RFC3339)
+		}
+		rows = append(rows, MultipartRow{
+			Key:       aws.StringValue(u.Key),
+			UploadID:  aws.StringValue(u.UploadId),
+			Initiated: initiated,
+		})
+	}
+	return rows, nil
+}
+
+// AbortMultipartUpload aborts an incomplete upload.
+func (c *S3Client) AbortMultipartUpload(bucket, key, uploadID string) error {
+	client, _, err := c.bucketClient(bucket)
+	if err != nil {
+		return err
+	}
+	_, err = client.AbortMultipartUpload(&s3.AbortMultipartUploadInput{
+		Bucket:   aws.String(bucket),
+		Key:      aws.String(key),
+		UploadId: aws.String(uploadID),
+	})
+	return err
+}
+
+// PeekObject reads up to maxBytes of an object for a preview modal.
+func (c *S3Client) PeekObject(bucket, key string, maxBytes int64) (string, error) {
+	client, _, err := c.bucketClient(bucket)
+	if err != nil {
+		return "", err
+	}
+	out, err := client.GetObject(&s3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+		Range:  aws.String(fmt.Sprintf("bytes=0-%d", maxBytes-1)),
+	})
+	if err != nil {
+		return "", err
+	}
+	defer out.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(out.Body, maxBytes))
+	if err != nil {
+		return "", err
+	}
+	ct := aws.StringValue(out.ContentType)
+	if strings.HasPrefix(ct, "text/") || strings.Contains(ct, "json") || strings.Contains(ct, "xml") || ct == "" {
+		return string(data), nil
+	}
+	return fmt.Sprintf("(binary content-type=%s, showing %d bytes hex)\n%x", ct, len(data), data[:min(64, len(data))]), nil
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

@@ -26,5 +26,7 @@ When editing plugin RPC, host plugin manager/renderer, or CoreView input/logging
 
 ## New / extended plugin
 
-Follow project skill `rpc-plugin-migration`. Reference: `plugins/redis/service.go` + `service_views.go`.
+Follow project skills `rpc-plugin-migration` and `plugin-ui-views`.
+Reference: `plugins/redis/service.go` + `service_views.go` (also docker).
+Header: `ViewBindings` (0-9) | `Actions` (current view) | `HelpSections` for `?`.
 Add the name to `RPC_PLUGINS` in the Makefile.

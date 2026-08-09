@@ -11,10 +11,22 @@ import (
 	"github.com/rivo/tview"
 )
 
+// HelpSection is one titled group shown in the "?" help modal.
+type HelpSection struct {
+	Title    string
+	Bindings []KeyBindingHelp
+}
+
+// KeyBindingHelp is a key + label pair for help display.
+type KeyBindingHelp struct {
+	Key   string
+	Label string
+}
+
 // CoreView provides a standardized UI component that can be embedded in plugins
 // with consistent layout and behavior. CoreView is the central UI component that
 // handles common UI patterns, user input, data display, and plugin interactions.
-// It manages components like tables, logs, help text, and navigation breadcrumbs.
+// It manages components like tables, help text, and navigation breadcrumbs.
 type CoreView struct {
 	// Core components
 	app        *tview.Application // Reference to the main application
@@ -23,11 +35,21 @@ type CoreView struct {
 	title      string             // Plugin title
 
 	// Header row panels
-	infoPanel    *tview.TextView // Left: context and status information
-	helpPanel    *tview.TextView // Middle: keybinding and help information
-	helpExpanded bool            // Whether help panel shows expanded text
-	logPanel     *tview.TextView // Right: logs and messages
-	breadcrumbs  *tview.TextView // Navigation breadcrumbs
+	infoPanel    *tview.TextView // Left: connection / status
+	viewsPanel   *tview.TextView // Middle: views 0-9
+	keysPanel    *tview.TextView // Right (former logs): expanded key shortcuts
+	helpExpanded bool
+	breadcrumbs  *tview.TextView
+
+	// Optional "?" modal content (grouped by view).
+	helpSections []HelpSection
+
+	// Separate binding maps for the two shortcut columns.
+	viewBindings   map[string]string // middle: view switches (key -> label)
+	viewBindingIDs map[string]string // key -> view id for highlight
+	activeViewID   string
+	keyBindings    map[string]string // right: action / global keys
+	keyHandlers    map[string]func()
 
 	// Table view
 	table        *Table
@@ -37,14 +59,10 @@ type CoreView struct {
 	tableHeaders    []string
 	tableData       [][]string
 	rawTableData    [][]string
-	selectionKey    string // Column to track selected rows
-	selectedRow     int    // Currently selected row index (-1 if none)
+	selectionKey    string
+	selectedRow     int
 	filterQuery     string
 	filteredIndices []int
-
-	// Key binding management
-	keyBindings map[string]string
-	keyHandlers map[string]func()
 
 	// Data refresh management
 	refreshMutex  sync.Mutex
@@ -86,6 +104,8 @@ func NewCoreView(app *tview.Application, title string) *CoreView {
 		title:       title,
 		selectedRow: -1,
 		stopRefresh: make(chan struct{}),
+		viewBindings:   make(map[string]string),
+		viewBindingIDs: make(map[string]string),
 		keyBindings: map[string]string{
 			"R":   "Refresh",
 			"ESC": "Back",

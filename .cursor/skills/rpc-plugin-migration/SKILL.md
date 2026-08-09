@@ -53,13 +53,21 @@ Breadcrumbs use `r.name` + `homeView` (first `ViewData.View`); ESC returns to `g
 ## ViewData / Action conventions
 
 ```text
-ViewData.View     = "keys" | "info" | …   # round-trip id
-KeyBinding.Action = "goto_info" | "delete" | "refresh" | …
-ActionResult.Next = full replacement snapshot (preferred after mutations/nav)
-ActionResult.ModalTitle/Body = host ShowInfoModal (key content, doctor, help-like)
+ViewData.View          = "keys" | "info" | …   # round-trip id
+ViewData.ViewBindings  = digits 0-9 → goto_<view>
+ViewData.Actions       = current-view ops (former logs / Actions column)
+ViewData.KeyBindings   = overflow view letters only (or nil)
+ViewData.HelpSections  = ? modal grouped by view
+KeyBinding.Action      = "goto_info" | "delete" | "refresh" | …
+ActionResult.Next      = full replacement snapshot (preferred after mutations/nav)
+ActionResult.ModalTitle/Body = host ShowInfoModal
 ```
 
-Nav actions: `goto_<viewID>`. Refresh: rebuild `currentView`. Host always rebinds `R` `?` `/`.
+Nav: `goto_<viewID>` via **ViewBindings** (digits). Refresh: rebuild `currentView`.
+Host always rebinds `R` `?` `/` `^t` into the Actions column.
+
+**UI layout pattern:** follow project skill `plugin-ui-views` (redis/docker reference).
+Do not use legacy `withNav` that merges all nav+actions into `KeyBindings`.
 
 ## Hard rules (from redis freezes)
 

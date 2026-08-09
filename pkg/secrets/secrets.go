@@ -135,11 +135,13 @@ func NewWithPaths(dbPath, keyPath string) (Provider, error) {
 		_ = os.Remove(dbPath)
 	}
 
+	fresh := false
 	switch _, err := os.Stat(dbPath); {
 	case errors.Is(err, os.ErrNotExist):
 		if err := kp.createDatabase(); err != nil {
 			return nil, fmt.Errorf("secrets: create database: %w", err)
 		}
+		fresh = true
 	case err != nil:
 		return nil, fmt.Errorf("secrets: stat database: %w", err)
 	}
@@ -148,8 +150,11 @@ func NewWithPaths(dbPath, keyPath string) (Provider, error) {
 		return nil, fmt.Errorf("secrets: open database: %w", err)
 	}
 
-	if err := kp.ensureReferenceTemplates(); err != nil {
-		return nil, err
+	// Schema docs only on first create so deliberate cleanup stays clean.
+	if fresh {
+		if err := kp.ensureReferenceTemplates(); err != nil {
+			return nil, err
+		}
 	}
 
 	return kp, nil
@@ -212,21 +217,39 @@ func (kp *KeePassProvider) Delete(path string) error {
 		return err
 	}
 
-	group, err := kp.findGroup(parts[:2])
-	if err != nil {
-		return err
-	}
-
 	entryTitle := parts[2]
-	for i := range group.Entries {
-		if getKVValue(group.Entries[i], kvTitle) == entryTitle {
-			group.Entries = append(group.Entries[:i], group.Entries[i+1:]...)
-			kp.dirty = true
-			return kp.flush()
+	removed := 0
+	root := kp.rootGroup()
+
+	// Walk all matching plugin/env groups (historical DBs may contain duplicates).
+	for gi := range root.Groups {
+		if root.Groups[gi].Name != parts[0] {
+			continue
+		}
+		pluginGroup := &root.Groups[gi]
+		for ei := range pluginGroup.Groups {
+			if pluginGroup.Groups[ei].Name != parts[1] {
+				continue
+			}
+			envGroup := &pluginGroup.Groups[ei]
+			kept := envGroup.Entries[:0]
+			for _, entry := range envGroup.Entries {
+				if getKVValue(entry, kvTitle) == entryTitle {
+					removed++
+					continue
+				}
+				kept = append(kept, entry)
+			}
+			envGroup.Entries = kept
 		}
 	}
 
-	return fmt.Errorf("secrets: entry %q not found", path)
+	if removed == 0 {
+		return fmt.Errorf("secrets: entry %q not found", path)
+	}
+
+	kp.dirty = true
+	return kp.flush()
 }
 
 func (kp *KeePassProvider) List(prefix string) ([]string, error) {

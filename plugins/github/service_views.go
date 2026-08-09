@@ -6,25 +6,108 @@ import (
 	"omo/pkg/pluginrpc"
 )
 
-func navBindings() []pluginrpc.KeyBinding {
+func viewNavBindings() []pluginrpc.KeyBinding {
 	return []pluginrpc.KeyBinding{
-		{Key: "L", Label: "Repos", Action: "goto_repositories"},
-		{Key: "P", Label: "PRs", Action: "goto_pull-requests"},
-		{Key: "W", Label: "Workflows", Action: "goto_workflows"},
-		{Key: "A", Label: "Runs", Action: "goto_runs"},
-		{Key: "E", Label: "Env Vars", Action: "goto_variables"},
-		{Key: "S", Label: "Secrets", Action: "goto_secrets"},
-		{Key: "B", Label: "Branches", Action: "goto_branches"},
-		{Key: "F", Label: "Releases", Action: "goto_releases"},
+		{Key: "0", Label: "Repos", Action: "goto_repositories"},
+		{Key: "1", Label: "PRs", Action: "goto_pull-requests"},
+		{Key: "2", Label: "Workflows", Action: "goto_workflows"},
+		{Key: "3", Label: "Runs", Action: "goto_runs"},
+		{Key: "4", Label: "Env Vars", Action: "goto_variables"},
+		{Key: "5", Label: "Secrets", Action: "goto_secrets"},
+		{Key: "6", Label: "Branches", Action: "goto_branches"},
+		{Key: "7", Label: "Releases", Action: "goto_releases"},
 	}
 }
 
-func withNav(extra ...pluginrpc.KeyBinding) []pluginrpc.KeyBinding {
-	out := make([]pluginrpc.KeyBinding, 0, len(extra)+len(navBindings())+1)
-	out = append(out, pluginrpc.KeyBinding{Key: "R", Label: "Refresh", Action: "refresh"})
-	out = append(out, extra...)
-	out = append(out, navBindings()...)
-	return out
+func repositoriesActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "Enter", Label: "Select", Action: "select_repo"},
+	}
+}
+
+func prsActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "M", Label: "Merge", Action: "merge"},
+		{Key: "C", Label: "Close", Action: "close"},
+		{Key: "O", Label: "Reopen", Action: "reopen"},
+		{Key: "V", Label: "Approve", Action: "approve"},
+		{Key: "K", Label: "Checks", Action: "view_checks"},
+		{Key: "I", Label: "Reviews", Action: "view_reviews"},
+		{Key: "T", Label: "Toggle State", Action: "toggle_pr_state"},
+	}
+}
+
+func workflowsActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "D", Label: "Dispatch", Action: "dispatch"},
+	}
+}
+
+func runsActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "X", Label: "Cancel", Action: "cancel_run"},
+		{Key: "G", Label: "Re-run", Action: "rerun"},
+		{Key: "J", Label: "Jobs", Action: "view_jobs"},
+	}
+}
+
+func variablesActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "N", Label: "New Var", Action: "create_variable"},
+		{Key: "U", Label: "Update", Action: "update_variable"},
+		{Key: "D", Label: "Delete", Action: "delete_variable"},
+	}
+}
+
+func secretsActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "D", Label: "Delete", Action: "delete_secret"},
+	}
+}
+
+func branchesActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "D", Label: "Delete", Action: "delete_branch"},
+	}
+}
+
+func releasesActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "D", Label: "Delete", Action: "delete_release"},
+	}
+}
+
+func helpSections() []pluginrpc.HelpSection {
+	return []pluginrpc.HelpSection{
+		{Title: "Views (0-7)", Bindings: viewNavBindings()},
+		{Title: "Repositories", Bindings: repositoriesActions()},
+		{Title: "Pull Requests", Bindings: prsActions()},
+		{Title: "Workflows", Bindings: workflowsActions()},
+		{Title: "Runs", Bindings: runsActions()},
+		{Title: "Variables", Bindings: variablesActions()},
+		{Title: "Secrets", Bindings: secretsActions()},
+		{Title: "Branches", Bindings: branchesActions()},
+		{Title: "Releases", Bindings: releasesActions()},
+		{
+			Title: "Global",
+			Bindings: []pluginrpc.KeyBinding{
+				{Key: "R", Label: "Refresh"},
+				{Key: "?", Label: "Help (this screen)"},
+				{Key: "/", Label: "Filter"},
+				{Key: "^t", Label: "Switch target"},
+				{Key: "ESC", Label: "Back / home"},
+			},
+		},
+	}
+}
+
+// decorate: Views column = 0-7, Actions column (former logs) = this view only.
+func decorate(view pluginrpc.ViewData, actions ...pluginrpc.KeyBinding) pluginrpc.ViewData {
+	view.ViewBindings = viewNavBindings()
+	view.KeyBindings = nil
+	view.Actions = actions
+	view.HelpSections = helpSections()
+	return view
 }
 
 func (s *Service) baseInfo(extra string) string {
@@ -134,7 +217,7 @@ func (s *Service) viewReposLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = [][]string{{"-", "No repositories", "-", "-", "-", "-", "-"}}
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewRepos,
 		Title:        "Repositories",
 		Info:         s.baseInfo(fmt.Sprintf("Repos: %d · Enter/P selects repo", len(repos))),
@@ -142,10 +225,7 @@ func (s *Service) viewReposLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Name", "Description", "Language", "Stars", "Visibility", "Default Branch", "Updated"},
 		Rows:         rows,
 		SelectionKey: "Name",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "Enter", Label: "Select", Action: "select_repo"},
-		),
-	}, nil
+	}, repositoriesActions()...), nil
 }
 
 func (s *Service) requireRepo() error {
@@ -170,7 +250,7 @@ func (s *Service) viewPRsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = [][]string{{"-", "No pull requests", "-", "-", "-", "-", "-", "-", "-"}}
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewPRs,
 		Title:        "Pull Requests",
 		Info:         s.baseInfo(fmt.Sprintf("Filter: %s · Count: %d", s.prState, len(prs))),
@@ -178,16 +258,7 @@ func (s *Service) viewPRsLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"#", "Title", "State", "Author", "Branch", "Base", "Changes", "Labels", "Age"},
 		Rows:         rows,
 		SelectionKey: "#",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "M", Label: "Merge", Action: "merge"},
-			pluginrpc.KeyBinding{Key: "C", Label: "Close", Action: "close"},
-			pluginrpc.KeyBinding{Key: "O", Label: "Reopen", Action: "reopen"},
-			pluginrpc.KeyBinding{Key: "V", Label: "Approve", Action: "approve"},
-			pluginrpc.KeyBinding{Key: "K", Label: "Checks", Action: "view_checks"},
-			pluginrpc.KeyBinding{Key: "I", Label: "Reviews", Action: "view_reviews"},
-			pluginrpc.KeyBinding{Key: "T", Label: "Toggle State", Action: "toggle_pr_state"},
-		),
-	}, nil
+	}, prsActions()...), nil
 }
 
 func (s *Service) viewWorkflowsLocked() (pluginrpc.ViewData, error) {
@@ -205,7 +276,7 @@ func (s *Service) viewWorkflowsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = [][]string{{"-", "No workflows", "-", "-", "-"}}
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewWorkflows,
 		Title:        "Workflows",
 		Info:         s.baseInfo(""),
@@ -213,10 +284,7 @@ func (s *Service) viewWorkflowsLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"ID", "Name", "Path", "State", "Updated"},
 		Rows:         rows,
 		SelectionKey: "ID",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "D", Label: "Dispatch", Action: "dispatch"},
-		),
-	}, nil
+	}, workflowsActions()...), nil
 }
 
 func (s *Service) viewRunsLocked() (pluginrpc.ViewData, error) {
@@ -234,7 +302,7 @@ func (s *Service) viewRunsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = [][]string{{"-", "No runs", "-", "-", "-", "-", "-", "-"}}
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewRuns,
 		Title:        "Workflow Runs",
 		Info:         s.baseInfo(""),
@@ -242,12 +310,7 @@ func (s *Service) viewRunsLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"ID", "Workflow", "Status", "Branch", "Event", "Actor", "Duration", "Age"},
 		Rows:         rows,
 		SelectionKey: "ID",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "X", Label: "Cancel", Action: "cancel_run"},
-			pluginrpc.KeyBinding{Key: "G", Label: "Re-run", Action: "rerun"},
-			pluginrpc.KeyBinding{Key: "J", Label: "Jobs", Action: "view_jobs"},
-		),
-	}, nil
+	}, runsActions()...), nil
 }
 
 func (s *Service) viewVariablesLocked() (pluginrpc.ViewData, error) {
@@ -265,7 +328,7 @@ func (s *Service) viewVariablesLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = [][]string{{"-", "-", "No variables"}}
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewEnvVars,
 		Title:        "Variables",
 		Info:         s.baseInfo(""),
@@ -273,12 +336,7 @@ func (s *Service) viewVariablesLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Name", "Value", "Updated"},
 		Rows:         rows,
 		SelectionKey: "Name",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "N", Label: "New Var", Action: "create_variable"},
-			pluginrpc.KeyBinding{Key: "U", Label: "Update", Action: "update_variable"},
-			pluginrpc.KeyBinding{Key: "D", Label: "Delete", Action: "delete_variable"},
-		),
-	}, nil
+	}, variablesActions()...), nil
 }
 
 func (s *Service) viewSecretsLocked() (pluginrpc.ViewData, error) {
@@ -296,7 +354,7 @@ func (s *Service) viewSecretsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = [][]string{{"-", "-", "No secrets"}}
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewSecrets,
 		Title:        "Secrets",
 		Info:         s.baseInfo(""),
@@ -304,10 +362,7 @@ func (s *Service) viewSecretsLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Name", "Value", "Updated"},
 		Rows:         rows,
 		SelectionKey: "Name",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "D", Label: "Delete", Action: "delete_secret"},
-		),
-	}, nil
+	}, secretsActions()...), nil
 }
 
 func (s *Service) viewBranchesLocked() (pluginrpc.ViewData, error) {
@@ -325,7 +380,7 @@ func (s *Service) viewBranchesLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = [][]string{{"-", "-", "-"}}
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewBranches,
 		Title:        "Branches",
 		Info:         s.baseInfo(""),
@@ -333,10 +388,7 @@ func (s *Service) viewBranchesLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Name", "SHA", "Protected"},
 		Rows:         rows,
 		SelectionKey: "Name",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "D", Label: "Delete", Action: "delete_branch"},
-		),
-	}, nil
+	}, branchesActions()...), nil
 }
 
 func (s *Service) viewReleasesLocked() (pluginrpc.ViewData, error) {
@@ -354,7 +406,7 @@ func (s *Service) viewReleasesLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = [][]string{{"-", "-", "-", "-", "-", "-"}}
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewReleases,
 		Title:        "Releases",
 		Info:         s.baseInfo(""),
@@ -362,8 +414,5 @@ func (s *Service) viewReleasesLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Tag", "Name", "Status", "Author", "Assets", "Published"},
 		Rows:         rows,
 		SelectionKey: "Tag",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "D", Label: "Delete", Action: "delete_release"},
-		),
-	}, nil
+	}, releasesActions()...), nil
 }

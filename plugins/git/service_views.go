@@ -6,24 +6,109 @@ import (
 	"omo/pkg/pluginrpc"
 )
 
-func navBindings() []pluginrpc.KeyBinding {
+func viewNavBindings() []pluginrpc.KeyBinding {
 	return []pluginrpc.KeyBinding{
-		{Key: "G", Label: "Repos", Action: "goto_repos"},
-		{Key: "S", Label: "Status", Action: "goto_status"},
-		{Key: "L", Label: "Commits", Action: "goto_commits"},
-		{Key: "B", Label: "Branches", Action: "goto_branches"},
-		{Key: "M", Label: "Remotes", Action: "goto_remotes"},
-		{Key: "T", Label: "Tags", Action: "goto_tags"},
-		{Key: "H", Label: "Stash", Action: "goto_stash"},
+		{Key: "0", Label: "Repos", Action: "goto_repos"},
+		{Key: "1", Label: "Status", Action: "goto_status"},
+		{Key: "2", Label: "Commits", Action: "goto_commits"},
+		{Key: "3", Label: "Branches", Action: "goto_branches"},
+		{Key: "4", Label: "Remotes", Action: "goto_remotes"},
+		{Key: "5", Label: "Stash", Action: "goto_stash"},
+		{Key: "6", Label: "Tags", Action: "goto_tags"},
 	}
 }
 
-func withNav(extra ...pluginrpc.KeyBinding) []pluginrpc.KeyBinding {
-	out := make([]pluginrpc.KeyBinding, 0, len(extra)+len(navBindings())+1)
-	out = append(out, pluginrpc.KeyBinding{Key: "R", Label: "Refresh", Action: "refresh"})
-	out = append(out, extra...)
-	out = append(out, navBindings()...)
-	return out
+func reposActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "F", Label: "Fetch", Action: "fetch"},
+		{Key: "P", Label: "Pull", Action: "pull"},
+		{Key: "U", Label: "Push", Action: "push"},
+		{Key: "E", Label: "Select", Action: "select_repo"},
+	}
+}
+
+func statusActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "A", Label: "Stage", Action: "stage"},
+		{Key: "U", Label: "Unstage", Action: "unstage"},
+		{Key: "D", Label: "Diff", Action: "diff"},
+		{Key: "X", Label: "Restore", Action: "restore"},
+	}
+}
+
+func commitsActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "D", Label: "Diff", Action: "diff"},
+		{Key: "E", Label: "Details", Action: "view_details"},
+		{Key: "C", Label: "Checkout", Action: "checkout"},
+		{Key: "X", Label: "Revert", Action: "revert"},
+		{Key: "P", Label: "Cherry-pick", Action: "cherry_pick"},
+	}
+}
+
+func branchesActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "C", Label: "Checkout", Action: "checkout"},
+		{Key: "D", Label: "Delete", Action: "delete"},
+		{Key: "E", Label: "Merge", Action: "merge"},
+	}
+}
+
+func remotesActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "D", Label: "Remove", Action: "delete"},
+		{Key: "F", Label: "Fetch", Action: "fetch_remote"},
+		{Key: "P", Label: "Prune", Action: "prune_remote"},
+	}
+}
+
+func stashActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "A", Label: "Apply", Action: "apply_stash"},
+		{Key: "P", Label: "Pop", Action: "pop_stash"},
+		{Key: "D", Label: "Drop", Action: "delete"},
+		{Key: "V", Label: "View", Action: "view_stash"},
+	}
+}
+
+func tagsActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "D", Label: "Delete", Action: "delete"},
+		{Key: "C", Label: "Checkout", Action: "checkout"},
+		{Key: "P", Label: "Push", Action: "push_tag"},
+	}
+}
+
+func helpSections() []pluginrpc.HelpSection {
+	return []pluginrpc.HelpSection{
+		{Title: "Views (0-6)", Bindings: viewNavBindings()},
+		{Title: "Repos", Bindings: reposActions()},
+		{Title: "Status", Bindings: statusActions()},
+		{Title: "Commits", Bindings: commitsActions()},
+		{Title: "Branches", Bindings: branchesActions()},
+		{Title: "Remotes", Bindings: remotesActions()},
+		{Title: "Stash", Bindings: stashActions()},
+		{Title: "Tags", Bindings: tagsActions()},
+		{
+			Title: "Global",
+			Bindings: []pluginrpc.KeyBinding{
+				{Key: "R", Label: "Refresh"},
+				{Key: "?", Label: "Help (this screen)"},
+				{Key: "/", Label: "Filter"},
+				{Key: "^t", Label: "Switch target"},
+				{Key: "ESC", Label: "Back / home"},
+			},
+		},
+	}
+}
+
+// decorate: Views column = 0-6, Actions column (former logs) = this view only.
+func decorate(view pluginrpc.ViewData, actions ...pluginrpc.KeyBinding) pluginrpc.ViewData {
+	view.ViewBindings = viewNavBindings()
+	view.KeyBindings = nil
+	view.Actions = actions
+	view.HelpSections = helpSections()
+	return view
 }
 
 func (s *Service) baseInfo(extra string) string {
@@ -45,15 +130,14 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	s.currentView = viewID
 
 	if s.currentPath == "" && viewID != viewRepos {
-		return pluginrpc.ViewData{
-			View:        viewID,
-			Title:       "Git Manager",
-			Info:        "[yellow]Git Manager[white]\nNo repository configured",
-			Status:      "not configured",
-			Headers:     []string{"Status", "Detail"},
-			Rows:        [][]string{{"error", "Configure with a KeePass path attribute"}},
-			KeyBindings: withNav(),
-		}, nil
+		return decorate(pluginrpc.ViewData{
+			View:    viewID,
+			Title:   "Git Manager",
+			Info:    "[yellow]Git Manager[white]\nNo repository configured",
+			Status:  "not configured",
+			Headers: []string{"Status", "Detail"},
+			Rows:    [][]string{{"error", "Configure with a KeePass path attribute"}},
+		}), nil
 	}
 
 	switch viewID {
@@ -106,7 +190,7 @@ func (s *Service) viewReposLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"-", "-", "-", "0", "0", "0", "No repositories configured"})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewRepos,
 		Title:        "Git Repositories",
 		Info:         s.baseInfo(fmt.Sprintf("Repos: %d", len(s.repos))),
@@ -114,13 +198,7 @@ func (s *Service) viewReposLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Repository", "Branch", "Status", "Modified", "Staged", "Untracked", "Last Commit"},
 		Rows:         rows,
 		SelectionKey: "Repository",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "F", Label: "Fetch", Action: "fetch"},
-			pluginrpc.KeyBinding{Key: "P", Label: "Pull", Action: "pull"},
-			pluginrpc.KeyBinding{Key: "U", Label: "Push", Action: "push"},
-			pluginrpc.KeyBinding{Key: "E", Label: "Select", Action: "select_repo"},
-		),
-	}, nil
+	}, reposActions()...), nil
 }
 
 func (s *Service) viewStatusLocked() (pluginrpc.ViewData, error) {
@@ -136,7 +214,7 @@ func (s *Service) viewStatusLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"Working tree clean", "-", "-"})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewStatus,
 		Title:        "Git Status",
 		Info:         s.baseInfo(""),
@@ -144,13 +222,7 @@ func (s *Service) viewStatusLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"File", "Status", "Type"},
 		Rows:         rows,
 		SelectionKey: "File",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "A", Label: "Stage", Action: "stage"},
-			pluginrpc.KeyBinding{Key: "U", Label: "Unstage", Action: "unstage"},
-			pluginrpc.KeyBinding{Key: "D", Label: "Diff", Action: "diff"},
-			pluginrpc.KeyBinding{Key: "X", Label: "Restore", Action: "restore"},
-		),
-	}, nil
+	}, statusActions()...), nil
 }
 
 func (s *Service) viewCommitsLocked() (pluginrpc.ViewData, error) {
@@ -165,7 +237,7 @@ func (s *Service) viewCommitsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"-", "-", "-", "No commits"})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewCommits,
 		Title:        "Git Commits",
 		Info:         s.baseInfo(""),
@@ -173,14 +245,7 @@ func (s *Service) viewCommitsLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Hash", "Author", "Date", "Message"},
 		Rows:         rows,
 		SelectionKey: "Hash",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "D", Label: "Diff", Action: "diff"},
-			pluginrpc.KeyBinding{Key: "E", Label: "Details", Action: "view_details"},
-			pluginrpc.KeyBinding{Key: "C", Label: "Checkout", Action: "checkout"},
-			pluginrpc.KeyBinding{Key: "X", Label: "Revert", Action: "revert"},
-			pluginrpc.KeyBinding{Key: "P", Label: "Cherry-pick", Action: "cherry_pick"},
-		),
-	}, nil
+	}, commitsActions()...), nil
 }
 
 func (s *Service) viewBranchesLocked() (pluginrpc.ViewData, error) {
@@ -205,7 +270,7 @@ func (s *Service) viewBranchesLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"-", "", "-", "0", "0"})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewBranches,
 		Title:        "Git Branches",
 		Info:         s.baseInfo(""),
@@ -213,12 +278,7 @@ func (s *Service) viewBranchesLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Branch", "Current", "Tracking", "Ahead", "Behind"},
 		Rows:         rows,
 		SelectionKey: "Branch",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "C", Label: "Checkout", Action: "checkout"},
-			pluginrpc.KeyBinding{Key: "D", Label: "Delete", Action: "delete"},
-			pluginrpc.KeyBinding{Key: "E", Label: "Merge", Action: "merge"},
-		),
-	}, nil
+	}, branchesActions()...), nil
 }
 
 func (s *Service) viewRemotesLocked() (pluginrpc.ViewData, error) {
@@ -233,7 +293,7 @@ func (s *Service) viewRemotesLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"-", "-", "No remotes"})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewRemotes,
 		Title:        "Git Remotes",
 		Info:         s.baseInfo(""),
@@ -241,12 +301,7 @@ func (s *Service) viewRemotesLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Remote", "Fetch URL", "Push URL"},
 		Rows:         rows,
 		SelectionKey: "Remote",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "D", Label: "Remove", Action: "delete"},
-			pluginrpc.KeyBinding{Key: "F", Label: "Fetch", Action: "fetch_remote"},
-			pluginrpc.KeyBinding{Key: "P", Label: "Prune", Action: "prune_remote"},
-		),
-	}, nil
+	}, remotesActions()...), nil
 }
 
 func (s *Service) viewStashLocked() (pluginrpc.ViewData, error) {
@@ -261,7 +316,7 @@ func (s *Service) viewStashLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"-", "-", "No stash entries"})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewStash,
 		Title:        "Git Stash",
 		Info:         s.baseInfo(""),
@@ -269,13 +324,7 @@ func (s *Service) viewStashLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Index", "Branch", "Message"},
 		Rows:         rows,
 		SelectionKey: "Index",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "A", Label: "Apply", Action: "apply_stash"},
-			pluginrpc.KeyBinding{Key: "P", Label: "Pop", Action: "pop_stash"},
-			pluginrpc.KeyBinding{Key: "D", Label: "Drop", Action: "delete"},
-			pluginrpc.KeyBinding{Key: "V", Label: "View", Action: "view_stash"},
-		),
-	}, nil
+	}, stashActions()...), nil
 }
 
 func (s *Service) viewTagsLocked() (pluginrpc.ViewData, error) {
@@ -294,7 +343,7 @@ func (s *Service) viewTagsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"-", "-", "-", "No tags"})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         viewTags,
 		Title:        "Git Tags",
 		Info:         s.baseInfo(""),
@@ -302,10 +351,5 @@ func (s *Service) viewTagsLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Tag", "Type", "Date", "Message"},
 		Rows:         rows,
 		SelectionKey: "Tag",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "D", Label: "Delete", Action: "delete"},
-			pluginrpc.KeyBinding{Key: "C", Label: "Checkout", Action: "checkout"},
-			pluginrpc.KeyBinding{Key: "P", Label: "Push", Action: "push_tag"},
-		),
-	}, nil
+	}, tagsActions()...), nil
 }

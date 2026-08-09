@@ -8,24 +8,83 @@ import (
 	"omo/pkg/pluginrpc"
 )
 
-func navBindings() []pluginrpc.KeyBinding {
+func viewNavBindings() []pluginrpc.KeyBinding {
 	return []pluginrpc.KeyBinding{
-		{Key: "O", Label: "Overview", Action: "goto_overview"},
-		{Key: "Q", Label: "Queues", Action: "goto_queues"},
-		{Key: "E", Label: "Exchanges", Action: "goto_exchanges"},
-		{Key: "B", Label: "Bindings", Action: "goto_bindings"},
-		{Key: "C", Label: "Connections", Action: "goto_connections"},
-		{Key: "H", Label: "Channels", Action: "goto_channels"},
-		{Key: "S", Label: "Nodes", Action: "goto_nodes"},
+		{Key: "0", Label: "Overview", Action: "goto_overview"},
+		{Key: "1", Label: "Queues", Action: "goto_queues"},
+		{Key: "2", Label: "Exchanges", Action: "goto_exchanges"},
+		{Key: "3", Label: "Bindings", Action: "goto_bindings"},
+		{Key: "4", Label: "Connections", Action: "goto_connections"},
+		{Key: "5", Label: "Channels", Action: "goto_channels"},
+		{Key: "6", Label: "Nodes", Action: "goto_nodes"},
 	}
 }
 
-func withNav(extra ...pluginrpc.KeyBinding) []pluginrpc.KeyBinding {
-	out := make([]pluginrpc.KeyBinding, 0, len(extra)+len(navBindings())+1)
-	out = append(out, pluginrpc.KeyBinding{Key: "R", Label: "Refresh", Action: "refresh"})
-	out = append(out, extra...)
-	out = append(out, navBindings()...)
-	return out
+func queuesActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "I", Label: "Info", Action: "info"},
+		{Key: "N", Label: "New Queue", Action: "create_queue"},
+		{Key: "D", Label: "Delete", Action: "delete_queue"},
+		{Key: "P", Label: "Purge", Action: "purge_queue"},
+		{Key: "M", Label: "Messages", Action: "browse_messages"},
+		{Key: "U", Label: "Publish", Action: "publish"},
+	}
+}
+
+func exchangesActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "I", Label: "Info", Action: "info"},
+		{Key: "N", Label: "New Exchange", Action: "create_exchange"},
+		{Key: "D", Label: "Delete", Action: "delete_exchange"},
+	}
+}
+
+func connectionsActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "I", Label: "Info", Action: "info"},
+		{Key: "D", Label: "Close Conn", Action: "close_connection"},
+	}
+}
+
+func channelsActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "I", Label: "Info", Action: "info"},
+	}
+}
+
+func nodesActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "I", Label: "Info", Action: "info"},
+	}
+}
+
+func helpSections() []pluginrpc.HelpSection {
+	return []pluginrpc.HelpSection{
+		{Title: "Views (0-6)", Bindings: viewNavBindings()},
+		{Title: "Queues", Bindings: queuesActions()},
+		{Title: "Exchanges", Bindings: exchangesActions()},
+		{Title: "Connections", Bindings: connectionsActions()},
+		{Title: "Channels", Bindings: channelsActions()},
+		{Title: "Nodes", Bindings: nodesActions()},
+		{
+			Title: "Global",
+			Bindings: []pluginrpc.KeyBinding{
+				{Key: "R", Label: "Refresh"},
+				{Key: "?", Label: "Help (this screen)"},
+				{Key: "/", Label: "Filter"},
+				{Key: "^t", Label: "Switch target"},
+				{Key: "ESC", Label: "Back / home"},
+			},
+		},
+	}
+}
+
+func decorate(view pluginrpc.ViewData, actions ...pluginrpc.KeyBinding) pluginrpc.ViewData {
+	view.ViewBindings = viewNavBindings()
+	view.KeyBindings = nil
+	view.Actions = actions
+	view.HelpSections = helpSections()
+	return view
 }
 
 func (s *Service) baseInfo(extra string) string {
@@ -123,7 +182,7 @@ func (s *Service) viewOverviewLocked() (pluginrpc.ViewData, error) {
 		rows = append(rows, []string{l.Protocol, strconv.Itoa(l.Port)})
 	}
 
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         rmqViewOverview,
 		Title:        "RabbitMQ Overview",
 		Info:         s.baseInfo(fmt.Sprintf("Version: %s", overview.RabbitMQVersion)),
@@ -131,8 +190,7 @@ func (s *Service) viewOverviewLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Metric", "Value"},
 		Rows:         rows,
 		SelectionKey: "Metric",
-		KeyBindings:  withNav(),
-	}, nil
+	}), nil
 }
 
 func (s *Service) viewQueuesLocked() (pluginrpc.ViewData, error) {
@@ -159,7 +217,7 @@ func (s *Service) viewQueuesLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"No queues found", "", "", "", "", "", ""})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         rmqViewQueues,
 		Title:        "RabbitMQ Queues",
 		Info:         s.baseInfo(fmt.Sprintf("Queues: %d", len(queues))),
@@ -167,15 +225,7 @@ func (s *Service) viewQueuesLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Name", "Messages", "Ready", "Unacked", "Consumers", "State", "Type"},
 		Rows:         rows,
 		SelectionKey: "Name",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "I", Label: "Info", Action: "info"},
-			pluginrpc.KeyBinding{Key: "N", Label: "New Queue", Action: "create_queue"},
-			pluginrpc.KeyBinding{Key: "D", Label: "Delete", Action: "delete_queue"},
-			pluginrpc.KeyBinding{Key: "P", Label: "Purge", Action: "purge_queue"},
-			pluginrpc.KeyBinding{Key: "M", Label: "Messages", Action: "browse_messages"},
-			pluginrpc.KeyBinding{Key: "U", Label: "Publish", Action: "publish"},
-		),
-	}, nil
+	}, queuesActions()...), nil
 }
 
 func (s *Service) viewExchangesLocked() (pluginrpc.ViewData, error) {
@@ -198,7 +248,7 @@ func (s *Service) viewExchangesLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"No exchanges found", "", "", "", "", "", ""})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         rmqViewExchanges,
 		Title:        "RabbitMQ Exchanges",
 		Info:         s.baseInfo(fmt.Sprintf("Exchanges: %d", len(exchanges))),
@@ -206,12 +256,7 @@ func (s *Service) viewExchangesLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Name", "Type", "Durable", "Auto Del", "Internal", "Msg In", "Msg Out"},
 		Rows:         rows,
 		SelectionKey: "Name",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "I", Label: "Info", Action: "info"},
-			pluginrpc.KeyBinding{Key: "N", Label: "New Exchange", Action: "create_exchange"},
-			pluginrpc.KeyBinding{Key: "D", Label: "Delete", Action: "delete_exchange"},
-		),
-	}, nil
+	}, exchangesActions()...), nil
 }
 
 func (s *Service) viewBindingsLocked() (pluginrpc.ViewData, error) {
@@ -230,7 +275,7 @@ func (s *Service) viewBindingsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"No bindings found", "", "", ""})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         rmqViewBindings,
 		Title:        "RabbitMQ Bindings",
 		Info:         s.baseInfo(fmt.Sprintf("Bindings: %d", len(bindings))),
@@ -238,8 +283,7 @@ func (s *Service) viewBindingsLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Source", "Destination", "Dest Type", "Routing Key"},
 		Rows:         rows,
 		SelectionKey: "Source",
-		KeyBindings:  withNav(),
-	}, nil
+	}), nil
 }
 
 func (s *Service) viewConnectionsLocked() (pluginrpc.ViewData, error) {
@@ -257,7 +301,7 @@ func (s *Service) viewConnectionsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"No active connections", "", "", "", "", "", ""})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         rmqViewConnections,
 		Title:        "RabbitMQ Connections",
 		Info:         s.baseInfo(fmt.Sprintf("Connections: %d", len(connections))),
@@ -265,11 +309,7 @@ func (s *Service) viewConnectionsLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Name", "User", "VHost", "State", "Channels", "Peer", "SSL"},
 		Rows:         rows,
 		SelectionKey: "Name",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "I", Label: "Info", Action: "info"},
-			pluginrpc.KeyBinding{Key: "D", Label: "Close Conn", Action: "close_connection"},
-		),
-	}, nil
+	}, connectionsActions()...), nil
 }
 
 func (s *Service) viewChannelsLocked() (pluginrpc.ViewData, error) {
@@ -288,7 +328,7 @@ func (s *Service) viewChannelsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"No active channels", "", "", "", "", "", "", ""})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         rmqViewChannels,
 		Title:        "RabbitMQ Channels",
 		Info:         s.baseInfo(fmt.Sprintf("Channels: %d", len(channels))),
@@ -296,10 +336,7 @@ func (s *Service) viewChannelsLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Name", "User", "VHost", "State", "Consumers", "Prefetch", "Unacked", "Confirm"},
 		Rows:         rows,
 		SelectionKey: "Name",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "I", Label: "Info", Action: "info"},
-		),
-	}, nil
+	}, channelsActions()...), nil
 }
 
 func (s *Service) viewNodesLocked() (pluginrpc.ViewData, error) {
@@ -320,7 +357,7 @@ func (s *Service) viewNodesLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"No nodes found", "", "", "", "", "", "", ""})
 	}
-	return pluginrpc.ViewData{
+	return decorate(pluginrpc.ViewData{
 		View:         rmqViewNodes,
 		Title:        "RabbitMQ Nodes",
 		Info:         s.baseInfo(fmt.Sprintf("Nodes: %d", len(nodes))),
@@ -328,8 +365,5 @@ func (s *Service) viewNodesLocked() (pluginrpc.ViewData, error) {
 		Headers:      []string{"Name", "Type", "Running", "Memory", "Disk Free", "FD Used", "Sockets", "Uptime"},
 		Rows:         rows,
 		SelectionKey: "Name",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "I", Label: "Info", Action: "info"},
-		),
-	}, nil
+	}, nodesActions()...), nil
 }
