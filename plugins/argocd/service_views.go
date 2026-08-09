@@ -56,14 +56,12 @@ func rbacActions() []pluginrpc.KeyBinding {
 }
 
 func helpSections() []pluginrpc.HelpSection {
-	return pluginrpc.HelpWithGlobal([]pluginrpc.HelpSection{
-		{Title: "Views (0-3)", Bindings: viewNavBindings()},
-		{Title: "More Views", Bindings: moreViewBindings()},
-		{Title: "Applications", Bindings: applicationsActions()},
-		{Title: "Projects", Bindings: projectsActions()},
-		{Title: "Accounts", Bindings: accountsActions()},
-		{Title: "RBAC", Bindings: rbacActions()},
-	}...)
+	return pluginrpc.HelpNav(viewNavBindings(), moreViewBindings(),
+		pluginrpc.HelpSection{Title: "Applications", Bindings: applicationsActions()},
+		pluginrpc.HelpSection{Title: "Projects", Bindings: projectsActions()},
+		pluginrpc.HelpSection{Title: "Accounts", Bindings: accountsActions()},
+		pluginrpc.HelpSection{Title: "RBAC", Bindings: rbacActions()},
+	)
 }
 
 var ui = pluginrpc.ViewUI{
@@ -91,7 +89,7 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	needsAPI := viewID == viewApplications || viewID == viewProjects || viewID == viewAccounts
 	if needsAPI {
 		if err := s.ensureConnectedLocked(); err != nil {
-			return ui.NotConnected(viewID, "ArgoCD Manager", err.Error()), nil
+			return ui.NotConnectedErr(viewID, "ArgoCD Manager", err)
 		}
 	}
 

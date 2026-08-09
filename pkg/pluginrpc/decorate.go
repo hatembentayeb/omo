@@ -1,6 +1,9 @@
 package pluginrpc
 
-import "sort"
+import (
+	"fmt"
+	"sort"
+)
 
 // GlobalHelpBindings are host-handled shortcuts shown in every plugin's "?" help.
 func GlobalHelpBindings() []KeyBinding {
@@ -23,6 +26,25 @@ func HelpWithGlobal(sections ...HelpSection) []HelpSection {
 	out := make([]HelpSection, 0, len(sections)+1)
 	out = append(out, sections...)
 	return append(out, GlobalHelpSection())
+}
+
+// HelpNav builds the standard "?" help preamble: Views (0-N), optional More Views,
+// then action sections, then Global. Pass nil/empty more when all views fit on 0-9.
+func HelpNav(views, more []KeyBinding, actions ...HelpSection) []HelpSection {
+	last := 0
+	if n := len(views); n > 0 {
+		last = n - 1
+	}
+	out := make([]HelpSection, 0, 2+len(actions)+1)
+	out = append(out, HelpSection{
+		Title:    fmt.Sprintf("Views (0-%d)", last),
+		Bindings: views,
+	})
+	if len(more) > 0 {
+		out = append(out, HelpSection{Title: "More Views", Bindings: more})
+	}
+	out = append(out, actions...)
+	return HelpWithGlobal(out...)
 }
 
 // ViewUI binds a plugin's Views / overflow / Help helpers for Decorate.
@@ -49,19 +71,32 @@ func (u ViewUI) Decorate(view ViewData, actions ...KeyBinding) ViewData {
 	return Decorate(view, views, more, help, actions...)
 }
 
+// TableSpec holds arguments for a decorated table view.
+type TableSpec struct {
+	View, Title, Info, Status, SelectionKey string
+	Headers                                 []string
+	Rows                                    [][]string
+}
+
 // Table builds a decorated table view with an explicit status.
-func (u ViewUI) Table(viewID, title, info, status string, headers []string, rows [][]string, sel string, actions ...KeyBinding) ViewData {
-	return u.Decorate(Table(viewID, title, info, status, headers, rows, sel), actions...)
+func (u ViewUI) Table(spec TableSpec, actions ...KeyBinding) ViewData {
+	return u.Decorate(Table(spec.View, spec.Title, spec.Info, spec.Status, spec.Headers, spec.Rows, spec.SelectionKey), actions...)
 }
 
 // Connected builds a decorated table with status "connected".
 func (u ViewUI) Connected(viewID, title, info string, headers []string, rows [][]string, sel string, actions ...KeyBinding) ViewData {
-	return u.Table(viewID, title, info, "connected", headers, rows, sel, actions...)
+	return u.Table(TableSpec{
+		View: viewID, Title: title, Info: info, Status: "connected",
+		Headers: headers, Rows: rows, SelectionKey: sel,
+	}, actions...)
 }
 
 // OK builds a decorated table with status "ok".
 func (u ViewUI) OK(viewID, title, info string, headers []string, rows [][]string, sel string, actions ...KeyBinding) ViewData {
-	return u.Table(viewID, title, info, "ok", headers, rows, sel, actions...)
+	return u.Table(TableSpec{
+		View: viewID, Title: title, Info: info, Status: "ok",
+		Headers: headers, Rows: rows, SelectionKey: sel,
+	}, actions...)
 }
 
 // StatusError decorates a Status/Detail error table.
@@ -72,6 +107,15 @@ func (u ViewUI) StatusError(viewID, title, info, status, detail string, actions 
 // NotConnected is the standard yellow disconnect panel.
 func (u ViewUI) NotConnected(viewID, brand, detail string, actions ...KeyBinding) ViewData {
 	return u.StatusError(viewID, brand, NotConnectedInfo(brand, detail), "not connected", detail, actions...)
+}
+
+// NotConnectedErr is NotConnected with err.Error() detail, ready for a GetView return.
+func (u ViewUI) NotConnectedErr(viewID, brand string, err error, actions ...KeyBinding) (ViewData, error) {
+	detail := ""
+	if err != nil {
+		detail = err.Error()
+	}
+	return u.NotConnected(viewID, brand, detail, actions...), nil
 }
 
 // Decorate wires Views / overflow KeyBindings / Actions / HelpSections onto a view

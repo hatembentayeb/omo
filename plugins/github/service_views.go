@@ -78,17 +78,16 @@ func releasesActions() []pluginrpc.KeyBinding {
 }
 
 func helpSections() []pluginrpc.HelpSection {
-	return pluginrpc.HelpWithGlobal([]pluginrpc.HelpSection{
-		{Title: "Views (0-7)", Bindings: viewNavBindings()},
-		{Title: "Repositories", Bindings: repositoriesActions()},
-		{Title: "Pull Requests", Bindings: prsActions()},
-		{Title: "Workflows", Bindings: workflowsActions()},
-		{Title: "Runs", Bindings: runsActions()},
-		{Title: "Variables", Bindings: variablesActions()},
-		{Title: "Secrets", Bindings: secretsActions()},
-		{Title: "Branches", Bindings: branchesActions()},
-		{Title: "Releases", Bindings: releasesActions()},
-	}...)
+	return pluginrpc.HelpNav(viewNavBindings(), nil,
+		pluginrpc.HelpSection{Title: "Repositories", Bindings: repositoriesActions()},
+		pluginrpc.HelpSection{Title: "Pull Requests", Bindings: prsActions()},
+		pluginrpc.HelpSection{Title: "Workflows", Bindings: workflowsActions()},
+		pluginrpc.HelpSection{Title: "Runs", Bindings: runsActions()},
+		pluginrpc.HelpSection{Title: "Variables", Bindings: variablesActions()},
+		pluginrpc.HelpSection{Title: "Secrets", Bindings: secretsActions()},
+		pluginrpc.HelpSection{Title: "Branches", Bindings: branchesActions()},
+		pluginrpc.HelpSection{Title: "Releases", Bindings: releasesActions()},
+	)
 }
 
 var ui = pluginrpc.ViewUI{

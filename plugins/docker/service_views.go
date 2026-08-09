@@ -76,15 +76,14 @@ func systemActions() []pluginrpc.KeyBinding {
 }
 
 func helpSections() []pluginrpc.HelpSection {
-	return pluginrpc.HelpWithGlobal([]pluginrpc.HelpSection{
-		{Title: "Views (0-6)", Bindings: viewNavBindings()},
-		{Title: "Containers", Bindings: containersActions()},
-		{Title: "Images", Bindings: imagesActions()},
-		{Title: "Networks", Bindings: networksActions()},
-		{Title: "Volumes", Bindings: volumesActions()},
-		{Title: "Compose", Bindings: composeActions()},
-		{Title: "System", Bindings: systemActions()},
-	}...)
+	return pluginrpc.HelpNav(viewNavBindings(), nil,
+		pluginrpc.HelpSection{Title: "Containers", Bindings: containersActions()},
+		pluginrpc.HelpSection{Title: "Images", Bindings: imagesActions()},
+		pluginrpc.HelpSection{Title: "Networks", Bindings: networksActions()},
+		pluginrpc.HelpSection{Title: "Volumes", Bindings: volumesActions()},
+		pluginrpc.HelpSection{Title: "Compose", Bindings: composeActions()},
+		pluginrpc.HelpSection{Title: "System", Bindings: systemActions()},
+	)
 }
 
 var ui = pluginrpc.ViewUI{

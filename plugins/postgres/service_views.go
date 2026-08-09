@@ -80,17 +80,15 @@ func indexesActions() []pluginrpc.KeyBinding {
 }
 
 func helpSections() []pluginrpc.HelpSection {
-	return pluginrpc.HelpWithGlobal([]pluginrpc.HelpSection{
-		{Title: "Views (0-9)", Bindings: viewNavBindings()},
-		{Title: "More Views", Bindings: moreViewBindings()},
-		{Title: "Users", Bindings: usersActions()},
-		{Title: "Databases", Bindings: databasesActions()},
-		{Title: "Tables", Bindings: tablesActions()},
-		{Title: "Extensions", Bindings: extensionsActions()},
-		{Title: "Connections", Bindings: connectionsActions()},
-		{Title: "Config", Bindings: configActions()},
-		{Title: "Indexes", Bindings: indexesActions()},
-	}...)
+	return pluginrpc.HelpNav(viewNavBindings(), moreViewBindings(),
+		pluginrpc.HelpSection{Title: "Users", Bindings: usersActions()},
+		pluginrpc.HelpSection{Title: "Databases", Bindings: databasesActions()},
+		pluginrpc.HelpSection{Title: "Tables", Bindings: tablesActions()},
+		pluginrpc.HelpSection{Title: "Extensions", Bindings: extensionsActions()},
+		pluginrpc.HelpSection{Title: "Connections", Bindings: connectionsActions()},
+		pluginrpc.HelpSection{Title: "Config", Bindings: configActions()},
+		pluginrpc.HelpSection{Title: "Indexes", Bindings: indexesActions()},
+	)
 }
 
 var ui = pluginrpc.ViewUI{
@@ -112,7 +110,7 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	s.currentView = viewID
 
 	if err := s.ensureConnectedLocked(); err != nil {
-		return ui.NotConnected(viewID, "PostgreSQL Manager", err.Error()), nil
+		return ui.NotConnectedErr(viewID, "PostgreSQL Manager", err)
 	}
 
 	switch viewID {

@@ -29,9 +29,11 @@ func viewNavBindings() []pluginrpc.KeyBinding {
 	}
 }
 
+const labelWhyRunning = "Why Running?"
+
 func processesActions() []pluginrpc.KeyBinding {
 	return []pluginrpc.KeyBinding{
-		{Key: "W", Label: "Why Running?", Action: "details"},
+		{Key: "W", Label: labelWhyRunning, Action: "details"},
 		{Key: "K", Label: "Kill", Action: "kill"},
 		{Key: "T", Label: "Sort CPU", Action: "sort_cpu"},
 		{Key: "M", Label: "Sort Mem", Action: "sort_mem"},
@@ -40,7 +42,7 @@ func processesActions() []pluginrpc.KeyBinding {
 
 func portsActions() []pluginrpc.KeyBinding {
 	return []pluginrpc.KeyBinding{
-		{Key: "W", Label: "Why Running?", Action: "details"},
+		{Key: "W", Label: labelWhyRunning, Action: "details"},
 		{Key: "K", Label: "Kill", Action: "kill"},
 		{Key: "J", Label: "Jump", Action: "jump_to_process"},
 	}
@@ -48,7 +50,7 @@ func portsActions() []pluginrpc.KeyBinding {
 
 func warningsActions() []pluginrpc.KeyBinding {
 	return []pluginrpc.KeyBinding{
-		{Key: "W", Label: "Why Running?", Action: "details"},
+		{Key: "W", Label: labelWhyRunning, Action: "details"},
 	}
 }
 
@@ -60,13 +62,12 @@ func diskActions() []pluginrpc.KeyBinding {
 }
 
 func helpSections() []pluginrpc.HelpSection {
-	return pluginrpc.HelpWithGlobal([]pluginrpc.HelpSection{
-		{Title: "Views (0-4)", Bindings: viewNavBindings()},
-		{Title: "Processes", Bindings: processesActions()},
-		{Title: "Ports", Bindings: portsActions()},
-		{Title: "Warnings", Bindings: warningsActions()},
-		{Title: "Disk", Bindings: diskActions()},
-	}...)
+	return pluginrpc.HelpNav(viewNavBindings(), nil,
+		pluginrpc.HelpSection{Title: "Processes", Bindings: processesActions()},
+		pluginrpc.HelpSection{Title: "Ports", Bindings: portsActions()},
+		pluginrpc.HelpSection{Title: "Warnings", Bindings: warningsActions()},
+		pluginrpc.HelpSection{Title: "Disk", Bindings: diskActions()},
+	)
 }
 
 var ui = pluginrpc.ViewUI{

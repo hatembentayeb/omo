@@ -59,14 +59,13 @@ func nodesActions() []pluginrpc.KeyBinding {
 }
 
 func helpSections() []pluginrpc.HelpSection {
-	return pluginrpc.HelpWithGlobal([]pluginrpc.HelpSection{
-		{Title: "Views (0-6)", Bindings: viewNavBindings()},
-		{Title: "Queues", Bindings: queuesActions()},
-		{Title: "Exchanges", Bindings: exchangesActions()},
-		{Title: "Connections", Bindings: connectionsActions()},
-		{Title: "Channels", Bindings: channelsActions()},
-		{Title: "Nodes", Bindings: nodesActions()},
-	}...)
+	return pluginrpc.HelpNav(viewNavBindings(), nil,
+		pluginrpc.HelpSection{Title: "Queues", Bindings: queuesActions()},
+		pluginrpc.HelpSection{Title: "Exchanges", Bindings: exchangesActions()},
+		pluginrpc.HelpSection{Title: "Connections", Bindings: connectionsActions()},
+		pluginrpc.HelpSection{Title: "Channels", Bindings: channelsActions()},
+		pluginrpc.HelpSection{Title: "Nodes", Bindings: nodesActions()},
+	)
 }
 
 var ui = pluginrpc.ViewUI{
@@ -91,7 +90,7 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	s.currentView = viewID
 
 	if err := s.ensureConnectedLocked(); err != nil {
-		return ui.NotConnected(viewID, "RabbitMQ Manager", err.Error()), nil
+		return ui.NotConnectedErr(viewID, "RabbitMQ Manager", err)
 	}
 
 	switch viewID {

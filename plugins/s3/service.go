@@ -10,6 +10,12 @@ import (
 	"omo/pkg/pluginrpc"
 )
 
+const (
+	errNoBucketSelected = "no bucket selected"
+	errNoUploadSelected = "no upload selected"
+	errNoObjectSelected = "no object selected"
+)
+
 // Service is the RPC-facing S3 backend (no tview).
 type Service struct {
 	mu            sync.Mutex
@@ -125,7 +131,7 @@ func (s *Service) DoAction(req pluginrpc.ActionRequest) (pluginrpc.ActionResult,
 			bucket = s.currentBucket
 		}
 		if bucket == "" || bucket == "(no buckets)" {
-			return pluginrpc.ActionResult{OK: false, Message: "no bucket selected"}, nil
+			return pluginrpc.ActionResult{OK: false, Message: errNoBucketSelected}, nil
 		}
 		s.currentBucket = bucket
 		s.currentPrefix = ""
@@ -182,7 +188,7 @@ func (s *Service) DoAction(req pluginrpc.ActionRequest) (pluginrpc.ActionResult,
 			return pluginrpc.ActionResult{OK: false, Message: "folder name required"}, nil
 		}
 		if s.currentBucket == "" {
-			return pluginrpc.ActionResult{OK: false, Message: "no bucket selected"}, nil
+			return pluginrpc.ActionResult{OK: false, Message: errNoBucketSelected}, nil
 		}
 		name = strings.Trim(name, "/")
 		folderKey := s.currentPrefix + name + "/"
@@ -203,7 +209,7 @@ func (s *Service) DoAction(req pluginrpc.ActionRequest) (pluginrpc.ActionResult,
 
 	case "abort_upload":
 		if s.currentBucket == "" || key == "" {
-			return pluginrpc.ActionResult{OK: false, Message: "no upload selected"}, nil
+			return pluginrpc.ActionResult{OK: false, Message: errNoUploadSelected}, nil
 		}
 		uploadID := req.Payload["col3"]
 		if uploadID == "" {
@@ -245,7 +251,7 @@ func (s *Service) DoAction(req pluginrpc.ActionRequest) (pluginrpc.ActionResult,
 
 	case "upload_info":
 		if key == "" || key == "(none)" {
-			return pluginrpc.ActionResult{OK: false, Message: "no upload selected"}, nil
+			return pluginrpc.ActionResult{OK: false, Message: errNoUploadSelected}, nil
 		}
 		uploadID := req.Payload["col3"]
 		if uploadID == "" {
@@ -265,7 +271,7 @@ func (s *Service) DoAction(req pluginrpc.ActionRequest) (pluginrpc.ActionResult,
 
 func (s *Service) browseKeyLocked(key string) (pluginrpc.ActionResult, error) {
 	if s.currentBucket == "" {
-		return pluginrpc.ActionResult{OK: false, Message: "no bucket selected"}, nil
+		return pluginrpc.ActionResult{OK: false, Message: errNoBucketSelected}, nil
 	}
 	if key == "" || strings.HasPrefix(key, "(") {
 		view, err := s.buildViewLocked(s3ViewObjects)
@@ -362,10 +368,10 @@ func (s *Service) navigateUpLocked() (pluginrpc.ActionResult, error) {
 func (s *Service) objectInfoLocked(req pluginrpc.ActionRequest) (pluginrpc.ActionResult, error) {
 	name := req.Payload["key"]
 	if name == "" || name == "../" || req.Payload["col3"] == "Directory" || strings.HasSuffix(name, "/") {
-		return pluginrpc.ActionResult{OK: false, Message: "no object selected"}, nil
+		return pluginrpc.ActionResult{OK: false, Message: errNoObjectSelected}, nil
 	}
 	if s.currentBucket == "" {
-		return pluginrpc.ActionResult{OK: false, Message: "no bucket selected"}, nil
+		return pluginrpc.ActionResult{OK: false, Message: errNoBucketSelected}, nil
 	}
 	fullKey := s.currentPrefix + name
 	info, err := s.client.HeadObject(s.currentBucket, fullKey)
@@ -394,7 +400,7 @@ func (s *Service) bucketInfoLocked(key string) (pluginrpc.ActionResult, error) {
 		bucket = s.currentBucket
 	}
 	if bucket == "" {
-		return pluginrpc.ActionResult{OK: false, Message: "no bucket selected"}, nil
+		return pluginrpc.ActionResult{OK: false, Message: errNoBucketSelected}, nil
 	}
 	was := s.currentBucket
 	s.currentBucket = bucket
@@ -414,7 +420,7 @@ func (s *Service) bucketInfoLocked(key string) (pluginrpc.ActionResult, error) {
 func (s *Service) peekLocked(req pluginrpc.ActionRequest) (pluginrpc.ActionResult, error) {
 	name := req.Payload["key"]
 	if name == "" || name == "../" || req.Payload["col3"] == "Directory" || strings.HasSuffix(name, "/") {
-		return pluginrpc.ActionResult{OK: false, Message: "no object selected"}, nil
+		return pluginrpc.ActionResult{OK: false, Message: errNoObjectSelected}, nil
 	}
 	fullKey := s.currentPrefix + name
 	data, err := s.client.PeekObject(s.currentBucket, fullKey, 4096)
@@ -427,7 +433,7 @@ func (s *Service) peekLocked(req pluginrpc.ActionRequest) (pluginrpc.ActionResul
 func (s *Service) presignLocked(req pluginrpc.ActionRequest) (pluginrpc.ActionResult, error) {
 	name := req.Payload["key"]
 	if name == "" || name == "../" || req.Payload["col3"] == "Directory" || strings.HasSuffix(name, "/") {
-		return pluginrpc.ActionResult{OK: false, Message: "no object selected"}, nil
+		return pluginrpc.ActionResult{OK: false, Message: errNoObjectSelected}, nil
 	}
 	fullKey := s.currentPrefix + name
 	url, err := s.client.PresignGet(s.currentBucket, fullKey, time.Hour)
@@ -439,36 +445,41 @@ func (s *Service) presignLocked(req pluginrpc.ActionRequest) (pluginrpc.ActionRe
 }
 
 func (s *Service) copyURILocked(req pluginrpc.ActionRequest) (pluginrpc.ActionResult, error) {
-	var uri string
+	uri, errMsg := s.resolveCopyURI(req)
+	if errMsg != "" {
+		return pluginrpc.ActionResult{OK: false, Message: errMsg}, nil
+	}
+	return pluginrpc.ActionResult{OK: true, ModalTitle: "S3 URI", ModalBody: uri + "\n\n(copy from here)"}, nil
+}
+
+func (s *Service) resolveCopyURI(req pluginrpc.ActionRequest) (uri, errMsg string) {
 	switch s.currentView {
 	case s3ViewBuckets:
 		if req.Payload["key"] == "" || strings.HasPrefix(req.Payload["key"], "(") {
-			return pluginrpc.ActionResult{OK: false, Message: "no bucket selected"}, nil
+			return "", errNoBucketSelected
 		}
-		uri = "s3://" + req.Payload["key"] + "/"
+		return "s3://" + req.Payload["key"] + "/", ""
 	case s3ViewOverview, s3ViewACL, s3ViewLifecycle:
 		if s.currentBucket == "" {
-			return pluginrpc.ActionResult{OK: false, Message: "no bucket selected"}, nil
+			return "", errNoBucketSelected
 		}
-		uri = fmt.Sprintf("s3://%s/%s", s.currentBucket, s.currentPrefix)
+		return fmt.Sprintf("s3://%s/%s", s.currentBucket, s.currentPrefix), ""
 	case s3ViewVersions, s3ViewUploads:
 		name := req.Payload["key"]
 		if name == "" || strings.HasPrefix(name, "(") {
-			uri = fmt.Sprintf("s3://%s/%s", s.currentBucket, s.currentPrefix)
-		} else {
-			uri = fmt.Sprintf("s3://%s/%s", s.currentBucket, name)
+			return fmt.Sprintf("s3://%s/%s", s.currentBucket, s.currentPrefix), ""
 		}
+		return fmt.Sprintf("s3://%s/%s", s.currentBucket, name), ""
 	default:
-		name := req.Payload["key"]
-		if name == "" || name == "../" {
-			uri = fmt.Sprintf("s3://%s/%s", s.currentBucket, s.currentPrefix)
-		} else if req.Payload["col3"] == "Directory" || strings.HasSuffix(name, "/") {
-			uri = fmt.Sprintf("s3://%s/%s%s", s.currentBucket, s.currentPrefix, name)
-		} else {
-			uri = fmt.Sprintf("s3://%s/%s%s", s.currentBucket, s.currentPrefix, name)
-		}
+		return s.objectViewURI(req.Payload["key"]), ""
 	}
-	return pluginrpc.ActionResult{OK: true, ModalTitle: "S3 URI", ModalBody: uri + "\n\n(copy from here)"}, nil
+}
+
+func (s *Service) objectViewURI(name string) string {
+	if name == "" || name == "../" {
+		return fmt.Sprintf("s3://%s/%s", s.currentBucket, s.currentPrefix)
+	}
+	return fmt.Sprintf("s3://%s/%s%s", s.currentBucket, s.currentPrefix, name)
 }
 
 func (s *Service) deleteLocked(req pluginrpc.ActionRequest) (pluginrpc.ActionResult, error) {
@@ -478,56 +489,62 @@ func (s *Service) deleteLocked(req pluginrpc.ActionRequest) (pluginrpc.ActionRes
 
 	switch s.currentView {
 	case s3ViewBuckets:
-		name := req.Payload["key"]
-		if name == "" || strings.HasPrefix(name, "(") {
-			return pluginrpc.ActionResult{OK: false, Message: "no bucket selected"}, nil
-		}
-		if err := s.client.DeleteBucket(name); err != nil {
-			return pluginrpc.ActionResult{OK: false, Message: err.Error()}, nil
-		}
-		if s.currentBucket == name {
-			s.currentBucket = ""
-			s.currentPrefix = ""
-		}
-		view, err := s.buildViewLocked(s3ViewBuckets)
-		if err != nil {
-			return pluginrpc.ActionResult{OK: false, Message: err.Error()}, nil
-		}
-		return pluginrpc.ActionResult{OK: true, Message: "deleted bucket " + name, Next: &view}, nil
-
+		return s.deleteBucketLocked(req.Payload["key"])
 	case s3ViewObjects:
-		name := req.Payload["key"]
-		if name == "" || name == "../" || req.Payload["col3"] == "Directory" || strings.HasSuffix(name, "/") {
-			return pluginrpc.ActionResult{OK: false, Message: "select a file object to delete (not a folder)"}, nil
-		}
-		fullKey := s.currentPrefix + name
-		if err := s.client.DeleteObject(s.currentBucket, fullKey); err != nil {
-			return pluginrpc.ActionResult{OK: false, Message: err.Error()}, nil
-		}
-		view, err := s.buildViewLocked(s3ViewObjects)
-		if err != nil {
-			return pluginrpc.ActionResult{OK: false, Message: err.Error()}, nil
-		}
-		return pluginrpc.ActionResult{OK: true, Message: "deleted " + fullKey, Next: &view}, nil
-
+		return s.deleteObjectLocked(req)
 	case s3ViewUploads:
-		name := req.Payload["key"]
-		uploadID := req.Payload["col3"]
-		if name == "" || uploadID == "" {
-			return pluginrpc.ActionResult{OK: false, Message: "no upload selected"}, nil
-		}
-		if err := s.client.AbortMultipartUpload(s.currentBucket, name, uploadID); err != nil {
-			return pluginrpc.ActionResult{OK: false, Message: err.Error()}, nil
-		}
-		view, err := s.buildViewLocked(s3ViewUploads)
-		if err != nil {
-			return pluginrpc.ActionResult{OK: false, Message: err.Error()}, nil
-		}
-		return pluginrpc.ActionResult{OK: true, Message: "aborted upload", Next: &view}, nil
-
+		return s.abortUploadLocked(req.Payload["key"], req.Payload["col3"])
 	default:
 		return pluginrpc.ActionResult{OK: false, Message: "delete not available in this view"}, nil
 	}
+}
+
+func (s *Service) deleteBucketLocked(name string) (pluginrpc.ActionResult, error) {
+	if name == "" || strings.HasPrefix(name, "(") {
+		return pluginrpc.ActionResult{OK: false, Message: errNoBucketSelected}, nil
+	}
+	if err := s.client.DeleteBucket(name); err != nil {
+		return pluginrpc.ActionResult{OK: false, Message: err.Error()}, nil
+	}
+	if s.currentBucket == name {
+		s.currentBucket = ""
+		s.currentPrefix = ""
+	}
+	view, err := s.buildViewLocked(s3ViewBuckets)
+	if err != nil {
+		return pluginrpc.ActionResult{OK: false, Message: err.Error()}, nil
+	}
+	return pluginrpc.ActionResult{OK: true, Message: "deleted bucket " + name, Next: &view}, nil
+}
+
+func (s *Service) deleteObjectLocked(req pluginrpc.ActionRequest) (pluginrpc.ActionResult, error) {
+	name := req.Payload["key"]
+	if name == "" || name == "../" || req.Payload["col3"] == "Directory" || strings.HasSuffix(name, "/") {
+		return pluginrpc.ActionResult{OK: false, Message: "select a file object to delete (not a folder)"}, nil
+	}
+	fullKey := s.currentPrefix + name
+	if err := s.client.DeleteObject(s.currentBucket, fullKey); err != nil {
+		return pluginrpc.ActionResult{OK: false, Message: err.Error()}, nil
+	}
+	view, err := s.buildViewLocked(s3ViewObjects)
+	if err != nil {
+		return pluginrpc.ActionResult{OK: false, Message: err.Error()}, nil
+	}
+	return pluginrpc.ActionResult{OK: true, Message: "deleted " + fullKey, Next: &view}, nil
+}
+
+func (s *Service) abortUploadLocked(name, uploadID string) (pluginrpc.ActionResult, error) {
+	if name == "" || uploadID == "" {
+		return pluginrpc.ActionResult{OK: false, Message: errNoUploadSelected}, nil
+	}
+	if err := s.client.AbortMultipartUpload(s.currentBucket, name, uploadID); err != nil {
+		return pluginrpc.ActionResult{OK: false, Message: err.Error()}, nil
+	}
+	view, err := s.buildViewLocked(s3ViewUploads)
+	if err != nil {
+		return pluginrpc.ActionResult{OK: false, Message: err.Error()}, nil
+	}
+	return pluginrpc.ActionResult{OK: true, Message: "aborted upload", Next: &view}, nil
 }
 
 func (s *Service) Stop() error {

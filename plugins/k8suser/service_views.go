@@ -8,6 +8,8 @@ import (
 	"omo/pkg/pluginrpc"
 )
 
+const titleK8sUsers = "K8s Users"
+
 func viewNavBindings() []pluginrpc.KeyBinding {
 	return []pluginrpc.KeyBinding{
 		{Key: "0", Label: "Users", Action: "goto_users"},
@@ -36,11 +38,10 @@ func rolesActions() []pluginrpc.KeyBinding {
 }
 
 func helpSections() []pluginrpc.HelpSection {
-	return pluginrpc.HelpWithGlobal([]pluginrpc.HelpSection{
-		{Title: "Views (0-1)", Bindings: viewNavBindings()},
-		{Title: "Users", Bindings: usersActions()},
-		{Title: "Roles", Bindings: rolesActions()},
-	}...)
+	return pluginrpc.HelpNav(viewNavBindings(), nil,
+		pluginrpc.HelpSection{Title: "Users", Bindings: usersActions()},
+		pluginrpc.HelpSection{Title: "Roles", Bindings: rolesActions()},
+	)
 }
 
 var ui = pluginrpc.ViewUI{
@@ -74,13 +75,13 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 
 func (s *Service) k8sViewUsersLocked() (pluginrpc.ViewData, error) {
 	if s.client.CurrentContext == "" {
-		return ui.StatusError(k8sViewUsers, "K8s Users", s.baseInfo("No context configured"),
+		return ui.StatusError(k8sViewUsers, titleK8sUsers, s.baseInfo("No context configured"),
 			"not configured", "Configure kubeconfig/context via host secrets", usersActions()...), nil
 	}
 
 	users, err := s.client.GetUsers()
 	if err != nil {
-		return ui.StatusError(k8sViewUsers, "K8s Users", s.baseInfo(err.Error()),
+		return ui.StatusError(k8sViewUsers, titleK8sUsers, s.baseInfo(err.Error()),
 			"error", err.Error(), usersActions()...), nil
 	}
 
@@ -90,7 +91,7 @@ func (s *Service) k8sViewUsersLocked() (pluginrpc.ViewData, error) {
 	}
 	rows = pluginrpc.EnsureRows(rows, []string{"No certificate-based users found", "Use create_user", "", ""})
 
-	return ui.OK(k8sViewUsers, "K8s Users", s.baseInfo(fmt.Sprintf("Users: %d", len(users))),
+	return ui.OK(k8sViewUsers, titleK8sUsers, s.baseInfo(fmt.Sprintf("Users: %d", len(users))),
 		[]string{"Username", "Certificate Expiry", "Namespaces", "Roles"}, rows, "Username", usersActions()...), nil
 }
 
