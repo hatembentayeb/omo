@@ -117,7 +117,7 @@ func (kp *KeePassProvider) ensureReferenceTemplates() error {
 }
 
 // ResetDB removes the KeePass file at DefaultDBPath. The next New() recreates it
-// with a fresh tree and reference templates. The key file is not removed.
+// with a fresh tree and reference templates (schema docs). The key file is not removed.
 func ResetDB() error {
 	path := DefaultDBPath()
 	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {

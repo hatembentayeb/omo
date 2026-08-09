@@ -22,6 +22,7 @@ type RPCRenderer struct {
 	root        *tview.Pages
 	currentView string
 	homeView    string // first/default view id for breadcrumbs + ESC
+	onActions   func([]pluginrpc.KeyBinding, func(string))
 }
 
 // NewRPCRenderer builds a CoreView shell for an RPC plugin.
@@ -52,6 +53,11 @@ func NewRPCRenderer(app *tview.Application, pages *tview.Pages, name string, p p
 // SetPlugin updates the RPC client used for refresh/actions (after async launch).
 func (r *RPCRenderer) SetPlugin(p pluginrpc.Plugin) {
 	r.plugin = p
+}
+
+// SetActionsHook wires the host sidebar to per-view plugin actions.
+func (r *RPCRenderer) SetActionsHook(fn func([]pluginrpc.KeyBinding, func(string))) {
+	r.onActions = fn
 }
 
 // ShowLoading sets a loading message without QueueUpdateDraw / table.Select.
@@ -96,21 +102,54 @@ func (r *RPCRenderer) Apply(view pluginrpc.ViewData) tview.Primitive {
 		title = r.name
 	}
 	r.core.ClearKeyBindings()
+	r.core.ClearHelpSections()
+
+	// Globals always live in the Keys column (former logs).
 	r.core.AddKeyBinding("R", "Refresh", r.refresh)
 	r.core.AddKeyBinding("?", "Help", func() { r.core.ShowHelpModal() })
 	r.core.AddKeyBinding("/", "Filter", nil)
 	r.core.AddKeyBinding("^t", "Target", nil) // handled globally in main (Ctrl+t)
 
+	// Middle column: explicit view switches (0-9).
+	for _, kb := range view.ViewBindings {
+		r.bindViewSwitch(kb)
+	}
+
+	// Legacy / extra KeyBindings: classify goto_/digits → Views, else → Keys.
 	for _, kb := range view.KeyBindings {
-		action := kb.Action
-		label := kb.Label
-		key := kb.Key
-		if action == "" || key == "" || key == "R" || key == "?" || key == "/" {
+		if isViewSwitchBinding(kb) {
+			// Non-digit overflow views (A/W/X/Z): bind silently, listed in "?".
+			if len(kb.Key) == 1 && kb.Key[0] >= '0' && kb.Key[0] <= '9' {
+				r.bindViewSwitch(kb)
+			} else if kb.Key != "" && kb.Action != "" {
+				action := kb.Action
+				r.core.BindKey(kb.Key, func() { r.dispatchAction(action) })
+			}
 			continue
 		}
-		r.core.AddKeyBinding(key, label, func() {
-			r.dispatchAction(action)
-		})
+		r.bindKeyShortcut(kb)
+	}
+
+	// Current-view actions → Keys column (expanded) + sidebar only.
+	for _, kb := range view.Actions {
+		r.bindKeyShortcut(kb)
+	}
+	r.core.SetActiveView(r.currentView)
+
+	if len(view.HelpSections) > 0 {
+		sections := make([]ui.HelpSection, 0, len(view.HelpSections))
+		for _, s := range view.HelpSections {
+			bindings := make([]ui.KeyBindingHelp, 0, len(s.Bindings))
+			for _, b := range s.Bindings {
+				bindings = append(bindings, ui.KeyBindingHelp{Key: b.Key, Label: b.Label})
+			}
+			sections = append(sections, ui.HelpSection{Title: s.Title, Bindings: bindings})
+		}
+		r.core.SetHelpSections(sections)
+	}
+
+	if r.onActions != nil {
+		r.onActions(view.Actions, r.dispatchAction)
 	}
 
 	if view.SelectionKey != "" {
@@ -139,6 +178,10 @@ func (r *RPCRenderer) Apply(view pluginrpc.ViewData) tview.Primitive {
 				r.dispatchAction("subscribe")
 			case "servers":
 				r.dispatchAction("shell")
+			case "buckets":
+				r.dispatchAction("open_objects")
+			case "objects":
+				r.dispatchAction("navigate")
 			}
 		})
 	}
@@ -168,6 +211,40 @@ func (r *RPCRenderer) FocusTable() {
 // Primitive returns the root pages primitive.
 func (r *RPCRenderer) Primitive() tview.Primitive {
 	return r.root
+}
+
+func isViewSwitchBinding(kb pluginrpc.KeyBinding) bool {
+	if strings.HasPrefix(kb.Action, "goto_") {
+		return true
+	}
+	return len(kb.Key) == 1 && kb.Key[0] >= '0' && kb.Key[0] <= '9'
+}
+
+func (r *RPCRenderer) bindViewSwitch(kb pluginrpc.KeyBinding) {
+	if kb.Key == "" || kb.Action == "" {
+		return
+	}
+	action := kb.Action
+	viewID := strings.TrimPrefix(action, "goto_")
+	r.core.AddViewBinding(kb.Key, kb.Label, viewID, func() {
+		r.dispatchAction(action)
+	})
+}
+
+func (r *RPCRenderer) bindKeyShortcut(kb pluginrpc.KeyBinding) {
+	key := kb.Key
+	if key == "" || key == "R" || key == "?" || key == "/" || key == "^t" {
+		return
+	}
+	label := kb.Label
+	action := kb.Action
+	if action == "" {
+		r.core.AddKeyBinding(key, label, nil)
+		return
+	}
+	r.core.AddKeyBinding(key, label, func() {
+		r.dispatchAction(action)
+	})
 }
 
 // Destroy cleans up the CoreView.
@@ -242,12 +319,13 @@ func (r *RPCRenderer) dispatchAction(action string) {
 			r.core.Log("[yellow]no key selected")
 			return
 		}
-		ui.ShowStandardConfirmationModal(r.pages, r.app, "Delete Key",
-			fmt.Sprintf("Delete key %q?", key),
+		payload := r.selectionPayload()
+		ui.ShowStandardConfirmationModal(r.pages, r.app, "Confirm Delete",
+			fmt.Sprintf("Delete %q?", key),
 			func(ok bool) {
 				r.FocusTable()
 				if ok {
-					r.runAction("delete", map[string]string{"key": key})
+					r.runAction("delete", payload)
 				}
 			})
 	case "flush":
@@ -261,6 +339,10 @@ func (r *RPCRenderer) dispatchAction(action string) {
 			})
 	case "create_key":
 		r.promptCreateKey()
+	case "create_bucket":
+		r.promptCreateBucket()
+	case "create_folder":
+		r.promptCreateFolder()
 	case "select_db":
 		r.promptSelectDB()
 	case "publish":
@@ -311,6 +393,28 @@ func (r *RPCRenderer) promptCreateKey() {
 						"ttl":   "-1",
 					})
 				})
+		})
+}
+
+func (r *RPCRenderer) promptCreateBucket() {
+	ui.ShowCompactStyledInputModal(r.pages, r.app, "New Bucket", "Name:", "", 48, nil,
+		func(name string, cancelled bool) {
+			r.FocusTable()
+			if cancelled || strings.TrimSpace(name) == "" {
+				return
+			}
+			r.runAction("create_bucket", map[string]string{"name": strings.TrimSpace(name)})
+		})
+}
+
+func (r *RPCRenderer) promptCreateFolder() {
+	ui.ShowCompactStyledInputModal(r.pages, r.app, "New Folder", "Name:", "", 40, nil,
+		func(name string, cancelled bool) {
+			r.FocusTable()
+			if cancelled || strings.TrimSpace(name) == "" {
+				return
+			}
+			r.runAction("create_folder", map[string]string{"name": strings.TrimSpace(name)})
 		})
 }
 

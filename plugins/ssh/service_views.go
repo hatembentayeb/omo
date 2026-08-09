@@ -8,24 +8,59 @@ import (
 	"omo/pkg/pluginrpc"
 )
 
-func sshNavBindings() []pluginrpc.KeyBinding {
+func viewNavBindings() []pluginrpc.KeyBinding {
 	return []pluginrpc.KeyBinding{
-		{Key: "L", Label: "Servers", Action: "goto_servers"},
-		{Key: "O", Label: "Overview", Action: "goto_overview"},
-		{Key: "P", Label: "Processes", Action: "goto_processes"},
-		{Key: "D", Label: "Disk", Action: "goto_disk"},
-		{Key: "N", Label: "Network", Action: "goto_network"},
-		{Key: "K", Label: "Docker", Action: "goto_docker"},
-		{Key: "V", Label: "Services", Action: "goto_services"},
+		{Key: "0", Label: "Servers", Action: "goto_servers"},
+		{Key: "1", Label: "Overview", Action: "goto_overview"},
+		{Key: "2", Label: "Processes", Action: "goto_processes"},
+		{Key: "3", Label: "Disk", Action: "goto_disk"},
+		{Key: "4", Label: "Network", Action: "goto_network"},
+		{Key: "5", Label: "Docker", Action: "goto_docker"},
+		{Key: "6", Label: "Services", Action: "goto_services"},
 	}
 }
 
-func withSSHNav(extra ...pluginrpc.KeyBinding) []pluginrpc.KeyBinding {
-	out := make([]pluginrpc.KeyBinding, 0, len(extra)+len(sshNavBindings())+1)
-	out = append(out, pluginrpc.KeyBinding{Key: "R", Label: "Refresh", Action: "refresh"})
-	out = append(out, extra...)
-	out = append(out, sshNavBindings()...)
-	return out
+func serversActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "C", Label: "Connect", Action: "connect"},
+		{Key: "I", Label: "Server Info", Action: "server_info"},
+		{Key: "S", Label: "Shell", Action: "shell"},
+		{Key: "E", Label: "Execute", Action: "execute"},
+	}
+}
+
+func overviewActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "S", Label: "Shell", Action: "shell"},
+		{Key: "E", Label: "Execute", Action: "execute"},
+		{Key: "I", Label: "Server Info", Action: "server_info"},
+	}
+}
+
+func shellActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "S", Label: "Shell", Action: "shell"},
+	}
+}
+
+func connectActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "C", Label: "Connect", Action: "connect"},
+	}
+}
+
+func helpSections() []pluginrpc.HelpSection {
+	return pluginrpc.HelpWithGlobal([]pluginrpc.HelpSection{
+		{Title: "Views (0-6)", Bindings: viewNavBindings()},
+		{Title: "Servers", Bindings: serversActions()},
+		{Title: "Overview", Bindings: overviewActions()},
+		{Title: "Shell", Bindings: shellActions()},
+	}...)
+}
+
+var ui = pluginrpc.ViewUI{
+	Views: viewNavBindings,
+	Help:  helpSections,
 }
 
 func (s *Service) baseInfo(extra string) string {
@@ -35,10 +70,7 @@ func (s *Service) baseInfo(extra string) string {
 	}
 	msg := fmt.Sprintf("[green]SSH Manager[white]\nServer: %s@%s:%d\nStatus: %s\nView: %s",
 		s.server.User, s.server.Host, s.server.Port, status, s.currentView)
-	if extra != "" {
-		msg += "\n" + extra
-	}
-	return msg
+	return pluginrpc.FormatInfo(msg, extra)
 }
 
 func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
@@ -51,15 +83,23 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	case viewOverview:
 		return s.viewOverviewLocked()
 	case viewProcesses:
-		return s.viewProcessesLocked()
+		return s.shellTableLocked(viewProcesses, "Processes", "PID",
+			[]string{"USER", "PID", "%CPU", "%MEM", "VSZ", "RSS", "TTY", "STAT", "START", "TIME", "COMMAND"},
+			s.client.GetProcesses, func(n int) string { return fmt.Sprintf("Processes: %d", n) }, nil)
 	case viewDisk:
-		return s.viewDiskLocked()
+		return s.shellTableLocked(viewDisk, "Disk Usage", "Filesystem",
+			[]string{"Filesystem", "Size", "Used", "Avail", "Use%", "Mounted"},
+			s.client.GetDiskUsage, nil, normalizeDiskHeaders)
 	case viewNetwork:
-		return s.viewNetworkLocked()
+		return s.shellTableLocked(viewNetwork, "Network", "Local",
+			[]string{"Proto", "Recv-Q", "Send-Q", "Local", "Remote", "State", "Process"},
+			s.client.GetNetworkConnections, nil, nil)
 	case viewDocker:
 		return s.viewDockerLocked()
 	case viewServices:
-		return s.viewServicesLocked()
+		return s.shellTableLocked(viewServices, "Services", "Unit",
+			[]string{"Unit", "Load", "Active", "Sub", "Description"},
+			s.client.GetSystemdServices, func(n int) string { return fmt.Sprintf("Services: %d", n) }, nil)
 	default:
 		return s.viewServersLocked()
 	}
@@ -89,25 +129,12 @@ func (s *Service) viewServersLocked() (pluginrpc.ViewData, error) {
 			tags,
 		})
 	}
-	if len(rows) == 0 {
-		rows = [][]string{{"No server configured", "", "", "", "", "", "", ""}}
-	}
+	rows = pluginrpc.EnsureRows(rows, []string{"No server configured", "", "", "", "", "", "", ""})
 
-	return pluginrpc.ViewData{
-		View:         viewServers,
-		Title:        "SSH Servers",
-		Info:         s.baseInfo("Configured via host secrets (multi-server discovery skipped in RPC)"),
-		Status:       "ok",
-		Headers:      []string{"Name", "Environment", "Host", "Port", "User", "Auth", "Proxy/Jump", "Tags"},
-		Rows:         rows,
-		SelectionKey: "Name",
-		KeyBindings: withSSHNav(
-			pluginrpc.KeyBinding{Key: "C", Label: "Connect", Action: "connect"},
-			pluginrpc.KeyBinding{Key: "I", Label: "Server Info", Action: "server_info"},
-			pluginrpc.KeyBinding{Key: "S", Label: "Shell", Action: "shell"},
-			pluginrpc.KeyBinding{Key: "E", Label: "Execute", Action: "execute"},
-		),
-	}, nil
+	return ui.OK(viewServers, "SSH Servers",
+		s.baseInfo("Configured via host secrets (multi-server discovery skipped in RPC)"),
+		[]string{"Name", "Environment", "Host", "Port", "User", "Auth", "Proxy/Jump", "Tags"},
+		rows, "Name", serversActions()...), nil
 }
 
 func (s *Service) viewOverviewLocked() (pluginrpc.ViewData, error) {
@@ -132,98 +159,40 @@ func (s *Service) viewOverviewLocked() (pluginrpc.ViewData, error) {
 		{"Last Login", info.LastLogin},
 		{"Connected For", s.client.GetConnectedDuration().Truncate(time.Second).String()},
 	}
-	return pluginrpc.ViewData{
-		View:         viewOverview,
-		Title:        "Overview",
-		Info:         s.baseInfo(""),
-		Status:       "ok",
-		Headers:      []string{"Property", "Value"},
-		Rows:         rows,
-		SelectionKey: "Property",
-		KeyBindings: withSSHNav(
-			pluginrpc.KeyBinding{Key: "S", Label: "Shell", Action: "shell"},
-			pluginrpc.KeyBinding{Key: "E", Label: "Execute", Action: "execute"},
-			pluginrpc.KeyBinding{Key: "I", Label: "Server Info", Action: "server_info"},
-		),
-	}, nil
+	return ui.OK(viewOverview, "Overview", s.baseInfo(""),
+		[]string{"Property", "Value"}, rows, "Property", overviewActions()...), nil
 }
 
-func (s *Service) viewProcessesLocked() (pluginrpc.ViewData, error) {
+// shellTableLocked builds a connected remote-command table (processes/disk/network/services).
+func (s *Service) shellTableLocked(
+	viewID, title, selectionKey string,
+	defaultHeaders []string,
+	fetch func() ([][]string, error),
+	infoExtra func(n int) string,
+	normalizeHeaders func([]string) []string,
+) (pluginrpc.ViewData, error) {
 	if err := s.ensureConnectedLocked(); err != nil {
-		return s.notConnectedView(viewProcesses, err)
+		return s.notConnectedView(viewID, err)
 	}
-	rows, err := s.client.GetProcesses()
+	rows, err := fetch()
 	if err != nil {
 		return pluginrpc.ViewData{}, err
 	}
-	headers := []string{"USER", "PID", "%CPU", "%MEM", "VSZ", "RSS", "TTY", "STAT", "START", "TIME", "COMMAND"}
+	headers := defaultHeaders
 	if len(rows) > 0 && looksLikeHeader(rows[0]) {
-		headers = rows[0]
+		if normalizeHeaders != nil {
+			headers = normalizeHeaders(rows[0])
+		} else {
+			headers = rows[0]
+		}
 		rows = rows[1:]
 	}
 	rows = padRows(rows, len(headers))
-	return pluginrpc.ViewData{
-		View:         viewProcesses,
-		Title:        "Processes",
-		Info:         s.baseInfo(fmt.Sprintf("Processes: %d", len(rows))),
-		Status:       "ok",
-		Headers:      headers,
-		Rows:         rows,
-		SelectionKey: "PID",
-		KeyBindings:  withSSHNav(pluginrpc.KeyBinding{Key: "S", Label: "Shell", Action: "shell"}),
-	}, nil
-}
-
-func (s *Service) viewDiskLocked() (pluginrpc.ViewData, error) {
-	if err := s.ensureConnectedLocked(); err != nil {
-		return s.notConnectedView(viewDisk, err)
+	extra := ""
+	if infoExtra != nil {
+		extra = infoExtra(len(rows))
 	}
-	rows, err := s.client.GetDiskUsage()
-	if err != nil {
-		return pluginrpc.ViewData{}, err
-	}
-	headers := []string{"Filesystem", "Size", "Used", "Avail", "Use%", "Mounted"}
-	if len(rows) > 0 && looksLikeHeader(rows[0]) {
-		headers = normalizeDiskHeaders(rows[0])
-		rows = rows[1:]
-	}
-	rows = padRows(rows, len(headers))
-	return pluginrpc.ViewData{
-		View:         viewDisk,
-		Title:        "Disk Usage",
-		Info:         s.baseInfo(""),
-		Status:       "ok",
-		Headers:      headers,
-		Rows:         rows,
-		SelectionKey: "Filesystem",
-		KeyBindings:  withSSHNav(pluginrpc.KeyBinding{Key: "S", Label: "Shell", Action: "shell"}),
-	}, nil
-}
-
-func (s *Service) viewNetworkLocked() (pluginrpc.ViewData, error) {
-	if err := s.ensureConnectedLocked(); err != nil {
-		return s.notConnectedView(viewNetwork, err)
-	}
-	rows, err := s.client.GetNetworkConnections()
-	if err != nil {
-		return pluginrpc.ViewData{}, err
-	}
-	headers := []string{"Proto", "Recv-Q", "Send-Q", "Local", "Remote", "State", "Process"}
-	if len(rows) > 0 && looksLikeHeader(rows[0]) {
-		headers = rows[0]
-		rows = rows[1:]
-	}
-	rows = padRows(rows, len(headers))
-	return pluginrpc.ViewData{
-		View:         viewNetwork,
-		Title:        "Network",
-		Info:         s.baseInfo(""),
-		Status:       "ok",
-		Headers:      headers,
-		Rows:         rows,
-		SelectionKey: "Local",
-		KeyBindings:  withSSHNav(pluginrpc.KeyBinding{Key: "S", Label: "Shell", Action: "shell"}),
-	}, nil
+	return ui.OK(viewID, title, s.baseInfo(extra), headers, rows, selectionKey, shellActions()...), nil
 }
 
 func (s *Service) viewDockerLocked() (pluginrpc.ViewData, error) {
@@ -232,17 +201,7 @@ func (s *Service) viewDockerLocked() (pluginrpc.ViewData, error) {
 	}
 	rows, err := s.client.GetDockerContainers()
 	if err != nil {
-		return pluginrpc.ViewData{
-			View:    viewDocker,
-			Title:   "Docker",
-			Info:    s.baseInfo(err.Error()),
-			Status:  "unavailable",
-			Headers: []string{"Status", "Detail"},
-			Rows:    [][]string{{"unavailable", err.Error()}},
-			KeyBindings: withSSHNav(
-				pluginrpc.KeyBinding{Key: "S", Label: "Shell", Action: "shell"},
-			),
-		}, nil
+		return ui.StatusError(viewDocker, "Docker", s.baseInfo(err.Error()), "unavailable", err.Error(), shellActions()...), nil
 	}
 	headers := []string{"Names", "Image", "Status", "Ports"}
 	if len(rows) > 0 && looksLikeHeader(rows[0]) {
@@ -250,52 +209,12 @@ func (s *Service) viewDockerLocked() (pluginrpc.ViewData, error) {
 		rows = rows[1:]
 	}
 	rows = padRows(rows, len(headers))
-	return pluginrpc.ViewData{
-		View:         viewDocker,
-		Title:        "Docker",
-		Info:         s.baseInfo(fmt.Sprintf("Containers: %d", len(rows))),
-		Status:       "ok",
-		Headers:      headers,
-		Rows:         rows,
-		SelectionKey: "Names",
-		KeyBindings:  withSSHNav(pluginrpc.KeyBinding{Key: "S", Label: "Shell", Action: "shell"}),
-	}, nil
-}
-
-func (s *Service) viewServicesLocked() (pluginrpc.ViewData, error) {
-	if err := s.ensureConnectedLocked(); err != nil {
-		return s.notConnectedView(viewServices, err)
-	}
-	rows, err := s.client.GetSystemdServices()
-	if err != nil {
-		return pluginrpc.ViewData{}, err
-	}
-	headers := []string{"Unit", "Load", "Active", "Sub", "Description"}
-	rows = padRows(rows, len(headers))
-	return pluginrpc.ViewData{
-		View:         viewServices,
-		Title:        "Services",
-		Info:         s.baseInfo(fmt.Sprintf("Services: %d", len(rows))),
-		Status:       "ok",
-		Headers:      headers,
-		Rows:         rows,
-		SelectionKey: "Unit",
-		KeyBindings:  withSSHNav(pluginrpc.KeyBinding{Key: "S", Label: "Shell", Action: "shell"}),
-	}, nil
+	return ui.OK(viewDocker, "Docker", s.baseInfo(fmt.Sprintf("Containers: %d", len(rows))),
+		headers, rows, "Names", shellActions()...), nil
 }
 
 func (s *Service) notConnectedView(viewID string, err error) (pluginrpc.ViewData, error) {
-	return pluginrpc.ViewData{
-		View:    viewID,
-		Title:   "SSH Manager",
-		Info:    s.baseInfo(err.Error()),
-		Status:  "not connected",
-		Headers: []string{"Status", "Detail"},
-		Rows:    [][]string{{"error", err.Error()}},
-		KeyBindings: withSSHNav(
-			pluginrpc.KeyBinding{Key: "C", Label: "Connect", Action: "connect"},
-		),
-	}, nil
+	return ui.StatusError(viewID, "SSH Manager", s.baseInfo(err.Error()), "not connected", err.Error(), connectActions()...), nil
 }
 
 func looksLikeHeader(row []string) bool {

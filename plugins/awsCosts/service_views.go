@@ -9,31 +9,39 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 )
 
-func navBindings() []pluginrpc.KeyBinding {
+func viewNavBindings() []pluginrpc.KeyBinding {
 	return []pluginrpc.KeyBinding{
-		{Key: "M", Label: "Main", Action: "goto_main"},
-		{Key: "S", Label: "Services", Action: "goto_services"},
-		{Key: "B", Label: "Budgets", Action: "goto_budgets"},
-		{Key: "T", Label: "Cost Types", Action: "goto_costtypes"},
-		{Key: "F", Label: "Forecast", Action: "goto_forecast"},
+		{Key: "0", Label: "Main", Action: "goto_main"},
+		{Key: "1", Label: "Services", Action: "goto_services"},
+		{Key: "2", Label: "Budgets", Action: "goto_budgets"},
+		{Key: "3", Label: "Cost Types", Action: "goto_costtypes"},
+		{Key: "4", Label: "Forecast", Action: "goto_forecast"},
 	}
 }
 
-func withNav(extra ...pluginrpc.KeyBinding) []pluginrpc.KeyBinding {
-	out := make([]pluginrpc.KeyBinding, 0, len(extra)+len(navBindings())+1)
-	out = append(out, pluginrpc.KeyBinding{Key: "R", Label: "Refresh", Action: "refresh"})
-	out = append(out, extra...)
-	out = append(out, navBindings()...)
-	return out
+func costExploreActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "P", Label: "Time Period", Action: "set_time_period"},
+		{Key: "G", Label: "Granularity", Action: "toggle_granularity"},
+	}
+}
+
+func helpSections() []pluginrpc.HelpSection {
+	return pluginrpc.HelpWithGlobal([]pluginrpc.HelpSection{
+		{Title: "Views (0-4)", Bindings: viewNavBindings()},
+		{Title: "Main / Services", Bindings: costExploreActions()},
+	}...)
+}
+
+var ui = pluginrpc.ViewUI{
+	Views: viewNavBindings,
+	Help:  helpSections,
 }
 
 func (s *Service) baseInfo(extra string) string {
 	msg := fmt.Sprintf("[green]AWS Cost Explorer[white]\nProfile: %s\nRegion: %s\n%s | %s\nView: %s",
 		s.profile, s.region, s.timeRange, s.granularity, s.currentView)
-	if extra != "" {
-		msg += "\n" + extra
-	}
-	return msg
+	return pluginrpc.FormatInfo(msg, extra)
 }
 
 func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
@@ -43,17 +51,7 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	s.currentView = viewID
 
 	if err := s.ensureClientLocked(); err != nil {
-		return pluginrpc.ViewData{
-			View:    viewID,
-			Title:   "AWS Cost Explorer",
-			Info:    "[yellow]AWS Cost Explorer[white]\nStatus: Not Connected\n" + err.Error(),
-			Status:  "not connected",
-			Headers: []string{"Status", "Detail"},
-			Rows:    [][]string{{"error", err.Error()}},
-			KeyBindings: []pluginrpc.KeyBinding{
-				{Key: "R", Label: "Refresh", Action: "refresh"},
-			},
-		}, nil
+		return ui.NotConnected(viewID, "AWS Cost Explorer", err.Error()), nil
 	}
 
 	switch viewID {
@@ -97,22 +95,8 @@ func (s *Service) viewMainLocked() (pluginrpc.ViewData, error) {
 			budgetStatus,
 		})
 	}
-	if len(rows) == 0 {
-		rows = [][]string{{"No data loaded", "", "", "", "", ""}}
-	}
-	return pluginrpc.ViewData{
-		View:         awsViewMain,
-		Title:        "AWS Cost Explorer",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"Service", "Cost", "Trend", "Chart", "Forecast", "Budget Status"},
-		Rows:         rows,
-		SelectionKey: "Service",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "P", Label: "Time Period", Action: "set_time_period"},
-			pluginrpc.KeyBinding{Key: "G", Label: "Granularity", Action: "toggle_granularity"},
-		),
-	}, nil
+	rows = pluginrpc.EnsureRows(rows, []string{"No data loaded", "", "", "", "", ""})
+	return ui.Connected(awsViewMain, "AWS Cost Explorer", s.baseInfo(""), []string{"Service", "Cost", "Trend", "Chart", "Forecast", "Budget Status"}, rows, "Service", costExploreActions()...), nil
 }
 
 func (s *Service) viewServicesLocked() (pluginrpc.ViewData, error) {
@@ -145,19 +129,7 @@ func (s *Service) viewServicesLocked() (pluginrpc.ViewData, error) {
 		})
 	}
 	rows = append(rows, []string{"TOTAL", fmt.Sprintf("$%.2f", totalCost), "100%", ""})
-	return pluginrpc.ViewData{
-		View:         awsViewServices,
-		Title:        "Service Breakdown",
-		Info:         s.baseInfo(fmt.Sprintf("Total: $%.2f", totalCost)),
-		Status:       "connected",
-		Headers:      []string{"Service", "Cost", "Percentage", "Distribution"},
-		Rows:         rows,
-		SelectionKey: "Service",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "P", Label: "Time Period", Action: "set_time_period"},
-			pluginrpc.KeyBinding{Key: "G", Label: "Granularity", Action: "toggle_granularity"},
-		),
-	}, nil
+	return ui.Connected(awsViewServices, "Service Breakdown", s.baseInfo(fmt.Sprintf("Total: $%.2f", totalCost)), []string{"Service", "Cost", "Percentage", "Distribution"}, rows, "Service", costExploreActions()...), nil
 }
 
 func (s *Service) viewBudgetsLocked() (pluginrpc.ViewData, error) {
@@ -166,34 +138,14 @@ func (s *Service) viewBudgetsLocked() (pluginrpc.ViewData, error) {
 	}
 	result, err := s.client.GetBudgets()
 	if err != nil {
-		return pluginrpc.ViewData{
-			View:         awsViewBudgets,
-			Title:        "AWS Budgets",
-			Info:         s.baseInfo(""),
-			Status:       "connected",
-			Headers:      []string{"Name", "Amount", "Period", "Used", "Remaining", "Status"},
-			Rows:         [][]string{{"Error fetching budgets", err.Error(), "", "", "", ""}},
-			SelectionKey: "Name",
-			KeyBindings:  withNav(),
-		}, nil
+		return ui.Connected(awsViewBudgets, "AWS Budgets", s.baseInfo(""), []string{"Name", "Amount", "Period", "Used", "Remaining", "Status"}, [][]string{{"Error fetching budgets", err.Error(), "", "", "", ""}}, "Name"), nil
 	}
 	rows := make([][]string, 0, len(result.Budgets))
 	for _, b := range result.Budgets {
 		rows = append(rows, formatBudgetRow(b))
 	}
-	if len(rows) == 0 {
-		rows = [][]string{{"No budgets found", "Configure budgets in AWS Console", "", "", "", ""}}
-	}
-	return pluginrpc.ViewData{
-		View:         awsViewBudgets,
-		Title:        "AWS Budgets",
-		Info:         s.baseInfo(fmt.Sprintf("Budgets: %d", len(result.Budgets))),
-		Status:       "connected",
-		Headers:      []string{"Name", "Amount", "Period", "Used", "Remaining", "Status"},
-		Rows:         rows,
-		SelectionKey: "Name",
-		KeyBindings:  withNav(),
-	}, nil
+	rows = pluginrpc.EnsureRows(rows, []string{"No budgets found", "Configure budgets in AWS Console", "", "", "", ""})
+	return ui.Connected(awsViewBudgets, "AWS Budgets", s.baseInfo(fmt.Sprintf("Budgets: %d", len(result.Budgets))), []string{"Name", "Amount", "Period", "Used", "Remaining", "Status"}, rows, "Name"), nil
 }
 
 func (s *Service) viewCostTypesLocked() (pluginrpc.ViewData, error) {
@@ -206,16 +158,7 @@ func (s *Service) viewCostTypesLocked() (pluginrpc.ViewData, error) {
 		{"Use Blended Costs", "Enabled", "Use blended costs for organizations"},
 		{"Include Support", "Enabled", "Include AWS support costs"},
 	}
-	return pluginrpc.ViewData{
-		View:         awsViewCostTypes,
-		Title:        "Cost Type Settings",
-		Info:         "[green]Cost Type Configuration[white]\nConfigure which cost types to include in calculations",
-		Status:       "connected",
-		Headers:      []string{"Setting", "Status", "Description"},
-		Rows:         rows,
-		SelectionKey: "Setting",
-		KeyBindings:  withNav(),
-	}, nil
+	return ui.Connected(awsViewCostTypes, "Cost Type Settings", "[green]Cost Type Configuration[white]\nConfigure which cost types to include in calculations", []string{"Setting", "Status", "Description"}, rows, "Setting"), nil
 }
 
 func (s *Service) viewForecastLocked() (pluginrpc.ViewData, error) {
@@ -225,16 +168,7 @@ func (s *Service) viewForecastLocked() (pluginrpc.ViewData, error) {
 	now := time.Now()
 	result, err := s.client.GetCostForecast(now.AddDate(0, 0, 1), now.AddDate(0, 3, 0), "MONTHLY")
 	if err != nil {
-		return pluginrpc.ViewData{
-			View:         awsViewForecast,
-			Title:        "Cost Forecast",
-			Info:         s.baseInfo(""),
-			Status:       "connected",
-			Headers:      []string{"Period", "Actual", "Forecast", "Lower Bound", "Upper Bound"},
-			Rows:         [][]string{{"Error fetching forecast", err.Error(), "", "", ""}},
-			SelectionKey: "Period",
-			KeyBindings:  withNav(),
-		}, nil
+		return ui.Connected(awsViewForecast, "Cost Forecast", s.baseInfo(""), []string{"Period", "Actual", "Forecast", "Lower Bound", "Upper Bound"}, [][]string{{"Error fetching forecast", err.Error(), "", "", ""}}, "Period"), nil
 	}
 
 	ce := s.client.CostExplorer()
@@ -252,16 +186,7 @@ func (s *Service) viewForecastLocked() (pluginrpc.ViewData, error) {
 	if len(tableData) == 0 {
 		tableData = [][]string{{"No forecast data available", "", "", "", ""}}
 	}
-	return pluginrpc.ViewData{
-		View:         awsViewForecast,
-		Title:        "Cost Forecast",
-		Info:         s.baseInfo("3-month forecast (MONTHLY)"),
-		Status:       "connected",
-		Headers:      []string{"Period", "Actual", "Forecast", "Lower Bound", "Upper Bound"},
-		Rows:         tableData,
-		SelectionKey: "Period",
-		KeyBindings:  withNav(),
-	}, nil
+	return ui.Connected(awsViewForecast, "Cost Forecast", s.baseInfo("3-month forecast (MONTHLY)"), []string{"Period", "Actual", "Forecast", "Lower Bound", "Upper Bound"}, tableData, "Period"), nil
 }
 
 func createBarChart(cost, budget float64, all []*CostData) string {

@@ -2,6 +2,7 @@ package argocd
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -344,6 +345,9 @@ func NewArgoAPIClient(config *ArgocdConfig) *ArgoAPIClient {
 	client := &ArgoAPIClient{
 		HTTPClient: &http.Client{
 			Timeout: timeout,
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{},
+			},
 		},
 		IsConnected: false,
 	}
@@ -367,6 +371,23 @@ func NewArgoAPIClient(config *ArgocdConfig) *ArgoAPIClient {
 	}
 
 	return client
+}
+
+// SetInsecure toggles TLS certificate verification (needed for kind NodePort / self-signed).
+func (c *ArgoAPIClient) SetInsecure(insecure bool) {
+	if c == nil || c.HTTPClient == nil {
+		return
+	}
+	tr, ok := c.HTTPClient.Transport.(*http.Transport)
+	if !ok || tr == nil {
+		tr = &http.Transport{}
+		c.HTTPClient.Transport = tr
+	}
+	if tr.TLSClientConfig == nil {
+		tr.TLSClientConfig = &tls.Config{}
+	}
+	tr.TLSClientConfig.InsecureSkipVerify = insecure
+	Debug("TLS InsecureSkipVerify=%v", insecure)
 }
 
 // Authenticate authenticates to ArgoCD API with username and password
@@ -1100,6 +1121,13 @@ func (c *ArgoAPIClient) GetProjects() ([]Project, error) {
 }
 
 func tryParseProjectsSpecFormat(data []byte) ([]Project, bool) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, false
+	}
+	if _, ok := raw["items"]; !ok {
+		return nil, false
+	}
 	var result struct {
 		Items []struct {
 			Metadata struct {
@@ -1108,7 +1136,15 @@ func tryParseProjectsSpecFormat(data []byte) ([]Project, bool) {
 			Spec Project `json:"spec"`
 		} `json:"items"`
 	}
-	if err := json.Unmarshal(data, &result); err != nil || len(result.Items) == 0 {
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, false
+	}
+	// Spec-format items need metadata+spec; empty list is still success.
+	if len(result.Items) == 0 {
+		return []Project{}, true
+	}
+	// Only accept if at least one item looks like metadata/spec shape.
+	if result.Items[0].Metadata.Name == "" && result.Items[0].Spec.Name == "" {
 		return nil, false
 	}
 	Debug("Found %d projects in spec format", len(result.Items))
@@ -1122,22 +1158,27 @@ func tryParseProjectsSpecFormat(data []byte) ([]Project, bool) {
 }
 
 func tryParseProjectsItemsArray(data []byte) ([]Project, bool) {
-	var result struct {
-		Items []Project `json:"items"`
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, false
 	}
-	if err := json.Unmarshal(data, &result); err != nil {
+	itemsRaw, ok := raw["items"]
+	if !ok {
+		return nil, false
+	}
+	if string(itemsRaw) == "null" {
+		return []Project{}, true
+	}
+	var items []Project
+	if err := json.Unmarshal(itemsRaw, &items); err != nil {
 		Debug("Failed to unmarshal projects as items array: %v", err)
 		return nil, false
 	}
-	if len(result.Items) == 0 {
-		return nil, false
+	if items == nil {
+		items = []Project{}
 	}
-	Debug("Found %d projects in items array", len(result.Items))
-	for i, proj := range result.Items {
-		Debug("Project %d: Name=%s, Description=%s, Destinations=%d, SourceRepos=%d, Roles=%d",
-			i, proj.Name, proj.Description, len(proj.Destinations), len(proj.SourceRepos), len(proj.Roles))
-	}
-	return result.Items, true
+	Debug("Found %d projects in items array", len(items))
+	return items, true
 }
 
 func tryParseProjectsDirectArray(data []byte) ([]Project, bool) {
@@ -1305,7 +1346,7 @@ func (c *ArgoAPIClient) tryGetProjects(path string) ([]Project, error) {
 	}
 
 	Debug("No projects found in response")
-	return nil, fmt.Errorf("no projects found in response")
+	return []Project{}, nil
 }
 
 // GetProject retrieves a specific project by name
@@ -1378,31 +1419,34 @@ func (c *ArgoAPIClient) tryGetApplications(path string) ([]Application, error) {
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	Debug("Response body (partial): %s", truncateBodyForLogging(bodyBytes))
 
-	// Try to parse as items array first
+	// Standard ArgoCD list: {"metadata":{...},"items":[...]} — items may be null when empty.
 	var itemsResult struct {
 		Items []Application `json:"items"`
 	}
-	if err := json.Unmarshal(bodyBytes, &itemsResult); err != nil {
-		Debug("Failed to unmarshal as items array: %v", err)
-	} else if len(itemsResult.Items) > 0 {
-		Debug("Found %d applications in items array", len(itemsResult.Items))
-		for i, app := range itemsResult.Items {
-			Debug("Application %d: Name=%s, Project=%s, Health=%s, Sync=%s",
-				i, app.Name, app.Project, app.Health.Status, app.Sync.Status)
+	if err := json.Unmarshal(bodyBytes, &itemsResult); err == nil {
+		// Distinguish "valid empty list" from "wrong shape with no items field".
+		var raw map[string]json.RawMessage
+		if err2 := json.Unmarshal(bodyBytes, &raw); err2 == nil {
+			if _, hasItems := raw["items"]; hasItems {
+				if itemsResult.Items == nil {
+					itemsResult.Items = []Application{}
+				}
+				Debug("Found %d applications in items array", len(itemsResult.Items))
+				return itemsResult.Items, nil
+			}
+		} else if len(itemsResult.Items) > 0 {
+			return itemsResult.Items, nil
 		}
-		return itemsResult.Items, nil
+	} else {
+		Debug("Failed to unmarshal as items array: %v", err)
 	}
 
 	// Try direct array
 	var directArray []Application
 	if err := json.Unmarshal(bodyBytes, &directArray); err != nil {
 		Debug("Failed to unmarshal as direct array: %v", err)
-	} else if len(directArray) > 0 {
+	} else {
 		Debug("Found %d applications in direct array", len(directArray))
-		for i, app := range directArray {
-			Debug("Application %d: Name=%s, Project=%s, Health=%s, Sync=%s",
-				i, app.Name, app.Project, app.Health.Status, app.Sync.Status)
-		}
 		return directArray, nil
 	}
 
@@ -1427,7 +1471,7 @@ func (c *ArgoAPIClient) tryGetApplications(path string) ([]Application, error) {
 				var appsArray []Application
 				if err := json.Unmarshal(appsBytes, &appsArray); err != nil {
 					Debug("Error unmarshaling as array: %v", err)
-				} else if len(appsArray) > 0 {
+				} else {
 					Debug("Found %d applications in nested structure", len(appsArray))
 					return appsArray, nil
 				}
@@ -1438,7 +1482,10 @@ func (c *ArgoAPIClient) tryGetApplications(path string) ([]Application, error) {
 				}
 				if err := json.Unmarshal(appsBytes, &appsWithItems); err != nil {
 					Debug("Error unmarshaling as items container: %v", err)
-				} else if len(appsWithItems.Items) > 0 {
+				} else {
+					if appsWithItems.Items == nil {
+						appsWithItems.Items = []Application{}
+					}
 					Debug("Found %d applications in nested items structure", len(appsWithItems.Items))
 					return appsWithItems.Items, nil
 				}
@@ -1453,7 +1500,7 @@ func (c *ArgoAPIClient) tryGetApplications(path string) ([]Application, error) {
 	}
 
 	Debug("No applications found in response")
-	return nil, fmt.Errorf("no applications found in response")
+	return []Application{}, nil
 }
 
 // truncateBodyForLogging returns a truncated version of the response body for logging

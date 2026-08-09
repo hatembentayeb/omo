@@ -33,6 +33,7 @@ type Service struct {
 	namespace   string
 	kubeconfig  string
 	kubePath    string
+	insecure    bool
 	currentView string
 	rbacData    RBACConfig
 }
@@ -76,6 +77,11 @@ func (s *Service) Configure(req pluginrpc.ConfigureRequest) error {
 	s.token = firstNonEmpty(req.Settings["auth_token"], req.Settings["token"])
 	s.kubeconfig = req.Settings["kubeconfig"]
 	s.kubePath = req.Settings["kubeconfig_path"]
+	s.insecure = parseBoolSetting(req.Settings["insecure"])
+	// Kind / local NodePort always uses a self-signed cert.
+	if !s.insecure && (strings.Contains(s.url, "localhost") || strings.Contains(s.url, "127.0.0.1")) {
+		s.insecure = true
+	}
 	if ns := req.Settings["namespace"]; ns != "" {
 		s.namespace = ns
 	}
@@ -83,9 +89,10 @@ func (s *Service) Configure(req pluginrpc.ConfigureRequest) error {
 		return fmt.Errorf("url/host is required")
 	}
 
-	pluginrpc.RPCLog("Service.Configure url=%s user=%s token=%v", s.url, s.username, s.token != "")
+	pluginrpc.RPCLog("Service.Configure url=%s user=%s token=%v insecure=%v", s.url, s.username, s.token != "", s.insecure)
 
 	s.client = NewArgoAPIClient(DefaultArgocdConfig())
+	s.client.SetInsecure(s.insecure)
 	s.k8sClient = nil
 	return nil
 }
@@ -412,4 +419,13 @@ func firstNonEmpty(vals ...string) string {
 		}
 	}
 	return ""
+}
+
+func parseBoolSetting(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "1", "true", "yes", "y", "on":
+		return true
+	default:
+		return false
+	}
 }

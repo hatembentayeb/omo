@@ -36,12 +36,13 @@ type PluginSession struct {
 
 // PluginManager tracks per-plugin RPC connections (pattern 2: lazy-connect, keep warm).
 type PluginManager struct {
-	mu       sync.Mutex
-	app      *tview.Application
-	pages    *tview.Pages
-	sessions map[string]*PluginSession
-	active   string
-	logFn    func(string, ...interface{})
+	mu         sync.Mutex
+	app        *tview.Application
+	pages      *tview.Pages
+	sessions   map[string]*PluginSession
+	active     string
+	logFn      func(string, ...interface{})
+	onActions  func([]pluginrpc.KeyBinding, func(string))
 }
 
 func newPluginManager(app *tview.Application, pages *tview.Pages, logFn func(string, ...interface{})) *PluginManager {
@@ -53,6 +54,11 @@ func newPluginManager(app *tview.Application, pages *tview.Pages, logFn func(str
 		sessions: make(map[string]*PluginSession),
 		logFn:    logFn,
 	}
+}
+
+// SetActionsHook wires sidebar updates when a plugin view is applied.
+func (m *PluginManager) SetActionsHook(fn func([]pluginrpc.KeyBinding, func(string))) {
+	m.onActions = fn
 }
 
 func (m *PluginManager) setSecrets(pluginapi.SecretsProvider) {
@@ -94,6 +100,7 @@ func (m *PluginManager) Activate(name, binPath string) (tview.Primitive, error) 
 	if needRenderer {
 		pluginrpc.RPCLog("creating RPCRenderer for %s", name)
 		renderer = NewRPCRenderer(m.app, m.pages, name, nil)
+		renderer.SetActionsHook(m.onActions)
 		m.mu.Lock()
 		if m.sessions[name] == sess {
 			sess.Renderer = renderer

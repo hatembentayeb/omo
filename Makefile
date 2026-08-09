@@ -6,7 +6,7 @@ RPC_PLUGINS := redis docker git sysprocess argocd k8suser ssh postgres rabbitmq 
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS := -ldflags "-X main.Version=$(VERSION)"
 
-.PHONY: all clean install dirs plugin-redis plugin-docker plugin-git plugin-sysprocess plugin-argocd plugin-k8suser plugin-ssh plugin-postgres plugin-rabbitmq plugin-kafka plugin-github plugin-s3 plugin-awsCosts
+.PHONY: all clean install dirs plugin-redis plugin-docker plugin-git plugin-sysprocess plugin-argocd plugin-k8suser plugin-ssh plugin-postgres plugin-rabbitmq plugin-kafka plugin-github plugin-s3 plugin-awsCosts dev-setup dev-secrets dev-seed dev-up dev-down
 
 # Build the host binary and all plugins, then install to ~/.omo
 all: dirs
@@ -123,20 +123,25 @@ dirs:
 	@mkdir -p $(PLUGINS_INSTALL_DIR)
 
 # Seed KeePass secrets for all plugins.
-# Plugins that need Docker (redis, kafka) also start their containers.
+# Plugins that need Docker (redis, kafka, postgres, rabbitmq) also start containers.
 dev-setup:
 	@bash dev/setup.sh
 
-# Seed KeePass secrets for plugins that don't need Docker.
+# Start local Docker stacks + kind (redis, kafka, postgres, rabbitmq, k8suser/argocd).
+dev-up:
+	@bash dev/up.sh
+
+# Stop local Docker stacks + kind cluster started by dev-up.
+dev-down:
+	@bash dev/down.sh
+
+# Clean placeholder/smoke KeePass entries and reseed local/dev credentials only.
+dev-secrets:
+	@go run dev/clean_and_seed.go
+
+# Alias for dev-secrets.
 dev-seed:
-	@for plugin in docker git awsCosts s3 k8suser argocd; do \
-		setup="dev/$$plugin/setup.sh"; \
-		if [ -f "$$setup" ]; then \
-			echo "==> Seeding $$plugin"; \
-			bash "$$setup"; \
-			echo ""; \
-		fi; \
-	done
+	@go run dev/clean_and_seed.go
 
 clean:
 	@rm -f omo

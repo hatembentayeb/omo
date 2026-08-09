@@ -6,39 +6,103 @@ import (
 	"omo/pkg/pluginrpc"
 )
 
-func navBindings() []pluginrpc.KeyBinding {
+// Primary views on digit keys 0-9. Remaining views use letter shortcuts and appear in "?".
+func viewNavBindings() []pluginrpc.KeyBinding {
 	return []pluginrpc.KeyBinding{
-		{Key: "1", Label: "Users", Action: "goto_users"},
-		{Key: "2", Label: "Databases", Action: "goto_databases"},
-		{Key: "3", Label: "Tables", Action: "goto_tables"},
-		{Key: "4", Label: "Schemas", Action: "goto_schemas"},
-		{Key: "5", Label: "Extensions", Action: "goto_extensions"},
-		{Key: "6", Label: "Connections", Action: "goto_connections"},
-		{Key: "7", Label: "Stats", Action: "goto_stats"},
-		{Key: "8", Label: "Config", Action: "goto_config"},
-		{Key: "0", Label: "Locks", Action: "goto_locks"},
-		{Key: "I", Label: "Indexes", Action: "goto_indexes"},
+		{Key: "0", Label: "Users", Action: "goto_users"},
+		{Key: "1", Label: "Databases", Action: "goto_databases"},
+		{Key: "2", Label: "Tables", Action: "goto_tables"},
+		{Key: "3", Label: "Schemas", Action: "goto_schemas"},
+		{Key: "4", Label: "Extensions", Action: "goto_extensions"},
+		{Key: "5", Label: "Connections", Action: "goto_connections"},
+		{Key: "6", Label: "Stats", Action: "goto_stats"},
+		{Key: "7", Label: "Config", Action: "goto_config"},
+		{Key: "8", Label: "Locks", Action: "goto_locks"},
+		{Key: "9", Label: "Indexes", Action: "goto_indexes"},
+	}
+}
+
+func moreViewBindings() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
 		{Key: "Y", Label: "Replication", Action: "goto_replication"},
 		{Key: "T", Label: "Tablespaces", Action: "goto_tablespaces"},
 		{Key: "B", Label: "DB Stats", Action: "goto_dbstats"},
 	}
 }
 
-func withNav(extra ...pluginrpc.KeyBinding) []pluginrpc.KeyBinding {
-	out := make([]pluginrpc.KeyBinding, 0, len(extra)+len(navBindings())+1)
-	out = append(out, pluginrpc.KeyBinding{Key: "R", Label: "Refresh", Action: "refresh"})
-	out = append(out, extra...)
-	out = append(out, navBindings()...)
-	return out
+func usersActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "N", Label: "New User", Action: "create_user"},
+		{Key: "D", Label: "Drop User", Action: "drop_user"},
+		{Key: "P", Label: "Password", Action: "change_password"},
+		{Key: "G", Label: "Grant Role", Action: "grant_role"},
+		{Key: "V", Label: "Revoke Role", Action: "revoke_role"},
+	}
+}
+
+func databasesActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "N", Label: "New DB", Action: "create_database"},
+		{Key: "D", Label: "Drop DB", Action: "drop_database"},
+	}
+}
+
+func tablesActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "E", Label: "Columns", Action: "view_columns"},
+	}
+}
+
+func extensionsActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "N", Label: "Install Ext", Action: "install_extension"},
+		{Key: "D", Label: "Drop Ext", Action: "drop_extension"},
+	}
+}
+
+func connectionsActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "K", Label: "Kill Conn", Action: "kill_connection"},
+		{Key: "C", Label: "Cancel Query", Action: "cancel_query"},
+	}
+}
+
+func configActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "E", Label: "Edit Param", Action: "edit_config"},
+	}
+}
+
+func indexesActions() []pluginrpc.KeyBinding {
+	return []pluginrpc.KeyBinding{
+		{Key: "E", Label: "Index Def", Action: "view_index"},
+	}
+}
+
+func helpSections() []pluginrpc.HelpSection {
+	return pluginrpc.HelpWithGlobal([]pluginrpc.HelpSection{
+		{Title: "Views (0-9)", Bindings: viewNavBindings()},
+		{Title: "More Views", Bindings: moreViewBindings()},
+		{Title: "Users", Bindings: usersActions()},
+		{Title: "Databases", Bindings: databasesActions()},
+		{Title: "Tables", Bindings: tablesActions()},
+		{Title: "Extensions", Bindings: extensionsActions()},
+		{Title: "Connections", Bindings: connectionsActions()},
+		{Title: "Config", Bindings: configActions()},
+		{Title: "Indexes", Bindings: indexesActions()},
+	}...)
+}
+
+var ui = pluginrpc.ViewUI{
+	Views: viewNavBindings,
+	More:  moreViewBindings,
+	Help:  helpSections,
 }
 
 func (s *Service) baseInfo(extra string) string {
 	msg := fmt.Sprintf("[green]PostgreSQL Manager[white]\nServer: %s:%d\nDB: %s\nStatus: Connected\nView: %s",
 		s.host, s.port, s.database, s.currentView)
-	if extra != "" {
-		msg += "\n" + extra
-	}
-	return msg
+	return pluginrpc.FormatInfo(msg, extra)
 }
 
 func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
@@ -48,17 +112,7 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	s.currentView = viewID
 
 	if err := s.ensureConnectedLocked(); err != nil {
-		return pluginrpc.ViewData{
-			View:    viewID,
-			Title:   "PostgreSQL Manager",
-			Info:    "[yellow]PostgreSQL Manager[white]\nStatus: Not Connected\n" + err.Error(),
-			Status:  "not connected",
-			Headers: []string{"Status", "Detail"},
-			Rows:    [][]string{{"error", err.Error()}},
-			KeyBindings: []pluginrpc.KeyBinding{
-				{Key: "R", Label: "Refresh", Action: "refresh"},
-			},
-		}, nil
+		return ui.NotConnected(viewID, "PostgreSQL Manager", err.Error()), nil
 	}
 
 	switch viewID {
@@ -110,22 +164,7 @@ func (s *Service) viewUsersLocked() (pluginrpc.ViewData, error) {
 			u.ValidUntil,
 		})
 	}
-	return pluginrpc.ViewData{
-		View:         viewUsers,
-		Title:        "PostgreSQL Users",
-		Info:         s.baseInfo(fmt.Sprintf("Users: %d", len(users))),
-		Status:       "connected",
-		Headers:      []string{"User", "Login", "Super", "CreateDB", "CreateRole", "Repl", "Conns", "Member Of", "Valid Until"},
-		Rows:         rows,
-		SelectionKey: "User",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "N", Label: "New User", Action: "create_user"},
-			pluginrpc.KeyBinding{Key: "D", Label: "Drop User", Action: "drop_user"},
-			pluginrpc.KeyBinding{Key: "P", Label: "Password", Action: "change_password"},
-			pluginrpc.KeyBinding{Key: "G", Label: "Grant Role", Action: "grant_role"},
-			pluginrpc.KeyBinding{Key: "V", Label: "Revoke Role", Action: "revoke_role"},
-		),
-	}, nil
+	return ui.Connected(viewUsers, "PostgreSQL Users", s.baseInfo(fmt.Sprintf("Users: %d", len(users))), []string{"User", "Login", "Super", "CreateDB", "CreateRole", "Repl", "Conns", "Member Of", "Valid Until"}, rows, "User", usersActions()...), nil
 }
 
 func (s *Service) viewDatabasesLocked() (pluginrpc.ViewData, error) {
@@ -139,22 +178,8 @@ func (s *Service) viewDatabasesLocked() (pluginrpc.ViewData, error) {
 			d.Name, d.Owner, d.Encoding, d.Collation, d.Size, d.Tablespace, fmt.Sprintf("%d", d.ConnLimit),
 		})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "-", "-", "-", "-", "No databases"})
-	}
-	return pluginrpc.ViewData{
-		View:         viewDatabases,
-		Title:        "PostgreSQL Databases",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"Name", "Owner", "Encoding", "Collation", "Size", "Tablespace", "Conn Limit"},
-		Rows:         rows,
-		SelectionKey: "Name",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "N", Label: "New DB", Action: "create_database"},
-			pluginrpc.KeyBinding{Key: "D", Label: "Drop DB", Action: "drop_database"},
-		),
-	}, nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "-", "-", "-", "No databases"})
+	return ui.Connected(viewDatabases, "PostgreSQL Databases", s.baseInfo(""), []string{"Name", "Owner", "Encoding", "Collation", "Size", "Tablespace", "Conn Limit"}, rows, "Name", databasesActions()...), nil
 }
 
 func (s *Service) viewTablesLocked() (pluginrpc.ViewData, error) {
@@ -172,21 +197,8 @@ func (s *Service) viewTablesLocked() (pluginrpc.ViewData, error) {
 			t.Schema, t.Name, t.Owner, fmt.Sprintf("%d", t.RowCount), t.Size, t.TotalSize, hasIdx, t.Tablespace,
 		})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "-", "-", "-", "-", "-", "No tables"})
-	}
-	return pluginrpc.ViewData{
-		View:         viewTables,
-		Title:        "PostgreSQL Tables",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"Schema", "Table", "Owner", "Rows", "Size", "Total Size", "Indexes", "Tablespace"},
-		Rows:         rows,
-		SelectionKey: "Table",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "E", Label: "Columns", Action: "view_columns"},
-		),
-	}, nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "-", "-", "-", "-", "No tables"})
+	return ui.Connected(viewTables, "PostgreSQL Tables", s.baseInfo(""), []string{"Schema", "Table", "Owner", "Rows", "Size", "Total Size", "Indexes", "Tablespace"}, rows, "Table", tablesActions()...), nil
 }
 
 func (s *Service) viewSchemasLocked() (pluginrpc.ViewData, error) {
@@ -198,19 +210,8 @@ func (s *Service) viewSchemasLocked() (pluginrpc.ViewData, error) {
 	for _, sch := range schemas {
 		rows = append(rows, []string{sch.Name, sch.Owner})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "No schemas"})
-	}
-	return pluginrpc.ViewData{
-		View:         viewSchemas,
-		Title:        "PostgreSQL Schemas",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"Schema", "Owner"},
-		Rows:         rows,
-		SelectionKey: "Schema",
-		KeyBindings:  withNav(),
-	}, nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "No schemas"})
+	return ui.Connected(viewSchemas, "PostgreSQL Schemas", s.baseInfo(""), []string{"Schema", "Owner"}, rows, "Schema"), nil
 }
 
 func (s *Service) viewExtensionsLocked() (pluginrpc.ViewData, error) {
@@ -230,22 +231,8 @@ func (s *Service) viewExtensionsLocked() (pluginrpc.ViewData, error) {
 		}
 		rows = append(rows, []string{ext.Name, ext.Version, ext.Schema, installed, comment})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "-", "-", "No extensions"})
-	}
-	return pluginrpc.ViewData{
-		View:         viewExtensions,
-		Title:        "PostgreSQL Extensions",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"Name", "Version", "Schema", "Installed", "Comment"},
-		Rows:         rows,
-		SelectionKey: "Name",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "N", Label: "Install Ext", Action: "install_extension"},
-			pluginrpc.KeyBinding{Key: "D", Label: "Drop Ext", Action: "drop_extension"},
-		),
-	}, nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "-", "No extensions"})
+	return ui.Connected(viewExtensions, "PostgreSQL Extensions", s.baseInfo(""), []string{"Name", "Version", "Schema", "Installed", "Comment"}, rows, "Name", extensionsActions()...), nil
 }
 
 func (s *Service) viewConnectionsLocked() (pluginrpc.ViewData, error) {
@@ -264,22 +251,8 @@ func (s *Service) viewConnectionsLocked() (pluginrpc.ViewData, error) {
 			conn.State, conn.BackendType, conn.WaitEvent, conn.Duration, query,
 		})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "-", "-", "-", "-", "-", "-", "No active connections"})
-	}
-	return pluginrpc.ViewData{
-		View:         viewConnections,
-		Title:        "PostgreSQL Active Connections",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"PID", "User", "Database", "Client", "State", "Backend", "Wait", "Duration", "Query"},
-		Rows:         rows,
-		SelectionKey: "PID",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "K", Label: "Kill Conn", Action: "kill_connection"},
-			pluginrpc.KeyBinding{Key: "C", Label: "Cancel Query", Action: "cancel_query"},
-		),
-	}, nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "-", "-", "-", "-", "-", "No active connections"})
+	return ui.Connected(viewConnections, "PostgreSQL Active Connections", s.baseInfo(""), []string{"PID", "User", "Database", "Client", "State", "Backend", "Wait", "Duration", "Query"}, rows, "PID", connectionsActions()...), nil
 }
 
 func (s *Service) viewStatsLocked() (pluginrpc.ViewData, error) {
@@ -291,16 +264,7 @@ func (s *Service) viewStatsLocked() (pluginrpc.ViewData, error) {
 	for _, st := range stats {
 		rows = append(rows, []string{st.Key, st.Value})
 	}
-	return pluginrpc.ViewData{
-		View:         viewStats,
-		Title:        "PostgreSQL Server Stats",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"Property", "Value"},
-		Rows:         rows,
-		SelectionKey: "Property",
-		KeyBindings:  withNav(),
-	}, nil
+	return ui.Connected(viewStats, "PostgreSQL Server Stats", s.baseInfo(""), []string{"Property", "Value"}, rows, "Property"), nil
 }
 
 func (s *Service) viewConfigLocked() (pluginrpc.ViewData, error) {
@@ -316,21 +280,8 @@ func (s *Service) viewConfigLocked() (pluginrpc.ViewData, error) {
 		}
 		rows = append(rows, []string{cfg.Name, cfg.Setting, cfg.Unit, cfg.Category, cfg.Source, cfg.BootVal, restart})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "-", "-", "-", "-", "No settings"})
-	}
-	return pluginrpc.ViewData{
-		View:         viewConfig,
-		Title:        "PostgreSQL Configuration",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"Parameter", "Value", "Unit", "Category", "Source", "Boot Value", "Restart?"},
-		Rows:         rows,
-		SelectionKey: "Parameter",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "E", Label: "Edit Param", Action: "edit_config"},
-		),
-	}, nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "-", "-", "-", "No settings"})
+	return ui.Connected(viewConfig, "PostgreSQL Configuration", s.baseInfo(""), []string{"Parameter", "Value", "Unit", "Category", "Source", "Boot Value", "Restart?"}, rows, "Parameter", configActions()...), nil
 }
 
 func (s *Service) viewLocksLocked() (pluginrpc.ViewData, error) {
@@ -348,19 +299,8 @@ func (s *Service) viewLocksLocked() (pluginrpc.ViewData, error) {
 			fmt.Sprintf("%d", lk.PID), lk.LockType, lk.Mode, lk.Relation, granted, lk.WaitStart,
 		})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "-", "-", "-", "No locks"})
-	}
-	return pluginrpc.ViewData{
-		View:         viewLocks,
-		Title:        "PostgreSQL Locks",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"PID", "Lock Type", "Mode", "Relation", "Granted", "Wait Start"},
-		Rows:         rows,
-		SelectionKey: "PID",
-		KeyBindings:  withNav(),
-	}, nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "-", "-", "No locks"})
+	return ui.Connected(viewLocks, "PostgreSQL Locks", s.baseInfo(""), []string{"PID", "Lock Type", "Mode", "Relation", "Granted", "Wait Start"}, rows, "PID"), nil
 }
 
 func (s *Service) viewIndexesLocked() (pluginrpc.ViewData, error) {
@@ -375,21 +315,8 @@ func (s *Service) viewIndexesLocked() (pluginrpc.ViewData, error) {
 			fmt.Sprintf("%d", idx.Scans), fmt.Sprintf("%d", idx.TupRead), fmt.Sprintf("%d", idx.TupFetch),
 		})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "-", "-", "-", "-", "No indexes"})
-	}
-	return pluginrpc.ViewData{
-		View:         viewIndexes,
-		Title:        "PostgreSQL Indexes",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"Schema", "Table", "Index", "Size", "Scans", "Tuples Read", "Tuples Fetched"},
-		Rows:         rows,
-		SelectionKey: "Index",
-		KeyBindings: withNav(
-			pluginrpc.KeyBinding{Key: "E", Label: "Index Def", Action: "view_index"},
-		),
-	}, nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "-", "-", "-", "No indexes"})
+	return ui.Connected(viewIndexes, "PostgreSQL Indexes", s.baseInfo(""), []string{"Schema", "Table", "Index", "Size", "Scans", "Tuples Read", "Tuples Fetched"}, rows, "Index", indexesActions()...), nil
 }
 
 func (s *Service) viewReplicationLocked() (pluginrpc.ViewData, error) {
@@ -404,19 +331,8 @@ func (s *Service) viewReplicationLocked() (pluginrpc.ViewData, error) {
 			r.SentLSN, r.WriteLSN, r.FlushLSN, r.ReplayLSN, r.WriteLag, r.FlushLag, r.ReplayLag,
 		})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "-", "No replicas", "-", "-", "-", "-", "-", "-", "-"})
-	}
-	return pluginrpc.ViewData{
-		View:         viewReplication,
-		Title:        "PostgreSQL Replication",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"PID", "Application", "Client", "State", "Sent LSN", "Write LSN", "Flush LSN", "Replay LSN", "Write Lag", "Flush Lag", "Replay Lag"},
-		Rows:         rows,
-		SelectionKey: "PID",
-		KeyBindings:  withNav(),
-	}, nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "No replicas", "-", "-", "-", "-", "-", "-", "-"})
+	return ui.Connected(viewReplication, "PostgreSQL Replication", s.baseInfo(""), []string{"PID", "Application", "Client", "State", "Sent LSN", "Write LSN", "Flush LSN", "Replay LSN", "Write Lag", "Flush Lag", "Replay Lag"}, rows, "PID"), nil
 }
 
 func (s *Service) viewTablespacesLocked() (pluginrpc.ViewData, error) {
@@ -428,19 +344,8 @@ func (s *Service) viewTablespacesLocked() (pluginrpc.ViewData, error) {
 	for _, ts := range tablespaces {
 		rows = append(rows, []string{ts.Name, ts.Owner, ts.Location, ts.Size})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "-", "No tablespaces"})
-	}
-	return pluginrpc.ViewData{
-		View:         viewTablespaces,
-		Title:        "PostgreSQL Tablespaces",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"Name", "Owner", "Location", "Size"},
-		Rows:         rows,
-		SelectionKey: "Name",
-		KeyBindings:  withNav(),
-	}, nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "No tablespaces"})
+	return ui.Connected(viewTablespaces, "PostgreSQL Tablespaces", s.baseInfo(""), []string{"Name", "Owner", "Location", "Size"}, rows, "Name"), nil
 }
 
 func (s *Service) viewDbStatsLocked() (pluginrpc.ViewData, error) {
@@ -453,19 +358,10 @@ func (s *Service) viewDbStatsLocked() (pluginrpc.ViewData, error) {
 		empty[0] = "No data"
 		data = append(data, empty)
 	}
-	return pluginrpc.ViewData{
-		View:   viewDbStats,
-		Title:  "PostgreSQL Database Stats",
-		Info:   s.baseInfo(""),
-		Status: "connected",
-		Headers: []string{
-			"Database", "Backends", "Commits", "Rollbacks",
-			"Blks Read", "Blks Hit", "Cache Hit%",
-			"Returned", "Fetched", "Inserted", "Updated", "Deleted",
-			"Conflicts", "Deadlocks",
-		},
-		Rows:         data,
-		SelectionKey: "Database",
-		KeyBindings:  withNav(),
-	}, nil
+	return ui.Connected(viewDbStats, "PostgreSQL Database Stats", s.baseInfo(""), []string{
+		"Database", "Backends", "Commits", "Rollbacks",
+		"Blks Read", "Blks Hit", "Cache Hit%",
+		"Returned", "Fetched", "Inserted", "Updated", "Deleted",
+		"Conflicts", "Deadlocks",
+	}, data, "Database"), nil
 }

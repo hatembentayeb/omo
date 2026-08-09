@@ -32,15 +32,15 @@ func (c *CoreView) StandardKeyHandler(event *tcell.EventKey, oldCapture func(*tc
 	case tcell.KeyRune:
 		key := string(event.Rune())
 
-		// Only dispatch keys that are registered in keyBindings.
-		if _, registered := c.keyBindings[key]; !registered {
-			break
-		}
-
-		// Priority 1: direct handler function
+		// Priority 1: direct handler (header bindings + silent action keys)
 		if handler, ok := c.keyHandlers[key]; ok && handler != nil {
 			handler()
 			return nil
+		}
+
+		// Only fall through to defaults for keys listed in the header matrix.
+		if _, registered := c.keyBindings[key]; !registered {
+			break
 		}
 
 		// Priority 2: action callback (lets plugin handle it)
@@ -102,7 +102,7 @@ func (c *CoreView) handleEscape(event *tcell.EventKey, oldCapture func(*tcell.Ev
 func (c *CoreView) ShowHelpModal() {
 	if c.helpExpanded {
 		c.helpExpanded = false
-		c.helpPanel.SetText(c.getHelpText())
+		c.refreshHeaderPanels()
 	}
 	if c.pages == nil || c.app == nil {
 		c.ToggleHelpExpanded()
@@ -119,13 +119,13 @@ func (c *CoreView) ShowHelpModal() {
 	})
 }
 
-// ToggleHelpExpanded switches between basic and expanded help in the header panel.
+// ToggleHelpExpanded switches between compact and expanded keys in the right column.
 // Prefer ShowHelpModal for user-facing "?" help.
 func (c *CoreView) ToggleHelpExpanded() {
 	c.helpExpanded = !c.helpExpanded
-	if c.helpExpanded {
-		c.helpPanel.SetText(c.getExpandedHelpText())
+	if c.helpExpanded && c.keysPanel != nil {
+		c.keysPanel.SetText(c.getExpandedHelpText())
 	} else {
-		c.helpPanel.SetText(c.getHelpText())
+		c.refreshHeaderPanels()
 	}
 }
