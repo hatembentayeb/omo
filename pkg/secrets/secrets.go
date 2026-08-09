@@ -217,39 +217,47 @@ func (kp *KeePassProvider) Delete(path string) error {
 		return err
 	}
 
-	entryTitle := parts[2]
-	removed := 0
-	root := kp.rootGroup()
-
-	// Walk all matching plugin/env groups (historical DBs may contain duplicates).
-	for gi := range root.Groups {
-		if root.Groups[gi].Name != parts[0] {
-			continue
-		}
-		pluginGroup := &root.Groups[gi]
-		for ei := range pluginGroup.Groups {
-			if pluginGroup.Groups[ei].Name != parts[1] {
-				continue
-			}
-			envGroup := &pluginGroup.Groups[ei]
-			kept := envGroup.Entries[:0]
-			for _, entry := range envGroup.Entries {
-				if getKVValue(entry, kvTitle) == entryTitle {
-					removed++
-					continue
-				}
-				kept = append(kept, entry)
-			}
-			envGroup.Entries = kept
-		}
-	}
-
-	if removed == 0 {
+	if removed := kp.removeEntriesByTitle(parts[0], parts[1], parts[2]); removed == 0 {
 		return fmt.Errorf("secrets: entry %q not found", path)
 	}
 
 	kp.dirty = true
 	return kp.flush()
+}
+
+// removeEntriesByTitle deletes matching entries across duplicate plugin/env groups.
+func (kp *KeePassProvider) removeEntriesByTitle(plugin, env, entryTitle string) int {
+	removed := 0
+	root := kp.rootGroup()
+	for gi := range root.Groups {
+		if root.Groups[gi].Name != plugin {
+			continue
+		}
+		pluginGroup := &root.Groups[gi]
+		for ei := range pluginGroup.Groups {
+			if pluginGroup.Groups[ei].Name != env {
+				continue
+			}
+			envGroup := &pluginGroup.Groups[ei]
+			kept, n := filterOutEntriesByTitle(envGroup.Entries, entryTitle)
+			envGroup.Entries = kept
+			removed += n
+		}
+	}
+	return removed
+}
+
+func filterOutEntriesByTitle(entries []gkp.Entry, entryTitle string) ([]gkp.Entry, int) {
+	kept := entries[:0]
+	removed := 0
+	for _, entry := range entries {
+		if getKVValue(entry, kvTitle) == entryTitle {
+			removed++
+			continue
+		}
+		kept = append(kept, entry)
+	}
+	return kept, removed
 }
 
 func (kp *KeePassProvider) List(prefix string) ([]string, error) {

@@ -1426,7 +1426,7 @@ func (c *ArgoAPIClient) tryGetApplications(path string) ([]Application, error) {
 	if err := json.Unmarshal(bodyBytes, &itemsResult); err == nil {
 		// Distinguish "valid empty list" from "wrong shape with no items field".
 		var raw map[string]json.RawMessage
-		if err2 := json.Unmarshal(bodyBytes, &raw); err2 == nil {
+		if json.Unmarshal(bodyBytes, &raw) == nil {
 			if _, hasItems := raw["items"]; hasItems {
 				if itemsResult.Items == nil {
 					itemsResult.Items = []Application{}
@@ -1537,10 +1537,7 @@ func (c *ArgoAPIClient) GetApplication(name string) (*Application, error) {
 func safeGo(f func()) {
 	go func() {
 		defer func() {
-			if r := recover(); r != nil {
-				// Don't use fmt.Printf as it causes UI issues
-				// This could be logged to a file or handled differently if needed
-			}
+			_ = recover()
 		}()
 		f()
 	}()

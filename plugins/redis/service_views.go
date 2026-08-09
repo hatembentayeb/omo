@@ -64,14 +64,12 @@ func databasesActions() []pluginrpc.KeyBinding {
 }
 
 func helpSections() []pluginrpc.HelpSection {
-	return pluginrpc.HelpWithGlobal([]pluginrpc.HelpSection{
-		{Title: "Views (0-9)", Bindings: viewNavBindings()},
-		{Title: "More Views", Bindings: moreViewBindings()},
-		{Title: "Keys", Bindings: keysActions()},
-		{Title: "Memory", Bindings: memoryActions()},
-		{Title: "PubSub", Bindings: pubsubActions()},
-		{Title: "Databases", Bindings: databasesActions()},
-	}...)
+	return pluginrpc.HelpNav(viewNavBindings(), moreViewBindings(),
+		pluginrpc.HelpSection{Title: "Keys", Bindings: keysActions()},
+		pluginrpc.HelpSection{Title: "Memory", Bindings: memoryActions()},
+		pluginrpc.HelpSection{Title: "PubSub", Bindings: pubsubActions()},
+		pluginrpc.HelpSection{Title: "Databases", Bindings: databasesActions()},
+	)
 }
 
 var ui = pluginrpc.ViewUI{
@@ -93,7 +91,7 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	s.currentView = viewID
 
 	if err := s.ensureConnectedLocked(); err != nil {
-		return ui.NotConnected(viewID, "Redis Manager", err.Error()), nil
+		return ui.NotConnectedErr(viewID, "Redis Manager", err)
 	}
 
 	switch viewID {

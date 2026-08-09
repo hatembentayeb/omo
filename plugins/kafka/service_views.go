@@ -52,14 +52,13 @@ func messagesActions() []pluginrpc.KeyBinding {
 }
 
 func helpSections() []pluginrpc.HelpSection {
-	return pluginrpc.HelpWithGlobal([]pluginrpc.HelpSection{
-		{Title: "Views (0-4)", Bindings: viewNavBindings()},
-		{Title: "Brokers", Bindings: brokersActions()},
-		{Title: "Topics", Bindings: topicsActions()},
-		{Title: "Consumers", Bindings: consumersActions()},
-		{Title: "Partitions", Bindings: partitionsActions()},
-		{Title: "Messages", Bindings: messagesActions()},
-	}...)
+	return pluginrpc.HelpNav(viewNavBindings(), nil,
+		pluginrpc.HelpSection{Title: "Brokers", Bindings: brokersActions()},
+		pluginrpc.HelpSection{Title: "Topics", Bindings: topicsActions()},
+		pluginrpc.HelpSection{Title: "Consumers", Bindings: consumersActions()},
+		pluginrpc.HelpSection{Title: "Partitions", Bindings: partitionsActions()},
+		pluginrpc.HelpSection{Title: "Messages", Bindings: messagesActions()},
+	)
 }
 
 var ui = pluginrpc.ViewUI{
@@ -87,7 +86,7 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	s.currentView = viewID
 
 	if err := s.ensureConnectedLocked(); err != nil {
-		return ui.NotConnected(viewID, "Kafka Manager", err.Error()), nil
+		return ui.NotConnectedErr(viewID, "Kafka Manager", err)
 	}
 
 	switch viewID {

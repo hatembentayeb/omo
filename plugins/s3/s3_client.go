@@ -14,13 +14,13 @@ import (
 
 // S3Client wraps AWS S3 API access without UI dependencies.
 type S3Client struct {
-	client       *s3.S3
-	profile      string
-	region       string
-	access       string
-	secret       string
-	endpoint     string
-	regionCache  map[string]string
+	client      *s3.S3
+	profile     string
+	region      string
+	access      string
+	secret      string
+	endpoint    string
+	regionCache map[string]string
 }
 
 // NewS3Client creates an empty S3 client; call Connect before use.
@@ -378,13 +378,13 @@ func (c *S3Client) PresignGet(bucket, key string, expiry time.Duration) (string,
 
 // BucketOverview aggregates common bucket configuration.
 type BucketOverview struct {
-	Region              string
-	Versioning          string
-	Encryption          string
-	PublicAccessBlock   string
-	ObjectCountApprox   string
-	TotalSizeApprox     string
-	PrefixSampled       string
+	Region            string
+	Versioning        string
+	Encryption        string
+	PublicAccessBlock string
+	ObjectCountApprox string
+	TotalSizeApprox   string
+	PrefixSampled     string
 }
 
 // GetBucketOverview fetches config + a quick listing sample for size/count.
@@ -394,39 +394,54 @@ func (c *S3Client) GetBucketOverview(bucket, prefix string) (*BucketOverview, er
 		return nil, err
 	}
 	ov := &BucketOverview{Region: region, PrefixSampled: prefix}
+	fillBucketVersioning(client, bucket, ov)
+	fillBucketEncryption(client, bucket, ov)
+	fillPublicAccessBlock(client, bucket, ov)
+	sampleBucketObjects(client, bucket, prefix, ov)
+	return ov, nil
+}
 
-	if out, err := client.GetBucketVersioning(&s3.GetBucketVersioningInput{Bucket: aws.String(bucket)}); err == nil {
-		status := aws.StringValue(out.Status)
-		if status == "" {
-			status = "Disabled"
-		}
-		ov.Versioning = status
-	} else {
+func fillBucketVersioning(client *s3.S3, bucket string, ov *BucketOverview) {
+	out, err := client.GetBucketVersioning(&s3.GetBucketVersioningInput{Bucket: aws.String(bucket)})
+	if err != nil {
 		ov.Versioning = "n/a: " + err.Error()
+		return
 	}
+	status := aws.StringValue(out.Status)
+	if status == "" {
+		status = "Disabled"
+	}
+	ov.Versioning = status
+}
 
-	if out, err := client.GetBucketEncryption(&s3.GetBucketEncryptionInput{Bucket: aws.String(bucket)}); err == nil {
-		rules := out.ServerSideEncryptionConfiguration
-		if rules != nil && len(rules.Rules) > 0 && rules.Rules[0].ApplyServerSideEncryptionByDefault != nil {
-			ov.Encryption = aws.StringValue(rules.Rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm)
-		} else {
-			ov.Encryption = "none"
-		}
-	} else {
+func fillBucketEncryption(client *s3.S3, bucket string, ov *BucketOverview) {
+	out, err := client.GetBucketEncryption(&s3.GetBucketEncryptionInput{Bucket: aws.String(bucket)})
+	if err != nil {
 		ov.Encryption = "none / n/a"
+		return
 	}
+	rules := out.ServerSideEncryptionConfiguration
+	if rules != nil && len(rules.Rules) > 0 && rules.Rules[0].ApplyServerSideEncryptionByDefault != nil {
+		ov.Encryption = aws.StringValue(rules.Rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm)
+		return
+	}
+	ov.Encryption = "none"
+}
 
-	if out, err := client.GetPublicAccessBlock(&s3.GetPublicAccessBlockInput{Bucket: aws.String(bucket)}); err == nil && out.PublicAccessBlockConfiguration != nil {
-		cfg := out.PublicAccessBlockConfiguration
-		ov.PublicAccessBlock = fmt.Sprintf("BlockPublicAcls=%v IgnorePublicAcls=%v BlockPublicPolicy=%v RestrictPublicBuckets=%v",
-			aws.BoolValue(cfg.BlockPublicAcls), aws.BoolValue(cfg.IgnorePublicAcls),
-			aws.BoolValue(cfg.BlockPublicPolicy), aws.BoolValue(cfg.RestrictPublicBuckets))
-	} else {
+func fillPublicAccessBlock(client *s3.S3, bucket string, ov *BucketOverview) {
+	out, err := client.GetPublicAccessBlock(&s3.GetPublicAccessBlockInput{Bucket: aws.String(bucket)})
+	if err != nil || out.PublicAccessBlockConfiguration == nil {
 		ov.PublicAccessBlock = "not set / n/a"
+		return
 	}
+	cfg := out.PublicAccessBlockConfiguration
+	ov.PublicAccessBlock = fmt.Sprintf("BlockPublicAcls=%v IgnorePublicAcls=%v BlockPublicPolicy=%v RestrictPublicBuckets=%v",
+		aws.BoolValue(cfg.BlockPublicAcls), aws.BoolValue(cfg.IgnorePublicAcls),
+		aws.BoolValue(cfg.BlockPublicPolicy), aws.BoolValue(cfg.RestrictPublicBuckets))
+}
 
-	var count int64
-	var total int64
+func sampleBucketObjects(client *s3.S3, bucket, prefix string, ov *BucketOverview) {
+	var count, total int64
 	truncated := false
 	input := &s3.ListObjectsV2Input{
 		Bucket:  aws.String(bucket),
@@ -435,7 +450,7 @@ func (c *S3Client) GetBucketOverview(bucket, prefix string) (*BucketOverview, er
 	if prefix != "" {
 		input.Prefix = aws.String(prefix)
 	}
-	err = client.ListObjectsV2Pages(input, func(page *s3.ListObjectsV2Output, last bool) bool {
+	err := client.ListObjectsV2Pages(input, func(page *s3.ListObjectsV2Output, last bool) bool {
 		for _, obj := range page.Contents {
 			count++
 			if obj.Size != nil {
@@ -451,15 +466,14 @@ func (c *S3Client) GetBucketOverview(bucket, prefix string) (*BucketOverview, er
 	if err != nil {
 		ov.ObjectCountApprox = "error: " + err.Error()
 		ov.TotalSizeApprox = "n/a"
-	} else {
-		suffix := ""
-		if truncated {
-			suffix = "+"
-		}
-		ov.ObjectCountApprox = fmt.Sprintf("%d%s", count, suffix)
-		ov.TotalSizeApprox = formatSize(total) + suffix
+		return
 	}
-	return ov, nil
+	suffix := ""
+	if truncated {
+		suffix = "+"
+	}
+	ov.ObjectCountApprox = fmt.Sprintf("%d%s", count, suffix)
+	ov.TotalSizeApprox = formatSize(total) + suffix
 }
 
 // VersionRow is one object version listing row.
@@ -521,8 +535,8 @@ func (c *S3Client) ListObjectVersions(bucket, prefix string) ([]VersionRow, erro
 
 // ACLRow is one ACL grant.
 type ACLRow struct {
-	Grantee string
-	Type    string
+	Grantee    string
+	Type       string
 	Permission string
 }
 
@@ -543,30 +557,44 @@ func (c *S3Client) GetBucketACL(bucket string) (owner string, rows []ACLRow, err
 		}
 	}
 	for _, g := range out.Grants {
-		row := ACLRow{Permission: aws.StringValue(g.Permission)}
-		if g.Grantee != nil {
-			row.Type = aws.StringValue(g.Grantee.Type)
-			row.Grantee = aws.StringValue(g.Grantee.DisplayName)
-			if row.Grantee == "" {
-				row.Grantee = aws.StringValue(g.Grantee.ID)
-			}
-			if row.Grantee == "" {
-				row.Grantee = aws.StringValue(g.Grantee.URI)
-			}
-			if row.Grantee == "" {
-				row.Grantee = aws.StringValue(g.Grantee.EmailAddress)
-			}
-		}
-		rows = append(rows, row)
+		rows = append(rows, ACLRow{
+			Permission: aws.StringValue(g.Permission),
+			Type:       granteeType(g.Grantee),
+			Grantee:    granteeName(g.Grantee),
+		})
 	}
 	return owner, rows, nil
 }
 
+func granteeType(g *s3.Grantee) string {
+	if g == nil {
+		return ""
+	}
+	return aws.StringValue(g.Type)
+}
+
+func granteeName(g *s3.Grantee) string {
+	if g == nil {
+		return ""
+	}
+	for _, v := range []string{
+		aws.StringValue(g.DisplayName),
+		aws.StringValue(g.ID),
+		aws.StringValue(g.URI),
+		aws.StringValue(g.EmailAddress),
+	} {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
 // LifecycleRow is one lifecycle rule summary.
 type LifecycleRow struct {
-	ID     string
-	Status string
-	Prefix string
+	ID      string
+	Status  string
+	Prefix  string
 	Summary string
 }
 
@@ -584,38 +612,50 @@ func (c *S3Client) ListLifecycleRules(bucket string) ([]LifecycleRow, error) {
 	}
 	rows := make([]LifecycleRow, 0, len(out.Rules))
 	for _, rule := range out.Rules {
-		prefix := ""
-		if rule.Filter != nil && rule.Filter.Prefix != nil {
-			prefix = aws.StringValue(rule.Filter.Prefix)
-		} else if rule.Prefix != nil {
-			prefix = aws.StringValue(rule.Prefix)
-		}
-		var parts []string
-		if rule.Expiration != nil && rule.Expiration.Days != nil {
-			parts = append(parts, fmt.Sprintf("expire %dd", *rule.Expiration.Days))
-		}
-		for _, t := range rule.Transitions {
-			days := int64(0)
-			if t.Days != nil {
-				days = *t.Days
-			}
-			parts = append(parts, fmt.Sprintf("→%s %dd", aws.StringValue(t.StorageClass), days))
-		}
-		if rule.AbortIncompleteMultipartUpload != nil && rule.AbortIncompleteMultipartUpload.DaysAfterInitiation != nil {
-			parts = append(parts, fmt.Sprintf("abort MPU %dd", *rule.AbortIncompleteMultipartUpload.DaysAfterInitiation))
-		}
-		summary := strings.Join(parts, ", ")
-		if summary == "" {
-			summary = "-"
-		}
-		rows = append(rows, LifecycleRow{
-			ID:      aws.StringValue(rule.ID),
-			Status:  aws.StringValue(rule.Status),
-			Prefix:  prefix,
-			Summary: summary,
-		})
+		rows = append(rows, lifecycleRuleRow(rule))
 	}
 	return rows, nil
+}
+
+func lifecycleRulePrefix(rule *s3.LifecycleRule) string {
+	if rule.Filter != nil && rule.Filter.Prefix != nil {
+		return aws.StringValue(rule.Filter.Prefix)
+	}
+	if rule.Prefix != nil {
+		return aws.StringValue(rule.Prefix)
+	}
+	return ""
+}
+
+func lifecycleRuleSummary(rule *s3.LifecycleRule) string {
+	var parts []string
+	if rule.Expiration != nil && rule.Expiration.Days != nil {
+		parts = append(parts, fmt.Sprintf("expire %dd", *rule.Expiration.Days))
+	}
+	for _, t := range rule.Transitions {
+		days := int64(0)
+		if t.Days != nil {
+			days = *t.Days
+		}
+		parts = append(parts, fmt.Sprintf("→%s %dd", aws.StringValue(t.StorageClass), days))
+	}
+	if rule.AbortIncompleteMultipartUpload != nil && rule.AbortIncompleteMultipartUpload.DaysAfterInitiation != nil {
+		parts = append(parts, fmt.Sprintf("abort MPU %dd", *rule.AbortIncompleteMultipartUpload.DaysAfterInitiation))
+	}
+	summary := strings.Join(parts, ", ")
+	if summary == "" {
+		return "-"
+	}
+	return summary
+}
+
+func lifecycleRuleRow(rule *s3.LifecycleRule) LifecycleRow {
+	return LifecycleRow{
+		ID:      aws.StringValue(rule.ID),
+		Status:  aws.StringValue(rule.Status),
+		Prefix:  lifecycleRulePrefix(rule),
+		Summary: lifecycleRuleSummary(rule),
+	}
 }
 
 // MultipartRow is an incomplete multipart upload.
@@ -632,7 +672,7 @@ func (c *S3Client) ListMultipartUploads(bucket, prefix string) ([]MultipartRow, 
 		return nil, err
 	}
 	input := &s3.ListMultipartUploadsInput{
-		Bucket:  aws.String(bucket),
+		Bucket:     aws.String(bucket),
 		MaxUploads: aws.Int64(100),
 	}
 	if prefix != "" {

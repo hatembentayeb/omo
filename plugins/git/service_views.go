@@ -80,16 +80,15 @@ func tagsActions() []pluginrpc.KeyBinding {
 }
 
 func helpSections() []pluginrpc.HelpSection {
-	return pluginrpc.HelpWithGlobal([]pluginrpc.HelpSection{
-		{Title: "Views (0-6)", Bindings: viewNavBindings()},
-		{Title: "Repos", Bindings: reposActions()},
-		{Title: "Status", Bindings: statusActions()},
-		{Title: "Commits", Bindings: commitsActions()},
-		{Title: "Branches", Bindings: branchesActions()},
-		{Title: "Remotes", Bindings: remotesActions()},
-		{Title: "Stash", Bindings: stashActions()},
-		{Title: "Tags", Bindings: tagsActions()},
-	}...)
+	return pluginrpc.HelpNav(viewNavBindings(), nil,
+		pluginrpc.HelpSection{Title: "Repos", Bindings: reposActions()},
+		pluginrpc.HelpSection{Title: "Status", Bindings: statusActions()},
+		pluginrpc.HelpSection{Title: "Commits", Bindings: commitsActions()},
+		pluginrpc.HelpSection{Title: "Branches", Bindings: branchesActions()},
+		pluginrpc.HelpSection{Title: "Remotes", Bindings: remotesActions()},
+		pluginrpc.HelpSection{Title: "Stash", Bindings: stashActions()},
+		pluginrpc.HelpSection{Title: "Tags", Bindings: tagsActions()},
+	)
 }
 
 var ui = pluginrpc.ViewUI{

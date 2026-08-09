@@ -11,36 +11,67 @@ type keyBinding struct {
 	description string
 }
 
+func formatBindingDescription(description string) string {
+	if len(description) == 0 {
+		return ""
+	}
+	formatted := strings.ToUpper(description[:1])
+	if len(description) > 1 {
+		formatted += strings.ToLower(description[1:])
+	}
+	return formatted
+}
+
+func isDigitKey(key string) bool {
+	return len(key) == 1 && key[0] >= '0' && key[0] <= '9'
+}
+
+func isSpecialKey(key string) bool {
+	return len(key) > 1 || strings.ContainsAny(key, "^_")
+}
+
+func bindingLess(a, b keyBinding) bool {
+	digitA, digitB := isDigitKey(a.key), isDigitKey(b.key)
+	if digitA != digitB {
+		return digitA
+	}
+	if digitA {
+		return a.key < b.key
+	}
+	specialA, specialB := isSpecialKey(a.key), isSpecialKey(b.key)
+	if specialA != specialB {
+		return !specialA
+	}
+	return a.key < b.key
+}
+
 func buildSortedBindings(keyBindings map[string]string) []keyBinding {
 	bindings := make([]keyBinding, 0, len(keyBindings))
 	for key, description := range keyBindings {
-		formattedDesc := ""
-		if len(description) > 0 {
-			formattedDesc = strings.ToUpper(description[:1])
-			if len(description) > 1 {
-				formattedDesc += strings.ToLower(description[1:])
-			}
-		}
-		bindings = append(bindings, keyBinding{key, formattedDesc})
+		bindings = append(bindings, keyBinding{key, formatBindingDescription(description)})
 	}
-
 	sort.Slice(bindings, func(i, j int) bool {
-		isDigitI := len(bindings[i].key) == 1 && bindings[i].key[0] >= '0' && bindings[i].key[0] <= '9'
-		isDigitJ := len(bindings[j].key) == 1 && bindings[j].key[0] >= '0' && bindings[j].key[0] <= '9'
-		if isDigitI != isDigitJ {
-			return isDigitI
-		}
-		if isDigitI && isDigitJ {
-			return bindings[i].key < bindings[j].key
-		}
-		isSpecialI := len(bindings[i].key) > 1 || strings.ContainsAny(bindings[i].key, "^_")
-		isSpecialJ := len(bindings[j].key) > 1 || strings.ContainsAny(bindings[j].key, "^_")
-		if isSpecialI != isSpecialJ {
-			return !isSpecialI
-		}
-		return bindings[i].key < bindings[j].key
+		return bindingLess(bindings[i], bindings[j])
 	})
 	return bindings
+}
+
+func longestDescription(bindings []keyBinding) int {
+	longest := 0
+	for _, b := range bindings {
+		if len(b.description) > longest {
+			longest = len(b.description)
+		}
+	}
+	return longest
+}
+
+func bindingCell(b keyBinding, longestDesc int) string {
+	paddingSpaces := longestDesc - len(b.description) + 1
+	if paddingSpaces < 1 {
+		paddingSpaces = 1
+	}
+	return fmt.Sprintf("[purple::b]<%s>[white::-] %s%s", b.key, b.description, strings.Repeat(" ", paddingSpaces))
 }
 
 // formatBindingsColumns lays out bindings in a dense multi-column matrix.
@@ -55,13 +86,7 @@ func formatBindingsColumns(bindings []keyBinding, maxRows, maxCols int) string {
 		maxCols = 1
 	}
 
-	longestDesc := 0
-	for _, b := range bindings {
-		if len(b.description) > longestDesc {
-			longestDesc = len(b.description)
-		}
-	}
-
+	longestDesc := longestDescription(bindings)
 	numCols := (len(bindings) + maxRows - 1) / maxRows
 	if numCols > maxCols {
 		numCols = maxCols
@@ -81,12 +106,7 @@ func formatBindingsColumns(bindings []keyBinding, maxRows, maxCols int) string {
 		if col >= maxCols {
 			break
 		}
-		paddingSpaces := longestDesc - len(binding.description) + 1
-		if paddingSpaces < 1 {
-			paddingSpaces = 1
-		}
-		padding := strings.Repeat(" ", paddingSpaces)
-		cell := fmt.Sprintf("[purple::b]<%s>[white::-] %s%s", binding.key, binding.description, padding)
+		cell := bindingCell(binding, longestDesc)
 		if lines[row] != "" {
 			lines[row] += cell
 		} else {
@@ -159,34 +179,37 @@ func (c *CoreView) ClearHelpSections() *CoreView {
 	return c
 }
 
-// getExpandedHelpText returns the "?" modal body, grouped by view when available.
-func (c *CoreView) getExpandedHelpText() string {
-	var sb strings.Builder
-
-	if len(c.helpSections) > 0 {
-		sb.WriteString("[yellow]Shortcuts by view[white]\n")
-		sb.WriteString("[gray]Press Esc to close · ? again from a view for context[white]\n\n")
-		for _, section := range c.helpSections {
-			if section.Title == "" {
-				continue
-			}
-			sb.WriteString(fmt.Sprintf("[yellow]%s[white]\n", section.Title))
-			if len(section.Bindings) == 0 {
-				sb.WriteString("  [gray](no actions)[white]\n\n")
-				continue
-			}
-			for _, b := range section.Bindings {
-				label := b.Label
-				if label == "" {
-					label = b.Key
-				}
-				sb.WriteString(fmt.Sprintf("  [aqua]%s[white]  %s\n", b.Key, label))
-			}
-			sb.WriteString("\n")
-		}
-		return sb.String()
+func writeHelpSection(sb *strings.Builder, section HelpSection) {
+	if section.Title == "" {
+		return
 	}
+	sb.WriteString(fmt.Sprintf("[yellow]%s[white]\n", section.Title))
+	if len(section.Bindings) == 0 {
+		sb.WriteString("  [gray](no actions)[white]\n\n")
+		return
+	}
+	for _, b := range section.Bindings {
+		label := b.Label
+		if label == "" {
+			label = b.Key
+		}
+		sb.WriteString(fmt.Sprintf("  [aqua]%s[white]  %s\n", b.Key, label))
+	}
+	sb.WriteString("\n")
+}
 
+func (c *CoreView) formatSectionedHelp() string {
+	var sb strings.Builder
+	sb.WriteString("[yellow]Shortcuts by view[white]\n")
+	sb.WriteString("[gray]Press Esc to close · ? again from a view for context[white]\n\n")
+	for _, section := range c.helpSections {
+		writeHelpSection(&sb, section)
+	}
+	return sb.String()
+}
+
+func (c *CoreView) formatFlatHelp() string {
+	var sb strings.Builder
 	sb.WriteString("[yellow]Views[white]\n")
 	for _, b := range buildSortedBindings(c.viewBindings) {
 		sb.WriteString(fmt.Sprintf("  [aqua]%s[white]  %s\n", b.key, b.description))
@@ -196,4 +219,12 @@ func (c *CoreView) getExpandedHelpText() string {
 		sb.WriteString(fmt.Sprintf("  [aqua]%s[white]  %s\n", b.key, b.description))
 	}
 	return sb.String()
+}
+
+// getExpandedHelpText returns the "?" modal body, grouped by view when available.
+func (c *CoreView) getExpandedHelpText() string {
+	if len(c.helpSections) > 0 {
+		return c.formatSectionedHelp()
+	}
+	return c.formatFlatHelp()
 }

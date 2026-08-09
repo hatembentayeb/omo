@@ -50,12 +50,11 @@ func connectActions() []pluginrpc.KeyBinding {
 }
 
 func helpSections() []pluginrpc.HelpSection {
-	return pluginrpc.HelpWithGlobal([]pluginrpc.HelpSection{
-		{Title: "Views (0-6)", Bindings: viewNavBindings()},
-		{Title: "Servers", Bindings: serversActions()},
-		{Title: "Overview", Bindings: overviewActions()},
-		{Title: "Shell", Bindings: shellActions()},
-	}...)
+	return pluginrpc.HelpNav(viewNavBindings(), nil,
+		pluginrpc.HelpSection{Title: "Servers", Bindings: serversActions()},
+		pluginrpc.HelpSection{Title: "Overview", Bindings: overviewActions()},
+		pluginrpc.HelpSection{Title: "Shell", Bindings: shellActions()},
+	)
 }
 
 var ui = pluginrpc.ViewUI{

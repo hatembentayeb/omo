@@ -27,10 +27,9 @@ func costExploreActions() []pluginrpc.KeyBinding {
 }
 
 func helpSections() []pluginrpc.HelpSection {
-	return pluginrpc.HelpWithGlobal([]pluginrpc.HelpSection{
-		{Title: "Views (0-4)", Bindings: viewNavBindings()},
-		{Title: "Main / Services", Bindings: costExploreActions()},
-	}...)
+	return pluginrpc.HelpNav(viewNavBindings(), nil,
+		pluginrpc.HelpSection{Title: "Main / Services", Bindings: costExploreActions()},
+	)
 }
 
 var ui = pluginrpc.ViewUI{
@@ -51,7 +50,7 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	s.currentView = viewID
 
 	if err := s.ensureClientLocked(); err != nil {
-		return ui.NotConnected(viewID, "AWS Cost Explorer", err.Error()), nil
+		return ui.NotConnectedErr(viewID, "AWS Cost Explorer", err)
 	}
 
 	switch viewID {

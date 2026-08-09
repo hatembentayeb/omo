@@ -35,9 +35,7 @@ func moreViewBindings() []pluginrpc.KeyBinding { /* optional overflow letters */
 func fooActions() []pluginrpc.KeyBinding { /* per-view mutations */ }
 
 func helpSections() []pluginrpc.HelpSection {
-	return pluginrpc.HelpWithGlobal(
-		pluginrpc.HelpSection{Title: "Views (0-N)", Bindings: viewNavBindings()},
-		// More Views section if moreViewBindings is non-empty
+	return pluginrpc.HelpNav(viewNavBindings(), nil, // or moreViewBindings() when overflow
 		pluginrpc.HelpSection{Title: "Foo", Bindings: fooActions()},
 	)
 }
@@ -53,13 +51,13 @@ func (s *Service) okView(viewID, title, extra string, headers []string, rows [][
 }
 ```
 
-Shared helpers live in `pkg/pluginrpc/decorate.go`: `ViewUI`, `Connected` / `OK` / `Table` / `StatusError` / `NotConnected`, `HelpWithGlobal`, `FormatInfo`, `EnsureRows`, `MapRows`, `SortedKVRows`.
+Shared helpers live in `pkg/pluginrpc/decorate.go`: `ViewUI`, `Connected` / `OK` / `Table` / `StatusError` / `NotConnected` / `NotConnectedErr`, `HelpNav` / `HelpWithGlobal`, `FormatInfo`, `EnsureRows`, `MapRows`, `SortedKVRows`.
 
 Each view builder:
 
 ```go
 return ui.Connected(viewFoo, "...", s.baseInfo(""), headers, rows, "Col", fooActions()...), nil
-// disconnect: return ui.NotConnected(viewID, "Brand Manager", err.Error()), nil
+// disconnect: return ui.NotConnectedErr(viewID, "Brand Manager", err)
 ```
 
 Views with no actions: omit the variadic actions.

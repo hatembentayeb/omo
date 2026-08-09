@@ -7,6 +7,11 @@ import (
 	"omo/pkg/pluginrpc"
 )
 
+const (
+	labelCopyURI = "Copy URI"
+	labelNone    = "(none)"
+)
+
 func viewNavBindings() []pluginrpc.KeyBinding {
 	return []pluginrpc.KeyBinding{
 		{Key: "0", Label: "Buckets", Action: "goto_buckets"},
@@ -31,7 +36,7 @@ func bucketsActions() []pluginrpc.KeyBinding {
 		{Key: "I", Label: "Info", Action: "bucket_info"},
 		{Key: "N", Label: "New Bucket", Action: "create_bucket"},
 		{Key: "D", Label: "Delete", Action: "delete"},
-		{Key: "C", Label: "Copy URI", Action: "copy_uri"},
+		{Key: "C", Label: labelCopyURI, Action: "copy_uri"},
 	}
 }
 
@@ -44,7 +49,7 @@ func objectsActions() []pluginrpc.KeyBinding {
 		{Key: "N", Label: "New Folder", Action: "create_folder"},
 		{Key: "P", Label: "Presign", Action: "presign"},
 		{Key: "D", Label: "Delete", Action: "delete"},
-		{Key: "C", Label: "Copy URI", Action: "copy_uri"},
+		{Key: "C", Label: labelCopyURI, Action: "copy_uri"},
 	}
 }
 
@@ -52,7 +57,7 @@ func overviewActions() []pluginrpc.KeyBinding {
 	return []pluginrpc.KeyBinding{
 		{Key: "E", Label: "Browse", Action: "open_objects"},
 		{Key: "I", Label: "Info", Action: "bucket_info"},
-		{Key: "C", Label: "Copy URI", Action: "copy_uri"},
+		{Key: "C", Label: labelCopyURI, Action: "copy_uri"},
 	}
 }
 
@@ -60,7 +65,7 @@ func versionsActions() []pluginrpc.KeyBinding {
 	return []pluginrpc.KeyBinding{
 		{Key: "E", Label: "Browse", Action: "browse_key"},
 		{Key: "I", Label: "Info", Action: "version_info"},
-		{Key: "C", Label: "Copy URI", Action: "copy_uri"},
+		{Key: "C", Label: labelCopyURI, Action: "copy_uri"},
 	}
 }
 
@@ -68,7 +73,7 @@ func aclActions() []pluginrpc.KeyBinding {
 	return []pluginrpc.KeyBinding{
 		{Key: "E", Label: "Browse", Action: "open_objects"},
 		{Key: "I", Label: "Info", Action: "acl_info"},
-		{Key: "C", Label: "Copy URI", Action: "copy_uri"},
+		{Key: "C", Label: labelCopyURI, Action: "copy_uri"},
 	}
 }
 
@@ -76,7 +81,7 @@ func lifecycleActions() []pluginrpc.KeyBinding {
 	return []pluginrpc.KeyBinding{
 		{Key: "E", Label: "Browse", Action: "open_objects"},
 		{Key: "I", Label: "Info", Action: "lifecycle_info"},
-		{Key: "C", Label: "Copy URI", Action: "copy_uri"},
+		{Key: "C", Label: labelCopyURI, Action: "copy_uri"},
 	}
 }
 
@@ -85,7 +90,7 @@ func uploadsActions() []pluginrpc.KeyBinding {
 		{Key: "E", Label: "Browse", Action: "browse_key"},
 		{Key: "I", Label: "Info", Action: "upload_info"},
 		{Key: "D", Label: "Abort", Action: "abort_upload"},
-		{Key: "C", Label: "Copy URI", Action: "copy_uri"},
+		{Key: "C", Label: labelCopyURI, Action: "copy_uri"},
 	}
 }
 
@@ -117,16 +122,15 @@ func actionsForView(viewID string) []pluginrpc.KeyBinding {
 }
 
 func helpSections() []pluginrpc.HelpSection {
-	return pluginrpc.HelpWithGlobal([]pluginrpc.HelpSection{
-		{Title: "Views (0-6)", Bindings: viewNavBindings()},
-		{Title: "Buckets", Bindings: bucketsActions()},
-		{Title: "Objects", Bindings: objectsActions()},
-		{Title: "Overview", Bindings: overviewActions()},
-		{Title: "Versions", Bindings: versionsActions()},
-		{Title: "ACL", Bindings: aclActions()},
-		{Title: "Lifecycle", Bindings: lifecycleActions()},
-		{Title: "Uploads", Bindings: uploadsActions()},
-	}...)
+	return pluginrpc.HelpNav(viewNavBindings(), nil,
+		pluginrpc.HelpSection{Title: "Buckets", Bindings: bucketsActions()},
+		pluginrpc.HelpSection{Title: "Objects", Bindings: objectsActions()},
+		pluginrpc.HelpSection{Title: "Overview", Bindings: overviewActions()},
+		pluginrpc.HelpSection{Title: "Versions", Bindings: versionsActions()},
+		pluginrpc.HelpSection{Title: "ACL", Bindings: aclActions()},
+		pluginrpc.HelpSection{Title: "Lifecycle", Bindings: lifecycleActions()},
+		pluginrpc.HelpSection{Title: "Uploads", Bindings: uploadsActions()},
+	)
 }
 
 var ui = pluginrpc.ViewUI{
@@ -150,10 +154,6 @@ func (s *Service) baseInfo(extra string) string {
 	return pluginrpc.FormatInfo(msg, extra)
 }
 
-func (s *Service) disconnectedView(viewID string, err error) pluginrpc.ViewData {
-	return ui.NotConnected(viewID, "S3 Manager", err.Error(), actionsForView(viewID)...)
-}
-
 func (s *Service) needBucketView(viewID string) pluginrpc.ViewData {
 	return ui.Connected(viewID, "S3 — "+viewID, s.baseInfo("Select a bucket first (view 0)"), []string{"Status", "Hint"}, [][]string{{"No bucket selected", "Press 0 or E to pick a bucket"}}, "Status", noBucketActions()...)
 }
@@ -165,7 +165,7 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	s.currentView = viewID
 
 	if err := s.ensureConnectedLocked(); err != nil {
-		return s.disconnectedView(viewID, err), nil
+		return ui.NotConnectedErr(viewID, "S3 Manager", err, actionsForView(viewID)...)
 	}
 
 	switch viewID {
@@ -249,7 +249,7 @@ func (s *Service) viewVersionsLocked() (pluginrpc.ViewData, error) {
 		// Keep full VersionID in the Version column so Info/actions stay accurate.
 		rows = append(rows, []string{v.Key, v.VersionID, v.IsLatest, v.Size, v.LastModified})
 	}
-	rows = pluginrpc.EnsureRows(rows, []string{"(none)", "", "", "", ""})
+	rows = pluginrpc.EnsureRows(rows, []string{labelNone, "", "", "", ""})
 	return ui.Connected(s3ViewVersions, "S3 Object Versions", s.baseInfo(fmt.Sprintf("Versions: %d (max 200)", len(versions))), []string{"Key", "Version", "Latest", "Size", "Modified"}, rows, "Key", versionsActions()...), nil
 }
 
@@ -279,13 +279,13 @@ func (s *Service) viewLifecycleLocked() (pluginrpc.ViewData, error) {
 		if strings.Contains(msg, "NoSuchLifecycleConfiguration") || strings.Contains(msg, "Lifecycle") {
 			msg = "No lifecycle configuration"
 		}
-		return ui.Connected(s3ViewLifecycle, "S3 Lifecycle", s.baseInfo(msg), []string{"ID", "Status", "Prefix", "Summary"}, [][]string{{"(none)", "", "", msg}}, "ID", lifecycleActions()...), nil
+		return ui.Connected(s3ViewLifecycle, "S3 Lifecycle", s.baseInfo(msg), []string{"ID", "Status", "Prefix", "Summary"}, [][]string{{labelNone, "", "", msg}}, "ID", lifecycleActions()...), nil
 	}
 	rows := make([][]string, 0, len(rules))
 	for _, r := range rules {
 		rows = append(rows, []string{r.ID, r.Status, emptyDash(r.Prefix), r.Summary})
 	}
-	rows = pluginrpc.EnsureRows(rows, []string{"(none)", "", "", ""})
+	rows = pluginrpc.EnsureRows(rows, []string{labelNone, "", "", ""})
 	return ui.Connected(s3ViewLifecycle, "S3 Lifecycle", s.baseInfo(fmt.Sprintf("Rules: %d", len(rules))), []string{"ID", "Status", "Prefix", "Summary"}, rows, "ID", lifecycleActions()...), nil
 }
 
@@ -301,7 +301,7 @@ func (s *Service) viewUploadsLocked() (pluginrpc.ViewData, error) {
 	for _, u := range uploads {
 		rows = append(rows, []string{u.Key, shortID(u.UploadID), u.Initiated, u.UploadID})
 	}
-	rows = pluginrpc.EnsureRows(rows, []string{"(none)", "", "", ""})
+	rows = pluginrpc.EnsureRows(rows, []string{labelNone, "", "", ""})
 	return ui.Connected(s3ViewUploads, "S3 Multipart Uploads", s.baseInfo(fmt.Sprintf("Incomplete: %d", len(uploads))), []string{"Key", "Upload ID", "Initiated", "Full Upload ID"}, rows, "Key", uploadsActions()...), nil
 }
 
