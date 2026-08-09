@@ -117,7 +117,7 @@ func actionsForView(viewID string) []pluginrpc.KeyBinding {
 }
 
 func helpSections() []pluginrpc.HelpSection {
-	return []pluginrpc.HelpSection{
+	return pluginrpc.HelpWithGlobal([]pluginrpc.HelpSection{
 		{Title: "Views (0-6)", Bindings: viewNavBindings()},
 		{Title: "Buckets", Bindings: bucketsActions()},
 		{Title: "Objects", Bindings: objectsActions()},
@@ -126,26 +126,11 @@ func helpSections() []pluginrpc.HelpSection {
 		{Title: "ACL", Bindings: aclActions()},
 		{Title: "Lifecycle", Bindings: lifecycleActions()},
 		{Title: "Uploads", Bindings: uploadsActions()},
-		{
-			Title: "Global",
-			Bindings: []pluginrpc.KeyBinding{
-				{Key: "R", Label: "Refresh"},
-				{Key: "?", Label: "Help (this screen)"},
-				{Key: "/", Label: "Filter"},
-				{Key: "^t", Label: "Switch target"},
-				{Key: "ESC", Label: "Back / home"},
-			},
-		},
-	}
+	}...)
 }
 
 func decorate(view pluginrpc.ViewData, actions ...pluginrpc.KeyBinding) pluginrpc.ViewData {
-	view.ViewBindings = viewNavBindings()
-	view.KeyBindings = nil
-	view.Actions = actions
-	view.HelpSections = helpSections()
-	view.LogLines = nil
-	return view
+	return pluginrpc.Decorate(view, viewNavBindings(), nil, helpSections(), actions...)
 }
 
 func (s *Service) baseInfo(extra string) string {

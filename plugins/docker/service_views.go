@@ -76,7 +76,7 @@ func systemActions() []pluginrpc.KeyBinding {
 }
 
 func helpSections() []pluginrpc.HelpSection {
-	return []pluginrpc.HelpSection{
+	return pluginrpc.HelpWithGlobal([]pluginrpc.HelpSection{
 		{Title: "Views (0-6)", Bindings: viewNavBindings()},
 		{Title: "Containers", Bindings: containersActions()},
 		{Title: "Images", Bindings: imagesActions()},
@@ -84,26 +84,11 @@ func helpSections() []pluginrpc.HelpSection {
 		{Title: "Volumes", Bindings: volumesActions()},
 		{Title: "Compose", Bindings: composeActions()},
 		{Title: "System", Bindings: systemActions()},
-		{
-			Title: "Global",
-			Bindings: []pluginrpc.KeyBinding{
-				{Key: "R", Label: "Refresh"},
-				{Key: "?", Label: "Help (this screen)"},
-				{Key: "/", Label: "Filter"},
-				{Key: "^t", Label: "Switch target"},
-				{Key: "ESC", Label: "Back / home"},
-			},
-		},
-	}
+	}...)
 }
 
-// decorate: Views column = 0-6, Actions column (former logs) = this view only.
 func decorate(view pluginrpc.ViewData, actions ...pluginrpc.KeyBinding) pluginrpc.ViewData {
-	view.ViewBindings = viewNavBindings()
-	view.KeyBindings = nil
-	view.Actions = actions
-	view.HelpSections = helpSections()
-	return view
+	return pluginrpc.Decorate(view, viewNavBindings(), nil, helpSections(), actions...)
 }
 
 func (s *Service) baseInfo(extra string) string {

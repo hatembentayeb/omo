@@ -56,33 +56,18 @@ func rbacActions() []pluginrpc.KeyBinding {
 }
 
 func helpSections() []pluginrpc.HelpSection {
-	return []pluginrpc.HelpSection{
+	return pluginrpc.HelpWithGlobal([]pluginrpc.HelpSection{
 		{Title: "Views (0-3)", Bindings: viewNavBindings()},
 		{Title: "More Views", Bindings: moreViewBindings()},
 		{Title: "Applications", Bindings: applicationsActions()},
 		{Title: "Projects", Bindings: projectsActions()},
 		{Title: "Accounts", Bindings: accountsActions()},
 		{Title: "RBAC", Bindings: rbacActions()},
-		{
-			Title: "Global",
-			Bindings: []pluginrpc.KeyBinding{
-				{Key: "R", Label: "Refresh"},
-				{Key: "?", Label: "Help (this screen)"},
-				{Key: "/", Label: "Filter"},
-				{Key: "^t", Label: "Switch target"},
-				{Key: "ESC", Label: "Back / home"},
-			},
-		},
-	}
+	}...)
 }
 
-// decorate: Views column = 0-3, overflow KeyBindings = RBAC subviews, Actions = this view only.
 func decorate(view pluginrpc.ViewData, actions ...pluginrpc.KeyBinding) pluginrpc.ViewData {
-	view.ViewBindings = viewNavBindings()
-	view.KeyBindings = moreViewBindings()
-	view.Actions = actions
-	view.HelpSections = helpSections()
-	return view
+	return pluginrpc.Decorate(view, viewNavBindings(), moreViewBindings(), helpSections(), actions...)
 }
 
 func (s *Service) baseInfo(extra string) string {
