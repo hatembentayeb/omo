@@ -1,335 +1,466 @@
 <p align="center">
-  <img src="logo.svg" alt="omo" width="400">
+  <img src="logo.svg" alt="omo" width="420">
 </p>
 
-<h3 align="center">Your entire infrastructure. One terminal.</h3>
+<h1 align="center">omo</h1>
+
+<p align="center">
+  <strong>Your entire infrastructure. One terminal.</strong><br>
+  A keyboard-first ops dashboard for Redis, Docker, Kafka, Postgres, Kubernetes, AWS, Git, and more —
+  backed by a local KeePass vault.
+</p>
 
 <p align="center">
   <a href="https://github.com/hatembentayeb/omo/releases"><img src="https://img.shields.io/github/v/release/hatembentayeb/omo?style=flat-square&color=22d3ee" alt="Release"></a>
+  <a href="https://github.com/hatembentayeb/omo/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/hatembentayeb/omo/ci.yml?branch=main&style=flat-square" alt="CI"></a>
   <a href="https://goreportcard.com/report/github.com/hatembentayeb/omo"><img src="https://goreportcard.com/badge/github.com/hatembentayeb/omo?style=flat-square" alt="Go Report Card"></a>
   <a href="https://github.com/hatembentayeb/omo/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue?style=flat-square" alt="License"></a>
   <a href="https://github.com/hatembentayeb/omo/releases"><img src="https://img.shields.io/github/downloads/hatembentayeb/omo/total?style=flat-square&color=4ade80" alt="Downloads"></a>
+  <img src="https://img.shields.io/badge/go-1.25+-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go">
   <img src="https://img.shields.io/badge/platform-linux%20%7C%20macOS%20%7C%20windows-lightgrey?style=flat-square" alt="Platform">
 </p>
 
 <p align="center">
-  <a href="https://oh-myops.com">Website</a> &bull;
-  <a href="#quick-start">Quick Start</a> &bull;
-  <a href="#plugins">Plugins</a> &bull;
-  <a href="#keepass-setup">KeePass Setup</a> &bull;
+  <a href="https://oh-myops.com">Website</a> ·
+  <a href="#why-omo">Why omo</a> ·
+  <a href="#install">Install</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#plugins">Plugins</a> ·
+  <a href="#architecture">Architecture</a> ·
+  <a href="#development">Development</a> ·
   <a href="#contributing">Contributing</a>
 </p>
 
 ---
 
-## What is omo?
+<p align="center">
+  <img src="assets/demo.gif" alt="omo demo" width="880">
+</p>
 
-**omo** is an operations dashboard that runs entirely in your terminal. Instead of juggling browser tabs, CLI tools, and dashboards, omo gives you a single keyboard-driven interface to manage your entire infrastructure.
-
-One binary. One KeePass file. Every service you run.
+<p align="center">
+  <sub>Browse containers, queues, databases, and cloud costs without leaving the terminal.</sub>
+</p>
 
 ---
 
-## Quick Start
+## Why omo?
 
-### 1. Install omo
+Ops work is fragmented. You bounce between the AWS console, `kubectl`, Redis Insight, Docker Desktop, Argo CD, GitHub, SSH sessions, and a password manager — each with its own UI, auth, and muscle memory.
+
+**omo** collapses that into one TUI:
+
+| Pain today | With omo |
+|------------|----------|
+| Ten browser tabs + CLIs | One binary, one keyboard model |
+| Credentials scattered in `.env`, shells, and vaults | One KeePass DB under `~/.omo/secrets/` |
+| Plugins break when the host Go version changes | Out-of-process **RPC plugins** (hashicorp/go-plugin) |
+| New tools mean new UIs to learn | Shared navigation: views, actions, filter, help |
+
+Built for SREs, platform engineers, and indie operators who live in the terminal.
+
+---
+
+## Features
+
+- **13 official plugins** — Docker, Redis, Kafka, RabbitMQ, Postgres, SSH, Argo CD, Kubernetes users, AWS Costs, S3, Git, GitHub, system processes
+- **KeePass-backed secrets** — auto-created on first launch; open with KeePassXC or `omo secrets`
+- **Package Manager** — sync the plugin index from GitHub and install/update plugins in-app
+- **Multi-target** — `Ctrl+t` switches instances (e.g. `redis/production/cache` ↔ `redis/staging/cache`)
+- **Keyboard-first** — Tab focus, filter (`/`), refresh (`R`), help (`?`)
+- **Safe by design** — credentials stay local; plugins receive config via `Configure`, not nested secret RPC
+- **Cross-platform host** — Linux / macOS / Windows; plugins ship as standalone executables
+
+---
+
+## Install
+
+### One-liner (recommended)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/hatembentayeb/omo/main/install.sh | bash
 ```
 
-This downloads the latest release binary and creates the `~/.omo/` directory.
+Installs the latest release into `/usr/local/bin` (override with `OMO_INSTALL_DIR`) and creates `~/.omo/`.
 
-### 2. Launch omo
+### From GitHub Releases
+
+Download the archive for your OS/arch from the [Releases](https://github.com/hatembentayeb/omo/releases) page, extract `omo`, and put it on your `PATH`.
+
+### From source
+
+```bash
+git clone https://github.com/hatembentayeb/omo.git
+cd omo
+make all    # builds host + all plugins into ~/.omo/plugins
+```
+
+Requires **Go 1.25+**.
+
+---
+
+## Quick start
+
+### 1. Launch
 
 ```bash
 omo
 ```
 
-On first launch, omo **automatically**:
-- Generates a master key file at `~/.omo/keys/omo.key`
-- Creates a KeePass database at `~/.omo/secrets/omo.kdbx` (secured by the key file)
+On first run, omo:
 
-No password prompts, no manual setup. The key file authenticates everything.
+1. Generates `~/.omo/keys/omo.key`
+2. Creates `~/.omo/secrets/omo.kdbx` (unlocked by that key file)
 
-> **Important:** Back up `~/.omo/keys/omo.key` — it's the only way to unlock your secrets database. If you lose it, you lose access to all stored credentials.
+> **Back up `~/.omo/keys/omo.key`.** Without it you cannot open the secrets database.
 
-### 3. Install plugins
+### 2. Install plugins
 
-Once inside omo:
+Inside omo:
 
-1. Press `p` from the plugins list (or **Tab** to the bottom actions list and select **Package Manager**)
-2. Press `S` to sync the plugin index from GitHub
-3. Press `A` to install all plugins
-4. Press `Q` to go back
+1. Focus the **plugins list** (left sidebar) and press **`p`**  
+   — or **Tab** to the host actions list and select **Package Manager**
+2. Press **`S`** to sync the plugin index
+3. Press **`A`** to install all plugins (or install selectively)
+4. Press **`Q`** to return
 
-### 4. Add your first connection
+### 3. Add a connection
 
-All plugin configurations live in the KeePass database. The path structure is:
+Every connection is a KeePass entry:
 
+```text
+<plugin>/<environment>/<instance>
 ```
-<plugin-name>/<environment>/<instance-name>
+
+Examples: `redis/production/cache-01`, `docker/development/local`, `s3/prod/main`.
+
+**Option A — CLI (scriptable):**
+
+```bash
+omo secrets put redis/development/local \
+  --url localhost \
+  --password mypass \
+  --attr port=6379 \
+  --attr database=0
+
+omo secrets list redis
+omo secrets get  redis/development/local
 ```
 
-Open the KeePass database with KeePassXC (using the key file for authentication):
+**Option B — KeePassXC:**
 
-1. Open `~/.omo/secrets/omo.kdbx` in KeePassXC
-2. When prompted, select **Key File** and point to `~/.omo/keys/omo.key`
-3. Inside the `omo` root group, create a group hierarchy: e.g. `redis` → `development`
-4. Create an entry named `local` with:
-   - **URL**: `localhost` (the host)
-   - **Username**: Redis ACL username (leave empty if none)
-   - **Password**: Redis password (leave empty if none)
-   - Add a custom attribute `port` = `6379`
+1. Open `~/.omo/secrets/omo.kdbx`
+2. Authenticate with **Key File** → `~/.omo/keys/omo.key`
+3. Create groups `redis` → `development`, entry `local`
+4. Set URL / username / password and custom attributes (`port`, …)
 
-Plugins also auto-create placeholder entries on first run to guide you.
+### 4. Operate
 
-### 5. Use the plugin
-
-Select the plugin from the sidebar — it auto-discovers your KeePass entries and connects.
+Select the plugin in the sidebar. Use `Ctrl+t` to pick the target, `?` for plugin help, `R` to refresh.
 
 ---
 
-## How It Works
+## Screenshot
 
-```
-┌──────────────────────────────────────────────┐
-│  KeePass (secrets/omo.kdbx + keys/omo.key)   │
-│  └── redis/production/cache-01               │
-│  └── docker/development/local                │
-│  └── kafka/staging/cluster-1                 │
-│  └── ...                                     │
-└──────────────┬───────────────────────────────┘
-               │ pluginapi.Secrets()
-┌──────────────▼───────────────────────────────┐
-│  omo (host binary)                           │
-│  ├── Auto-bootstrap KeePass on first run     │
-│  ├── RPC plugin launcher (go-plugin)         │
-│  ├── Tab/Shift+Tab panel cycling             │
-│  └── Per-plugin logging (~/.omo/logs/)       │
-└──────────────┬───────────────────────────────┘
-               │ exec + RPC (ViewData / DoAction)
-┌──────────────▼───────────────────────────────┐
-│  Plugins (standalone executables)            │
-│  redis  docker  kafka  …                     │
-└──────────────────────────────────────────────┘
-```
+<p align="center">
+  <img src="assets/screenshot.png" alt="omo screenshot" width="880">
+</p>
 
 ---
 
 ## Plugins
 
-omo ships with 12 official plugins:
-
-| Plugin | Description | KeePass Path |
-|--------|-------------|-------------|
-| **docker** | Containers, images, networks, volumes, compose | `docker/<env>/<host>` |
+| Plugin | What you manage | KeePass path |
+|--------|-----------------|--------------|
+| **docker** | Containers, images, networks, volumes, Compose | `docker/<env>/<host>` |
 | **redis** | Keys, memory, clients, slowlog, pub/sub | `redis/<env>/<instance>` |
 | **kafka** | Brokers, topics, partitions, consumer groups | `kafka/<env>/<cluster>` |
 | **rabbitmq** | Queues, exchanges, bindings, connections | `rabbitmq/<env>/<instance>` |
 | **postgres** | Databases, users, queries, replication | `postgres/<env>/<instance>` |
-| **ssh** | Remote servers, execution, system monitoring | `ssh/<env>/<server>` |
-| **argocd** | Applications, projects, accounts, RBAC | `argocd/<env>/<instance>` |
-| **k8suser** | Kubernetes user & certificate management | `k8suser/<env>/<cluster>` |
+| **ssh** | Remote shell, processes, disk, services | `ssh/<env>/<server>` |
+| **argocd** | Apps, projects, accounts, RBAC | `argocd/<env>/<instance>` |
+| **k8suser** | Cert-based users & roles | `k8suser/<env>/<cluster>` |
 | **awsCosts** | Cost explorer, budgets, forecasts | `awsCosts/<env>/<profile>` |
-| **s3** | Buckets, objects, upload, download | `s3/<env>/<profile>` |
-| **git** | Repositories, branches, commits, diffs | `git/<env>/<repo>` |
-| **sysprocess** | Processes, CPU, memory, disk, ports | *(no config needed)* |
+| **s3** | Buckets, objects, ACL, lifecycle, multipart | `s3/<env>/<profile>` |
+| **git** | Status, commits, branches, stash | `git/<env>/<repo>` |
+| **github** | PRs, Actions, secrets, variables, releases | `github/<env>/<account>` |
+| **sysprocess** | Local processes, CPU, memory, disk, ports | *(no KeePass entry)* |
 
----
+Plugin metadata lives in [`plugins.meta.yaml`](plugins.meta.yaml); the published index is [`index.yaml`](index.yaml).
 
-## KeePass Setup
+### KeePass field mapping
 
-omo creates and manages the KeePass database automatically. You only need to interact with it when adding or editing connections.
-
-### Database location
-
-| File | Purpose |
-|------|---------|
-| `~/.omo/secrets/omo.kdbx` | KeePass KDBX4 database (all credentials) |
-| `~/.omo/keys/omo.key` | Master key file (auto-generated, **back this up!**) |
-
-To open the database in KeePassXC, select "Key File" authentication and point to `~/.omo/keys/omo.key`.
-
-### Entry fields
-
-Each KeePass entry maps to a connection. Plugins use standard KeePass fields plus custom attributes:
-
-| KeePass Field | Used For |
-|---------------|----------|
-| **Title** | Display name |
-| **URL** | Host / endpoint |
+| Field | Typical use |
+|-------|-------------|
+| **Title** | Instance display name |
+| **URL** | Host / endpoint / socket |
 | **UserName** | Username |
-| **Password** | Password / token |
-| **Notes** | Description |
-| Custom attributes | Plugin-specific (e.g. `port`, `database`, `ssl_mode`) |
+| **Password** | Password / token / secret key |
+| **Notes** | Free-form description |
+| **Custom attributes** | `port`, `database`, `region`, `ssl_mode`, `kubeconfig`, … |
 
-Empty fields are ignored — only fill in what your service needs.
+Empty fields are ignored — only set what the plugin needs.
 
-### Example: Redis
+<details>
+<summary><strong>Example entries</strong></summary>
+
+**Redis** — `redis/production/cache-main`
 
 | Field | Value |
 |-------|-------|
-| Path | `redis/production/cache-main` |
-| Title | `cache-main` |
 | URL | `redis.example.com` |
-| Password | `your-redis-password` |
-| Custom: `port` | `6379` |
-| Custom: `database` | `0` |
+| Password | `…` |
+| `port` | `6379` |
+| `database` | `0` |
 
-### Example: PostgreSQL
+**Postgres** — `postgres/production/app-db`
 
 | Field | Value |
 |-------|-------|
-| Path | `postgres/production/app-db` |
-| Title | `app-db` |
 | URL | `db.example.com` |
 | UserName | `admin` |
-| Password | `your-db-password` |
-| Custom: `port` | `5432` |
-| Custom: `database` | `myapp` |
-| Custom: `ssl_mode` | `require` |
+| Password | `…` |
+| `port` | `5432` |
+| `database` | `myapp` |
+| `ssl_mode` | `require` |
 
-### Example: Docker
+**Docker** — `docker/development/local`
 
 | Field | Value |
 |-------|-------|
-| Path | `docker/development/local` |
-| Title | `local` |
 | URL | `unix:///var/run/docker.sock` |
 
-### Example: SSH
+**SSH** — `ssh/production/web-01`
 
 | Field | Value |
 |-------|-------|
-| Path | `ssh/production/web-01` |
-| Title | `web-01` |
 | URL | `10.0.1.50` |
 | UserName | `deploy` |
-| Custom: `port` | `22` |
-| Custom: `auth_method` | `key` |
-| Custom: `private_key_path` | `~/.ssh/id_ed25519` |
+| `port` | `22` |
+| `auth_method` | `key` |
+| `private_key_path` | `~/.ssh/id_ed25519` |
+
+</details>
 
 ---
 
-## Keyboard Shortcuts
+## `omo secrets` CLI
+
+Manage the vault without a GUI (CI-friendly):
+
+```bash
+omo secrets list [prefix]
+omo secrets get  <plugin/env/name>
+omo secrets put  <plugin/env/name> [--username U] [--password P] [--url U] [--notes N] [--attr k=v]
+omo secrets delete <plugin/env/name>
+omo secrets reset --yes   # deletes omo.kdbx; key file is kept
+```
+
+Run `omo secrets` with no args for full help.
+
+---
+
+## Keyboard shortcuts
 
 ### Global
 
 | Key | Action |
 |-----|--------|
-| **Tab** | Cycle focus: plugins → main → actions |
-| **Shift+Tab** | Cycle focus in reverse |
-| **↑ / ↓** | Navigate lists |
-| **Enter** | Select item |
-| **r** | Refresh plugins *(when sidebar focused)* |
-| **p** | Open Package Manager *(when sidebar focused)* |
+| **Tab** / **Shift+Tab** | Cycle focus (plugins ↔ main ↔ actions) |
+| **↑ / ↓** | Move selection |
+| **Enter** | Activate |
+| **r** | Refresh plugins *(plugins list focused)* |
+| **p** | Open Package Manager *(plugins list focused)* |
 
-### Inside plugins
+### Inside a plugin
 
 | Key | Action |
 |-----|--------|
-| **Ctrl+t** | Switch instance / connection |
-| **R** | Refresh data |
-| **/** | Filter / search |
-| **?** | Show plugin help |
-| **Esc** | Go back |
+| **Ctrl+t** | Switch target / connection |
+| **R** | Refresh view |
+| **/** | Filter rows |
+| **?** | Help (plugin + global bindings) |
+| **Esc** | Back / home |
 
-Each plugin has its own keybindings — press `?` inside any plugin to see them.
+Plugin-specific actions are listed in `?` and in the actions column.
 
 ---
 
-## Directory Structure
+## Architecture
 
+```text
+┌─────────────────────────────────────────────────────────┐
+│  KeePass  ~/.omo/secrets/omo.kdbx  +  ~/.omo/keys/omo.key│
+│    redis/prod/cache · docker/dev/local · s3/prod/main … │
+└──────────────────────────┬──────────────────────────────┘
+                           │ host resolves secrets
+┌──────────────────────────▼──────────────────────────────┐
+│  omo host (cmd/omo)                                     │
+│  · TUI (tview/tcell)                                    │
+│  · Package Manager + plugin launcher                    │
+│  · Configure → GetView / DoAction over RPC              │
+└──────────────────────────┬──────────────────────────────┘
+                           │ hashicorp/go-plugin (exec)
+         ┌─────────────────┼─────────────────┐
+         ▼                 ▼                 ▼
+   plugin-redis      plugin-docker      plugin-s3  …
+   (ViewData)        (ViewData)         (ViewData)
 ```
+
+**Why RPC plugins?** Native Go plugins (`.so`) break across Go versions. omo plugins are separate binaries spoken to over RPC, so the host and plugins can be released independently and cross-compiled cleanly.
+
+### On-disk layout
+
+```text
 ~/.omo/
-  secrets/
-    omo.kdbx            KeePass database (all credentials)
-  keys/
-    omo.key             Master key file (auto-generated)
-  index.yaml            Plugin index (auto-managed)
-  installed.yaml        Installed plugin versions
-  logs/
-    omo.log             Main app log
-    redis.log           Per-plugin logs
-    docker.log
-    ...
-  plugins/
-    redis/redis         RPC plugin executables
-    docker/docker
-    ...
+├── secrets/omo.kdbx     # credentials (KeePass KDBX4)
+├── keys/omo.key         # master key file — back this up
+├── index.yaml           # remote plugin catalog (synced)
+├── installed.yaml       # what you have installed
+├── logs/                # omo.log + per-plugin logs
+└── plugins/
+    ├── redis/redis
+    ├── docker/docker
+    └── …
+```
+
+### Repository layout
+
+```text
+cmd/omo/           # host binary + secrets CLI
+internal/host/     # TUI host, RPC renderer, package manager wiring
+pkg/
+  pluginrpc/       # RPC contract (ViewData, DoAction, …)
+  pluginapi/       # shared metadata / logging helpers
+  secrets/         # KeePass integration
+  ui/              # reusable TUI widgets
+plugins/<name>/    # one directory per official plugin
+  cmd/<name>/      # plugin main (Serve)
+dev/               # local stacks + KeePass seed scripts
 ```
 
 ---
 
-## Building from Source
+## Development
+
+### Prerequisites
+
+- Go **1.25+**
+- Docker (optional, for `make dev-setup` stacks)
+- KeePassXC (optional, for inspecting the vault)
+
+### Common commands
 
 ```bash
-git clone https://github.com/hatembentayeb/omo.git
-cd omo
-make all
+make all          # build host + install all plugins to ~/.omo/plugins
+make plugin-redis # rebuild a single plugin quickly
+make clean        # remove local ./omo binary (keeps ~/.omo)
+make purge        # remove ~/.omo entirely (destructive)
+
+make dev-setup    # start/seed local Redis/Kafka (and friends) via dev/
+make dev-seed     # seed KeePass for plugins that don't need Docker
 ```
 
-This builds the `omo` binary (with version injected) and all plugins as RPC executables, then installs everything to `~/.omo/`.
+After `make all`, run `omo` from your Go bin or `./omo`.
 
-### Requirements
-
-- **Go 1.25+** (only if building from source)
-- **KeePassXC** (optional — only needed to manually view/edit `secrets/omo.kdbx`; omo manages the database automatically)
-
-### Development setup
+### Project checks
 
 ```bash
-# Start Redis + Kafka containers and seed KeePass entries
-make dev-setup
-
-# Or seed only non-Docker plugins
-make dev-seed
+go mod tidy
+go vet ./...
+go build ./cmd/omo
+# CI also builds every plugin under plugins/*/cmd/*
 ```
+
+CI workflow: [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+
+### Writing a plugin (overview)
+
+1. Implement `pluginrpc.Plugin`:
+
+   ```go
+   GetMetadata() (pluginapi.PluginMetadata, error)
+   Configure(pluginrpc.ConfigureRequest) error
+   GetView(pluginrpc.ViewRequest) (pluginrpc.ViewData, error)
+   DoAction(pluginrpc.ActionRequest) (pluginrpc.ActionResult, error)
+   Stop() error
+   ```
+
+2. Return tables as `ViewData` (`Headers`, `Rows`, key bindings). The **host** owns rendering.
+3. Put an entrypoint at `plugins/<name>/cmd/<name>` that calls `plugin.Serve` with `pluginrpc.ServePluginMap(impl)`.
+4. Register the plugin in `plugins.meta.yaml`.
+5. Add a `dev/<name>/setup.sh` (and KeePass seed) so reviewers can try it locally.
+
+Study a full example: [`plugins/redis/`](plugins/redis/).
+
+### Configuration contract
+
+The host loads KeePass settings and calls `Configure` with a `map[string]string` (host, port, password, …). Plugins must **not** open nested RPC back to secrets during `GetView` — that deadlocks net/rpc on the shared mux.
+
+### Logging
+
+- Host: `~/.omo/logs/omo.log`, `rpc-host.log`
+- Plugins: `~/.omo/logs/<plugin>.log`
 
 ---
 
-## Build Matrix
+## Security notes
 
-| OS | Arch | Binary | Plugins (RPC) |
-|----|------|--------|---------------|
-| Linux | amd64 | ✅ | ✅ |
-| Linux | arm64 | ✅ | ✅ |
-| macOS | amd64 | ✅ | ✅ (local build / future releases) |
-| macOS | arm64 | ✅ | ✅ (local build / future releases) |
-| Windows | amd64 | ✅ | ✅ (local build / future releases) |
-
-> Plugins are standalone RPC executables (hashicorp/go-plugin), not Go native `.so` files — so they are not tied to the host Go version and work across platforms.
+- Credentials never leave your machine unless *you* point a plugin at a remote service.
+- Prefer the key file model; treat `~/.omo/keys/omo.key` like a private key.
+- Use `omo secrets` in automation instead of committing passwords.
+- Review plugin source before installing third-party plugins (same as any ops tool).
 
 ---
 
 ## Roadmap
 
-- [x] `omo secrets` CLI for managing KeePass entries without a GUI
-- [x] RPC plugins (no more Go `.so` version mismatches)
-- [ ] Plugin SDK v2 with richer lifecycle hooks
+- [x] `omo secrets` CLI
+- [x] RPC plugins (no Go `.so` version skew)
+- [ ] Richer plugin SDK / lifecycle docs
 - [ ] Prometheus / Grafana plugin
-- [ ] Theme and color customization
+- [ ] Theme / color customization
+- [ ] Community plugin registry guidelines
+
+Ideas and bugs: [GitHub Issues](https://github.com/hatembentayeb/omo/issues).
 
 ---
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/my-change`)
-3. Ensure `go vet ./...` and `go build ./...` pass
-4. Submit a pull request
+Contributions are welcome — bug fixes, plugins, docs, and DX improvements.
 
-For plugin contributions, include a `dev/` setup script and KeePass seed data so reviewers can test locally.
+1. Fork and create a branch (`feat/…`, `fix/…`)
+2. Keep changes focused; match existing style
+3. Ensure `go vet ./...` and builds succeed (`make all` or CI-equivalent)
+4. For plugins: include `dev/` setup + a KeePass seed path so maintainers can test
+5. Open a PR against `main` with a clear summary and test notes
+
+Please be respectful in issues and PRs. This is a community project.
+
+---
+
+## Build matrix
+
+| OS | Arch | Host | Plugins |
+|----|------|------|---------|
+| Linux | amd64 / arm64 | ✅ | ✅ |
+| macOS | amd64 / arm64 | ✅ | ✅ |
+| Windows | amd64 | ✅ | ✅ |
+
+Release automation: [`.github/workflows/release.yml`](.github/workflows/release.yml).
 
 ---
 
 ## License
 
-Apache License 2.0. See [LICENSE](LICENSE) for the full text.
+Apache License 2.0 — see [LICENSE](LICENSE).
 
 ---
 
 <p align="center">
-  <sub>Built by <a href="https://oh-myops.com">Hatem Ben Tayeb</a></sub>
+  <sub>
+    Built for people who operate systems from a shell.<br>
+    <a href="https://oh-myops.com">oh-myops.com</a> ·
+    <a href="https://github.com/hatembentayeb/omo">GitHub</a>
+  </sub>
 </p>
