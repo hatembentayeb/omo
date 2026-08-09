@@ -69,8 +69,9 @@ func helpSections() []pluginrpc.HelpSection {
 	}...)
 }
 
-func decorate(view pluginrpc.ViewData, actions ...pluginrpc.KeyBinding) pluginrpc.ViewData {
-	return pluginrpc.Decorate(view, viewNavBindings(), nil, helpSections(), actions...)
+var ui = pluginrpc.ViewUI{
+	Views: viewNavBindings,
+	Help:  helpSections,
 }
 
 func (s *Service) baseInfo(extra string) string {
@@ -80,10 +81,7 @@ func (s *Service) baseInfo(extra string) string {
 	}
 	msg := fmt.Sprintf("[green]RabbitMQ Manager[white]\nInstance: %s\nHost: %s\nVHost: %s\nStatus: Connected\nView: %s",
 		name, s.host, s.vhost, s.currentView)
-	if extra != "" {
-		msg += "\n" + extra
-	}
-	return msg
+	return pluginrpc.FormatInfo(msg, extra)
 }
 
 func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
@@ -93,17 +91,11 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	s.currentView = viewID
 
 	if err := s.ensureConnectedLocked(); err != nil {
-		return pluginrpc.ViewData{
-			View:    viewID,
-			Title:   "RabbitMQ Manager",
-			Info:    "[yellow]RabbitMQ Manager[white]\nStatus: Not Connected\n" + err.Error(),
-			Status:  "not connected",
-			Headers: []string{"Status", "Detail"},
-			Rows:    [][]string{{"error", err.Error()}},
-			KeyBindings: []pluginrpc.KeyBinding{
-				{Key: "R", Label: "Refresh", Action: "refresh"},
-			},
-		}, nil
+		return ui.Decorate(pluginrpc.StatusErrorView(
+			viewID, "RabbitMQ Manager",
+			"[yellow]RabbitMQ Manager[white]\nStatus: Not Connected\n"+err.Error(),
+			"not connected", err.Error(),
+		)), nil
 	}
 
 	switch viewID {
@@ -168,7 +160,7 @@ func (s *Service) viewOverviewLocked() (pluginrpc.ViewData, error) {
 		rows = append(rows, []string{l.Protocol, strconv.Itoa(l.Port)})
 	}
 
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         rmqViewOverview,
 		Title:        "RabbitMQ Overview",
 		Info:         s.baseInfo(fmt.Sprintf("Version: %s", overview.RabbitMQVersion)),
@@ -203,7 +195,7 @@ func (s *Service) viewQueuesLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"No queues found", "", "", "", "", "", ""})
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         rmqViewQueues,
 		Title:        "RabbitMQ Queues",
 		Info:         s.baseInfo(fmt.Sprintf("Queues: %d", len(queues))),
@@ -234,7 +226,7 @@ func (s *Service) viewExchangesLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"No exchanges found", "", "", "", "", "", ""})
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         rmqViewExchanges,
 		Title:        "RabbitMQ Exchanges",
 		Info:         s.baseInfo(fmt.Sprintf("Exchanges: %d", len(exchanges))),
@@ -261,7 +253,7 @@ func (s *Service) viewBindingsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"No bindings found", "", "", ""})
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         rmqViewBindings,
 		Title:        "RabbitMQ Bindings",
 		Info:         s.baseInfo(fmt.Sprintf("Bindings: %d", len(bindings))),
@@ -287,7 +279,7 @@ func (s *Service) viewConnectionsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"No active connections", "", "", "", "", "", ""})
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         rmqViewConnections,
 		Title:        "RabbitMQ Connections",
 		Info:         s.baseInfo(fmt.Sprintf("Connections: %d", len(connections))),
@@ -314,7 +306,7 @@ func (s *Service) viewChannelsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"No active channels", "", "", "", "", "", "", ""})
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         rmqViewChannels,
 		Title:        "RabbitMQ Channels",
 		Info:         s.baseInfo(fmt.Sprintf("Channels: %d", len(channels))),
@@ -343,7 +335,7 @@ func (s *Service) viewNodesLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"No nodes found", "", "", "", "", "", "", ""})
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         rmqViewNodes,
 		Title:        "RabbitMQ Nodes",
 		Info:         s.baseInfo(fmt.Sprintf("Nodes: %d", len(nodes))),

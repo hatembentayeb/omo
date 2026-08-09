@@ -87,8 +87,9 @@ func helpSections() []pluginrpc.HelpSection {
 	}...)
 }
 
-func decorate(view pluginrpc.ViewData, actions ...pluginrpc.KeyBinding) pluginrpc.ViewData {
-	return pluginrpc.Decorate(view, viewNavBindings(), nil, helpSections(), actions...)
+var ui = pluginrpc.ViewUI{
+	Views: viewNavBindings,
+	Help:  helpSections,
 }
 
 func (s *Service) baseInfo(extra string) string {
@@ -101,10 +102,7 @@ func (s *Service) baseInfo(extra string) string {
 		host = "(default)"
 	}
 	msg := fmt.Sprintf("[green]Docker Manager[white]\nHost: %s\nURL: %s\nView: %s", name, host, s.currentView)
-	if extra != "" {
-		msg += "\n" + extra
-	}
-	return msg
+	return pluginrpc.FormatInfo(msg, extra)
 }
 
 func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
@@ -114,17 +112,11 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	s.currentView = viewID
 
 	if s.client == nil || !s.client.IsConnected() {
-		return pluginrpc.ViewData{
-			View:    viewID,
-			Title:   "Docker Manager",
-			Info:    "[yellow]Docker Manager[white]\nStatus: Not Connected",
-			Status:  "not connected",
-			Headers: []string{"Status", "Detail"},
-			Rows:    [][]string{{"error", "not connected — Configure with a docker host"}},
-			KeyBindings: []pluginrpc.KeyBinding{
-				{Key: "R", Label: "Refresh", Action: "refresh"},
-			},
-		}, nil
+		return ui.Decorate(pluginrpc.StatusErrorView(
+			viewID, "Docker Manager",
+			"[yellow]Docker Manager[white]\nStatus: Not Connected",
+			"not connected", "not connected — Configure with a docker host",
+		)), nil
 	}
 
 	switch viewID {
@@ -157,7 +149,7 @@ func (s *Service) viewContainersLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"-", "-", "-", "-", "No containers", "-"})
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewContainers,
 		Title:        "Docker Containers",
 		Info:         s.baseInfo(fmt.Sprintf("Containers: %d", len(list))),
@@ -180,7 +172,7 @@ func (s *Service) viewImagesLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"-", "-", "-", "-", "No images"})
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewImages,
 		Title:        "Docker Images",
 		Info:         s.baseInfo(fmt.Sprintf("Images: %d", len(list))),
@@ -207,7 +199,7 @@ func (s *Service) viewNetworksLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"-", "-", "-", "-", "-", "No networks"})
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewNetworks,
 		Title:        "Docker Networks",
 		Info:         s.baseInfo(fmt.Sprintf("Networks: %d", len(list))),
@@ -234,7 +226,7 @@ func (s *Service) viewVolumesLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"-", "-", "-", "-", "No volumes"})
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewVolumes,
 		Title:        "Docker Volumes",
 		Info:         s.baseInfo(fmt.Sprintf("Volumes: %d", len(list))),
@@ -257,7 +249,7 @@ func (s *Service) viewStatsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"-", "-", "-", "-", "-", "-", "No running containers"})
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewStats,
 		Title:        "Docker Stats",
 		Info:         s.baseInfo(""),
@@ -286,7 +278,7 @@ func (s *Service) viewComposeLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"-", "-", "0", "0", "No compose projects"})
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewCompose,
 		Title:        "Docker Compose",
 		Info:         s.baseInfo(fmt.Sprintf("Projects: %d", len(projects))),
@@ -319,7 +311,7 @@ func (s *Service) viewSystemLocked() (pluginrpc.ViewData, error) {
 		{"Root Dir", info.DockerRootDir},
 		{"Swarm", info.SwarmStatus},
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewSystem,
 		Title:        "Docker System",
 		Info:         s.baseInfo(""),

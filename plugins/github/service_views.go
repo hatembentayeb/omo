@@ -91,8 +91,9 @@ func helpSections() []pluginrpc.HelpSection {
 	}...)
 }
 
-func decorate(view pluginrpc.ViewData, actions ...pluginrpc.KeyBinding) pluginrpc.ViewData {
-	return pluginrpc.Decorate(view, viewNavBindings(), nil, helpSections(), actions...)
+var ui = pluginrpc.ViewUI{
+	Views: viewNavBindings,
+	Help:  helpSections,
 }
 
 func (s *Service) baseInfo(extra string) string {
@@ -111,10 +112,7 @@ func (s *Service) baseInfo(extra string) string {
 	}
 	msg := fmt.Sprintf("[green]GitHub Manager[white]\nAccount: %s (%s)\nRepo: %s\nView: %s",
 		owner, acctType, repo, s.currentView)
-	if extra != "" {
-		msg += "\n" + extra
-	}
-	return msg
+	return pluginrpc.FormatInfo(msg, extra)
 }
 
 func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
@@ -124,17 +122,11 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	s.currentView = viewID
 
 	if s.account == nil || !s.client.HasAccount() {
-		return pluginrpc.ViewData{
-			View:    viewID,
-			Title:   "GitHub Manager",
-			Info:    "[yellow]GitHub Manager[white]\nStatus: Not Connected\nHost must Configure with token",
-			Status:  "not connected",
-			Headers: []string{"Status", "Detail"},
-			Rows:    [][]string{{"error", "not configured"}},
-			KeyBindings: []pluginrpc.KeyBinding{
-				{Key: "R", Label: "Refresh", Action: "refresh"},
-			},
-		}, nil
+		return ui.Decorate(pluginrpc.StatusErrorView(
+			viewID, "GitHub Manager",
+			"[yellow]GitHub Manager[white]\nStatus: Not Connected\nHost must Configure with token",
+			"not connected", "not configured",
+		)), nil
 	}
 
 	switch viewID {
@@ -202,7 +194,7 @@ func (s *Service) viewReposLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = [][]string{{"-", "No repositories", "-", "-", "-", "-", "-"}}
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewRepos,
 		Title:        "Repositories",
 		Info:         s.baseInfo(fmt.Sprintf("Repos: %d · Enter/P selects repo", len(repos))),
@@ -235,7 +227,7 @@ func (s *Service) viewPRsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = [][]string{{"-", "No pull requests", "-", "-", "-", "-", "-", "-", "-"}}
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewPRs,
 		Title:        "Pull Requests",
 		Info:         s.baseInfo(fmt.Sprintf("Filter: %s · Count: %d", s.prState, len(prs))),
@@ -261,7 +253,7 @@ func (s *Service) viewWorkflowsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = [][]string{{"-", "No workflows", "-", "-", "-"}}
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewWorkflows,
 		Title:        "Workflows",
 		Info:         s.baseInfo(""),
@@ -287,7 +279,7 @@ func (s *Service) viewRunsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = [][]string{{"-", "No runs", "-", "-", "-", "-", "-", "-"}}
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewRuns,
 		Title:        "Workflow Runs",
 		Info:         s.baseInfo(""),
@@ -313,7 +305,7 @@ func (s *Service) viewVariablesLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = [][]string{{"-", "-", "No variables"}}
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewEnvVars,
 		Title:        "Variables",
 		Info:         s.baseInfo(""),
@@ -339,7 +331,7 @@ func (s *Service) viewSecretsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = [][]string{{"-", "-", "No secrets"}}
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewSecrets,
 		Title:        "Secrets",
 		Info:         s.baseInfo(""),
@@ -365,7 +357,7 @@ func (s *Service) viewBranchesLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = [][]string{{"-", "-", "-"}}
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewBranches,
 		Title:        "Branches",
 		Info:         s.baseInfo(""),
@@ -391,7 +383,7 @@ func (s *Service) viewReleasesLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = [][]string{{"-", "-", "-", "-", "-", "-"}}
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewReleases,
 		Title:        "Releases",
 		Info:         s.baseInfo(""),

@@ -69,17 +69,15 @@ func helpSections() []pluginrpc.HelpSection {
 	}...)
 }
 
-func decorate(view pluginrpc.ViewData, actions ...pluginrpc.KeyBinding) pluginrpc.ViewData {
-	return pluginrpc.Decorate(view, viewNavBindings(), nil, helpSections(), actions...)
+var ui = pluginrpc.ViewUI{
+	Views: viewNavBindings,
+	Help:  helpSections,
 }
 
 func (s *Service) baseInfo(extra string) string {
 	msg := fmt.Sprintf("[green]Process Monitor[white]\nUser: %s\nProcesses: %d\nView: %s",
 		s.currentUser, len(s.processes), s.currentView)
-	if extra != "" {
-		msg += "\n" + extra
-	}
-	return msg
+	return pluginrpc.FormatInfo(msg, extra)
 }
 
 func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
@@ -116,7 +114,7 @@ func (s *Service) viewProcessesLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"-", "-", "-", "0", "0", "-", "-", "No processes"})
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewProcesses,
 		Title:        "User Processes",
 		Info:         s.baseInfo(""),
@@ -130,7 +128,7 @@ func (s *Service) viewProcessesLocked() (pluginrpc.ViewData, error) {
 func (s *Service) viewDetailsLocked() (pluginrpc.ViewData, error) {
 	p := s.detailsProcess
 	if p == nil {
-		return decorate(pluginrpc.ViewData{
+		return ui.Decorate(pluginrpc.ViewData{
 			View:         viewDetails,
 			Title:        "Why Is This Running?",
 			Info:         s.baseInfo(""),
@@ -196,7 +194,7 @@ func (s *Service) viewDetailsLocked() (pluginrpc.ViewData, error) {
 		}
 	}
 
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewDetails,
 		Title:        "Why Is This Running?",
 		Info:         s.baseInfo(fmt.Sprintf("PID %d", p.PID)),
@@ -267,7 +265,7 @@ func (s *Service) viewPortsLocked() (pluginrpc.ViewData, error) {
 	if len(data) == 0 {
 		data = append(data, []string{"-", "-", "-", "No listening ports", "-"})
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewPorts,
 		Title:        "Listening Ports",
 		Info:         s.baseInfo(""),
@@ -297,7 +295,7 @@ func (s *Service) viewWarningsLocked() (pluginrpc.ViewData, error) {
 	if len(data) == 0 {
 		data = append(data, []string{"", "", "[green]No warnings — all processes look healthy", ""})
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewWarnings,
 		Title:        "Process Warnings",
 		Info:         s.baseInfo(""),
@@ -371,7 +369,7 @@ func (s *Service) viewMetricsLocked() (pluginrpc.ViewData, error) {
 	data = append(data, []string{"", ""})
 	data = append(data, []string{"User Processes", fmt.Sprintf("%d", len(s.processes))})
 
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewMetrics,
 		Title:        "System Metrics",
 		Info:         s.baseInfo(""),
@@ -403,7 +401,7 @@ func (s *Service) viewDiskLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"", "[yellow]No entries[white]"})
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewDisk,
 		Title:        "Disk Usage (ncdu)",
 		Info:         s.baseInfo("Path: " + truncateString(s.diskPath, 50)),

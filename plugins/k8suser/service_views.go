@@ -43,17 +43,15 @@ func helpSections() []pluginrpc.HelpSection {
 	}...)
 }
 
-func decorate(view pluginrpc.ViewData, actions ...pluginrpc.KeyBinding) pluginrpc.ViewData {
-	return pluginrpc.Decorate(view, viewNavBindings(), nil, helpSections(), actions...)
+var ui = pluginrpc.ViewUI{
+	Views: viewNavBindings,
+	Help:  helpSections,
 }
 
 func (s *Service) baseInfo(extra string) string {
 	msg := fmt.Sprintf("[green]K8s User Manager[white]\nContext: %s\nKubeconfig: %s\nView: %s",
 		s.client.CurrentContext, s.client.KubeConfig, s.currentView)
-	if extra != "" {
-		msg += "\n" + extra
-	}
-	return msg
+	return pluginrpc.FormatInfo(msg, extra)
 }
 
 func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
@@ -76,26 +74,18 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 
 func (s *Service) k8sViewUsersLocked() (pluginrpc.ViewData, error) {
 	if s.client.CurrentContext == "" {
-		return decorate(pluginrpc.ViewData{
-			View:    k8sViewUsers,
-			Title:   "K8s Users",
-			Info:    s.baseInfo("No context configured"),
-			Status:  "not configured",
-			Headers: []string{"Status", "Detail"},
-			Rows:    [][]string{{"error", "Configure kubeconfig/context via host secrets"}},
-		}, usersActions()...), nil
+		return ui.Decorate(pluginrpc.StatusErrorView(
+			k8sViewUsers, "K8s Users", s.baseInfo("No context configured"),
+			"not configured", "Configure kubeconfig/context via host secrets",
+		), usersActions()...), nil
 	}
 
 	users, err := s.client.GetUsers()
 	if err != nil {
-		return decorate(pluginrpc.ViewData{
-			View:    k8sViewUsers,
-			Title:   "K8s Users",
-			Info:    s.baseInfo(err.Error()),
-			Status:  "error",
-			Headers: []string{"Status", "Detail"},
-			Rows:    [][]string{{"error", err.Error()}},
-		}, usersActions()...), nil
+		return ui.Decorate(pluginrpc.StatusErrorView(
+			k8sViewUsers, "K8s Users", s.baseInfo(err.Error()),
+			"error", err.Error(),
+		), usersActions()...), nil
 	}
 
 	rows := make([][]string, 0, len(users))
@@ -106,15 +96,10 @@ func (s *Service) k8sViewUsersLocked() (pluginrpc.ViewData, error) {
 		rows = [][]string{{"No certificate-based users found", "Use create_user", "", ""}}
 	}
 
-	return decorate(pluginrpc.ViewData{
-		View:         k8sViewUsers,
-		Title:        "K8s Users",
-		Info:         s.baseInfo(fmt.Sprintf("Users: %d", len(users))),
-		Status:       "ok",
-		Headers:      []string{"Username", "Certificate Expiry", "Namespaces", "Roles"},
-		Rows:         rows,
-		SelectionKey: "Username",
-	}, usersActions()...), nil
+	return ui.Decorate(pluginrpc.Table(
+		k8sViewUsers, "K8s Users", s.baseInfo(fmt.Sprintf("Users: %d", len(users))), "ok",
+		[]string{"Username", "Certificate Expiry", "Namespaces", "Roles"}, rows, "Username",
+	), usersActions()...), nil
 }
 
 func (s *Service) k8sViewRolesLocked() (pluginrpc.ViewData, error) {
@@ -122,15 +107,10 @@ func (s *Service) k8sViewRolesLocked() (pluginrpc.ViewData, error) {
 	if err != nil {
 		return pluginrpc.ViewData{}, err
 	}
-	return decorate(pluginrpc.ViewData{
-		View:         k8sViewRoles,
-		Title:        "K8s Roles",
-		Info:         s.baseInfo(fmt.Sprintf("Roles: %d", len(rows))),
-		Status:       "ok",
-		Headers:      []string{"Name", "Namespace", "Resources"},
-		Rows:         rows,
-		SelectionKey: "Name",
-	}, rolesActions()...), nil
+	return ui.Decorate(pluginrpc.Table(
+		k8sViewRoles, "K8s Roles", s.baseInfo(fmt.Sprintf("Roles: %d", len(rows))), "ok",
+		[]string{"Name", "Namespace", "Resources"}, rows, "Name",
+	), rolesActions()...), nil
 }
 
 func (s *Service) fetchRolesLocked() ([][]string, error) {

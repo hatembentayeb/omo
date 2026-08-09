@@ -35,39 +35,34 @@ func moreViewBindings() []pluginrpc.KeyBinding { /* optional overflow letters */
 func fooActions() []pluginrpc.KeyBinding { /* per-view mutations */ }
 
 func helpSections() []pluginrpc.HelpSection {
-	return []pluginrpc.HelpSection{
-		{Title: "Views (0-N)", Bindings: viewNavBindings()},
-		{Title: "More Views", Bindings: moreViewBindings()}, // omit if empty
-		{Title: "Foo", Bindings: fooActions()},
-		{Title: "Global", Bindings: []pluginrpc.KeyBinding{
-			{Key: "R", Label: "Refresh"},
-			{Key: "?", Label: "Help (this screen)"},
-			{Key: "/", Label: "Filter"},
-			{Key: "^t", Label: "Switch target"},
-			{Key: "ESC", Label: "Back / home"},
-		}},
-	}
+	return pluginrpc.HelpWithGlobal(
+		pluginrpc.HelpSection{Title: "Views (0-N)", Bindings: viewNavBindings()},
+		// More Views section if moreViewBindings is non-empty
+		pluginrpc.HelpSection{Title: "Foo", Bindings: fooActions()},
+	)
 }
 
-func decorate(view pluginrpc.ViewData, actions ...pluginrpc.KeyBinding) pluginrpc.ViewData {
-	view.ViewBindings = viewNavBindings()
-	view.KeyBindings = moreViewBindings() // or nil if ≤10 views
-	view.Actions = actions
-	view.HelpSections = helpSections()
-	return view
+var ui = pluginrpc.ViewUI{
+	Views: viewNavBindings,
+	More:  moreViewBindings, // omit when ≤10 views
+	Help:  helpSections,
+}
+
+func (s *Service) okView(viewID, title, extra string, headers []string, rows [][]string, sel string, actions ...pluginrpc.KeyBinding) (pluginrpc.ViewData, error) {
+	return ui.Decorate(pluginrpc.Table(viewID, title, s.baseInfo(extra), "connected", headers, rows, sel), actions...), nil
 }
 ```
+
+Shared helpers live in `pkg/pluginrpc/decorate.go`: `ViewUI`, `Decorate`, `HelpWithGlobal`, `Table`, `StatusErrorView`, `FormatInfo`, `EnsureRows`, `SortedKVRows`.
 
 Each view builder:
 
 ```go
-return decorate(pluginrpc.ViewData{
-	View: viewFoo, Title: "...", Info: s.baseInfo(""),
-	Status: "connected", Headers: ..., Rows: ..., SelectionKey: ...,
-}, fooActions()...), nil
+return s.okView(viewFoo, "...", "", headers, rows, "Col", fooActions()...)
+// or: return ui.Decorate(pluginrpc.Table(...), fooActions()...), nil
 ```
 
-Views with no actions: `decorate(viewData)` (no extras).
+Views with no actions: omit the variadic actions.
 
 ## Rules
 

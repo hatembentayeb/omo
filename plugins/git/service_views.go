@@ -92,8 +92,9 @@ func helpSections() []pluginrpc.HelpSection {
 	}...)
 }
 
-func decorate(view pluginrpc.ViewData, actions ...pluginrpc.KeyBinding) pluginrpc.ViewData {
-	return pluginrpc.Decorate(view, viewNavBindings(), nil, helpSections(), actions...)
+var ui = pluginrpc.ViewUI{
+	Views: viewNavBindings,
+	Help:  helpSections,
 }
 
 func (s *Service) baseInfo(extra string) string {
@@ -102,10 +103,7 @@ func (s *Service) baseInfo(extra string) string {
 		path = "(none)"
 	}
 	msg := fmt.Sprintf("[green]Git Manager[white]\nRepo: %s\nView: %s", path, s.currentView)
-	if extra != "" {
-		msg += "\n" + extra
-	}
-	return msg
+	return pluginrpc.FormatInfo(msg, extra)
 }
 
 func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
@@ -115,14 +113,11 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	s.currentView = viewID
 
 	if s.currentPath == "" && viewID != viewRepos {
-		return decorate(pluginrpc.ViewData{
-			View:    viewID,
-			Title:   "Git Manager",
-			Info:    "[yellow]Git Manager[white]\nNo repository configured",
-			Status:  "not configured",
-			Headers: []string{"Status", "Detail"},
-			Rows:    [][]string{{"error", "Configure with a KeePass path attribute"}},
-		}), nil
+		return ui.Decorate(pluginrpc.StatusErrorView(
+			viewID, "Git Manager",
+			"[yellow]Git Manager[white]\nNo repository configured",
+			"not configured", "Configure with a KeePass path attribute",
+		)), nil
 	}
 
 	switch viewID {
@@ -175,7 +170,7 @@ func (s *Service) viewReposLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"-", "-", "-", "0", "0", "0", "No repositories configured"})
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewRepos,
 		Title:        "Git Repositories",
 		Info:         s.baseInfo(fmt.Sprintf("Repos: %d", len(s.repos))),
@@ -199,7 +194,7 @@ func (s *Service) viewStatusLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"Working tree clean", "-", "-"})
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewStatus,
 		Title:        "Git Status",
 		Info:         s.baseInfo(""),
@@ -222,7 +217,7 @@ func (s *Service) viewCommitsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"-", "-", "-", "No commits"})
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewCommits,
 		Title:        "Git Commits",
 		Info:         s.baseInfo(""),
@@ -255,7 +250,7 @@ func (s *Service) viewBranchesLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"-", "", "-", "0", "0"})
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewBranches,
 		Title:        "Git Branches",
 		Info:         s.baseInfo(""),
@@ -278,7 +273,7 @@ func (s *Service) viewRemotesLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"-", "-", "No remotes"})
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewRemotes,
 		Title:        "Git Remotes",
 		Info:         s.baseInfo(""),
@@ -301,7 +296,7 @@ func (s *Service) viewStashLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"-", "-", "No stash entries"})
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewStash,
 		Title:        "Git Stash",
 		Info:         s.baseInfo(""),
@@ -328,7 +323,7 @@ func (s *Service) viewTagsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"-", "-", "-", "No tags"})
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewTags,
 		Title:        "Git Tags",
 		Info:         s.baseInfo(""),

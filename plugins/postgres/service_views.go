@@ -93,17 +93,20 @@ func helpSections() []pluginrpc.HelpSection {
 	}...)
 }
 
-func decorate(view pluginrpc.ViewData, actions ...pluginrpc.KeyBinding) pluginrpc.ViewData {
-	return pluginrpc.Decorate(view, viewNavBindings(), moreViewBindings(), helpSections(), actions...)
+var ui = pluginrpc.ViewUI{
+	Views: viewNavBindings,
+	More:  moreViewBindings,
+	Help:  helpSections,
 }
 
 func (s *Service) baseInfo(extra string) string {
 	msg := fmt.Sprintf("[green]PostgreSQL Manager[white]\nServer: %s:%d\nDB: %s\nStatus: Connected\nView: %s",
 		s.host, s.port, s.database, s.currentView)
-	if extra != "" {
-		msg += "\n" + extra
-	}
-	return msg
+	return pluginrpc.FormatInfo(msg, extra)
+}
+
+func (s *Service) okView(viewID, title, extra string, headers []string, rows [][]string, sel string, actions ...pluginrpc.KeyBinding) (pluginrpc.ViewData, error) {
+	return ui.Decorate(pluginrpc.Table(viewID, title, s.baseInfo(extra), "connected", headers, rows, sel), actions...), nil
 }
 
 func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
@@ -113,17 +116,11 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	s.currentView = viewID
 
 	if err := s.ensureConnectedLocked(); err != nil {
-		return pluginrpc.ViewData{
-			View:    viewID,
-			Title:   "PostgreSQL Manager",
-			Info:    "[yellow]PostgreSQL Manager[white]\nStatus: Not Connected\n" + err.Error(),
-			Status:  "not connected",
-			Headers: []string{"Status", "Detail"},
-			Rows:    [][]string{{"error", err.Error()}},
-			KeyBindings: []pluginrpc.KeyBinding{
-				{Key: "R", Label: "Refresh", Action: "refresh"},
-			},
-		}, nil
+		return ui.Decorate(pluginrpc.StatusErrorView(
+			viewID, "PostgreSQL Manager",
+			"[yellow]PostgreSQL Manager[white]\nStatus: Not Connected\n"+err.Error(),
+			"not connected", err.Error(),
+		)), nil
 	}
 
 	switch viewID {
@@ -175,15 +172,7 @@ func (s *Service) viewUsersLocked() (pluginrpc.ViewData, error) {
 			u.ValidUntil,
 		})
 	}
-	return decorate(pluginrpc.ViewData{
-		View:         viewUsers,
-		Title:        "PostgreSQL Users",
-		Info:         s.baseInfo(fmt.Sprintf("Users: %d", len(users))),
-		Status:       "connected",
-		Headers:      []string{"User", "Login", "Super", "CreateDB", "CreateRole", "Repl", "Conns", "Member Of", "Valid Until"},
-		Rows:         rows,
-		SelectionKey: "User",
-	}, usersActions()...), nil
+	return s.okView(viewUsers, "PostgreSQL Users", fmt.Sprintf("Users: %d", len(users)), []string{"User", "Login", "Super", "CreateDB", "CreateRole", "Repl", "Conns", "Member Of", "Valid Until"}, rows, "User", usersActions()...)
 }
 
 func (s *Service) viewDatabasesLocked() (pluginrpc.ViewData, error) {
@@ -197,18 +186,8 @@ func (s *Service) viewDatabasesLocked() (pluginrpc.ViewData, error) {
 			d.Name, d.Owner, d.Encoding, d.Collation, d.Size, d.Tablespace, fmt.Sprintf("%d", d.ConnLimit),
 		})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "-", "-", "-", "-", "No databases"})
-	}
-	return decorate(pluginrpc.ViewData{
-		View:         viewDatabases,
-		Title:        "PostgreSQL Databases",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"Name", "Owner", "Encoding", "Collation", "Size", "Tablespace", "Conn Limit"},
-		Rows:         rows,
-		SelectionKey: "Name",
-	}, databasesActions()...), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "-", "-", "-", "No databases"})
+	return s.okView(viewDatabases, "PostgreSQL Databases", "", []string{"Name", "Owner", "Encoding", "Collation", "Size", "Tablespace", "Conn Limit"}, rows, "Name", databasesActions()...)
 }
 
 func (s *Service) viewTablesLocked() (pluginrpc.ViewData, error) {
@@ -226,18 +205,8 @@ func (s *Service) viewTablesLocked() (pluginrpc.ViewData, error) {
 			t.Schema, t.Name, t.Owner, fmt.Sprintf("%d", t.RowCount), t.Size, t.TotalSize, hasIdx, t.Tablespace,
 		})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "-", "-", "-", "-", "-", "No tables"})
-	}
-	return decorate(pluginrpc.ViewData{
-		View:         viewTables,
-		Title:        "PostgreSQL Tables",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"Schema", "Table", "Owner", "Rows", "Size", "Total Size", "Indexes", "Tablespace"},
-		Rows:         rows,
-		SelectionKey: "Table",
-	}, tablesActions()...), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "-", "-", "-", "-", "No tables"})
+	return s.okView(viewTables, "PostgreSQL Tables", "", []string{"Schema", "Table", "Owner", "Rows", "Size", "Total Size", "Indexes", "Tablespace"}, rows, "Table", tablesActions()...)
 }
 
 func (s *Service) viewSchemasLocked() (pluginrpc.ViewData, error) {
@@ -249,18 +218,8 @@ func (s *Service) viewSchemasLocked() (pluginrpc.ViewData, error) {
 	for _, sch := range schemas {
 		rows = append(rows, []string{sch.Name, sch.Owner})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "No schemas"})
-	}
-	return decorate(pluginrpc.ViewData{
-		View:         viewSchemas,
-		Title:        "PostgreSQL Schemas",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"Schema", "Owner"},
-		Rows:         rows,
-		SelectionKey: "Schema",
-	}), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "No schemas"})
+	return s.okView(viewSchemas, "PostgreSQL Schemas", "", []string{"Schema", "Owner"}, rows, "Schema")
 }
 
 func (s *Service) viewExtensionsLocked() (pluginrpc.ViewData, error) {
@@ -280,18 +239,8 @@ func (s *Service) viewExtensionsLocked() (pluginrpc.ViewData, error) {
 		}
 		rows = append(rows, []string{ext.Name, ext.Version, ext.Schema, installed, comment})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "-", "-", "No extensions"})
-	}
-	return decorate(pluginrpc.ViewData{
-		View:         viewExtensions,
-		Title:        "PostgreSQL Extensions",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"Name", "Version", "Schema", "Installed", "Comment"},
-		Rows:         rows,
-		SelectionKey: "Name",
-	}, extensionsActions()...), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "-", "No extensions"})
+	return s.okView(viewExtensions, "PostgreSQL Extensions", "", []string{"Name", "Version", "Schema", "Installed", "Comment"}, rows, "Name", extensionsActions()...)
 }
 
 func (s *Service) viewConnectionsLocked() (pluginrpc.ViewData, error) {
@@ -310,18 +259,8 @@ func (s *Service) viewConnectionsLocked() (pluginrpc.ViewData, error) {
 			conn.State, conn.BackendType, conn.WaitEvent, conn.Duration, query,
 		})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "-", "-", "-", "-", "-", "-", "No active connections"})
-	}
-	return decorate(pluginrpc.ViewData{
-		View:         viewConnections,
-		Title:        "PostgreSQL Active Connections",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"PID", "User", "Database", "Client", "State", "Backend", "Wait", "Duration", "Query"},
-		Rows:         rows,
-		SelectionKey: "PID",
-	}, connectionsActions()...), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "-", "-", "-", "-", "-", "No active connections"})
+	return s.okView(viewConnections, "PostgreSQL Active Connections", "", []string{"PID", "User", "Database", "Client", "State", "Backend", "Wait", "Duration", "Query"}, rows, "PID", connectionsActions()...)
 }
 
 func (s *Service) viewStatsLocked() (pluginrpc.ViewData, error) {
@@ -333,15 +272,7 @@ func (s *Service) viewStatsLocked() (pluginrpc.ViewData, error) {
 	for _, st := range stats {
 		rows = append(rows, []string{st.Key, st.Value})
 	}
-	return decorate(pluginrpc.ViewData{
-		View:         viewStats,
-		Title:        "PostgreSQL Server Stats",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"Property", "Value"},
-		Rows:         rows,
-		SelectionKey: "Property",
-	}), nil
+	return s.okView(viewStats, "PostgreSQL Server Stats", "", []string{"Property", "Value"}, rows, "Property")
 }
 
 func (s *Service) viewConfigLocked() (pluginrpc.ViewData, error) {
@@ -357,18 +288,8 @@ func (s *Service) viewConfigLocked() (pluginrpc.ViewData, error) {
 		}
 		rows = append(rows, []string{cfg.Name, cfg.Setting, cfg.Unit, cfg.Category, cfg.Source, cfg.BootVal, restart})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "-", "-", "-", "-", "No settings"})
-	}
-	return decorate(pluginrpc.ViewData{
-		View:         viewConfig,
-		Title:        "PostgreSQL Configuration",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"Parameter", "Value", "Unit", "Category", "Source", "Boot Value", "Restart?"},
-		Rows:         rows,
-		SelectionKey: "Parameter",
-	}, configActions()...), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "-", "-", "-", "No settings"})
+	return s.okView(viewConfig, "PostgreSQL Configuration", "", []string{"Parameter", "Value", "Unit", "Category", "Source", "Boot Value", "Restart?"}, rows, "Parameter", configActions()...)
 }
 
 func (s *Service) viewLocksLocked() (pluginrpc.ViewData, error) {
@@ -386,18 +307,8 @@ func (s *Service) viewLocksLocked() (pluginrpc.ViewData, error) {
 			fmt.Sprintf("%d", lk.PID), lk.LockType, lk.Mode, lk.Relation, granted, lk.WaitStart,
 		})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "-", "-", "-", "No locks"})
-	}
-	return decorate(pluginrpc.ViewData{
-		View:         viewLocks,
-		Title:        "PostgreSQL Locks",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"PID", "Lock Type", "Mode", "Relation", "Granted", "Wait Start"},
-		Rows:         rows,
-		SelectionKey: "PID",
-	}), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "-", "-", "No locks"})
+	return s.okView(viewLocks, "PostgreSQL Locks", "", []string{"PID", "Lock Type", "Mode", "Relation", "Granted", "Wait Start"}, rows, "PID")
 }
 
 func (s *Service) viewIndexesLocked() (pluginrpc.ViewData, error) {
@@ -412,18 +323,8 @@ func (s *Service) viewIndexesLocked() (pluginrpc.ViewData, error) {
 			fmt.Sprintf("%d", idx.Scans), fmt.Sprintf("%d", idx.TupRead), fmt.Sprintf("%d", idx.TupFetch),
 		})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "-", "-", "-", "-", "No indexes"})
-	}
-	return decorate(pluginrpc.ViewData{
-		View:         viewIndexes,
-		Title:        "PostgreSQL Indexes",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"Schema", "Table", "Index", "Size", "Scans", "Tuples Read", "Tuples Fetched"},
-		Rows:         rows,
-		SelectionKey: "Index",
-	}, indexesActions()...), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "-", "-", "-", "No indexes"})
+	return s.okView(viewIndexes, "PostgreSQL Indexes", "", []string{"Schema", "Table", "Index", "Size", "Scans", "Tuples Read", "Tuples Fetched"}, rows, "Index", indexesActions()...)
 }
 
 func (s *Service) viewReplicationLocked() (pluginrpc.ViewData, error) {
@@ -438,18 +339,8 @@ func (s *Service) viewReplicationLocked() (pluginrpc.ViewData, error) {
 			r.SentLSN, r.WriteLSN, r.FlushLSN, r.ReplayLSN, r.WriteLag, r.FlushLag, r.ReplayLag,
 		})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "-", "No replicas", "-", "-", "-", "-", "-", "-", "-"})
-	}
-	return decorate(pluginrpc.ViewData{
-		View:         viewReplication,
-		Title:        "PostgreSQL Replication",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"PID", "Application", "Client", "State", "Sent LSN", "Write LSN", "Flush LSN", "Replay LSN", "Write Lag", "Flush Lag", "Replay Lag"},
-		Rows:         rows,
-		SelectionKey: "PID",
-	}), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "No replicas", "-", "-", "-", "-", "-", "-", "-"})
+	return s.okView(viewReplication, "PostgreSQL Replication", "", []string{"PID", "Application", "Client", "State", "Sent LSN", "Write LSN", "Flush LSN", "Replay LSN", "Write Lag", "Flush Lag", "Replay Lag"}, rows, "PID")
 }
 
 func (s *Service) viewTablespacesLocked() (pluginrpc.ViewData, error) {
@@ -461,18 +352,8 @@ func (s *Service) viewTablespacesLocked() (pluginrpc.ViewData, error) {
 	for _, ts := range tablespaces {
 		rows = append(rows, []string{ts.Name, ts.Owner, ts.Location, ts.Size})
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"-", "-", "-", "No tablespaces"})
-	}
-	return decorate(pluginrpc.ViewData{
-		View:         viewTablespaces,
-		Title:        "PostgreSQL Tablespaces",
-		Info:         s.baseInfo(""),
-		Status:       "connected",
-		Headers:      []string{"Name", "Owner", "Location", "Size"},
-		Rows:         rows,
-		SelectionKey: "Name",
-	}), nil
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "No tablespaces"})
+	return s.okView(viewTablespaces, "PostgreSQL Tablespaces", "", []string{"Name", "Owner", "Location", "Size"}, rows, "Name")
 }
 
 func (s *Service) viewDbStatsLocked() (pluginrpc.ViewData, error) {
@@ -485,18 +366,10 @@ func (s *Service) viewDbStatsLocked() (pluginrpc.ViewData, error) {
 		empty[0] = "No data"
 		data = append(data, empty)
 	}
-	return decorate(pluginrpc.ViewData{
-		View:   viewDbStats,
-		Title:  "PostgreSQL Database Stats",
-		Info:   s.baseInfo(""),
-		Status: "connected",
-		Headers: []string{
-			"Database", "Backends", "Commits", "Rollbacks",
-			"Blks Read", "Blks Hit", "Cache Hit%",
-			"Returned", "Fetched", "Inserted", "Updated", "Deleted",
-			"Conflicts", "Deadlocks",
-		},
-		Rows:         data,
-		SelectionKey: "Database",
-	}), nil
+	return s.okView(viewDbStats, "PostgreSQL Database Stats", "", []string{
+		"Database", "Backends", "Commits", "Rollbacks",
+		"Blks Read", "Blks Hit", "Cache Hit%",
+		"Returned", "Fetched", "Inserted", "Updated", "Deleted",
+		"Conflicts", "Deadlocks",
+	}, data, "Database")
 }

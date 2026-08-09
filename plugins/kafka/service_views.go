@@ -62,8 +62,9 @@ func helpSections() []pluginrpc.HelpSection {
 	}...)
 }
 
-func decorate(view pluginrpc.ViewData, actions ...pluginrpc.KeyBinding) pluginrpc.ViewData {
-	return pluginrpc.Decorate(view, viewNavBindings(), nil, helpSections(), actions...)
+var ui = pluginrpc.ViewUI{
+	Views: viewNavBindings,
+	Help:  helpSections,
 }
 
 func (s *Service) baseInfo(extra string) string {
@@ -76,10 +77,7 @@ func (s *Service) baseInfo(extra string) string {
 	if s.selectedTopic != "" {
 		msg += "\nTopic: " + s.selectedTopic
 	}
-	if extra != "" {
-		msg += "\n" + extra
-	}
-	return msg
+	return pluginrpc.FormatInfo(msg, extra)
 }
 
 func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
@@ -89,17 +87,11 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	s.currentView = viewID
 
 	if err := s.ensureConnectedLocked(); err != nil {
-		return pluginrpc.ViewData{
-			View:    viewID,
-			Title:   "Kafka Manager",
-			Info:    "[yellow]Kafka Manager[white]\nStatus: Not Connected\n" + err.Error(),
-			Status:  "not connected",
-			Headers: []string{"Status", "Detail"},
-			Rows:    [][]string{{"error", err.Error()}},
-			KeyBindings: []pluginrpc.KeyBinding{
-				{Key: "R", Label: "Refresh", Action: "refresh"},
-			},
-		}, nil
+		return ui.Decorate(pluginrpc.StatusErrorView(
+			viewID, "Kafka Manager",
+			"[yellow]Kafka Manager[white]\nStatus: Not Connected\n"+err.Error(),
+			"not connected", err.Error(),
+		)), nil
 	}
 
 	switch viewID {
@@ -136,7 +128,7 @@ func (s *Service) viewBrokersLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"No brokers found", "", ""})
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         kafkaViewBrokers,
 		Title:        "Kafka Brokers",
 		Info:         s.baseInfo(fmt.Sprintf("Brokers: %d", len(brokers))),
@@ -168,7 +160,7 @@ func (s *Service) viewTopicsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"No topics found", "", "", ""})
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         kafkaViewTopics,
 		Title:        "Kafka Topics",
 		Info:         s.baseInfo(fmt.Sprintf("Topics: %d", len(topics))),
@@ -197,7 +189,7 @@ func (s *Service) viewConsumersLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"No consumer groups found", "", "", "", ""})
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         kafkaViewConsumers,
 		Title:        "Kafka Consumers",
 		Info:         s.baseInfo(fmt.Sprintf("Consumer Groups: %d", len(groups))),
@@ -210,7 +202,7 @@ func (s *Service) viewConsumersLocked() (pluginrpc.ViewData, error) {
 
 func (s *Service) viewPartitionsLocked() (pluginrpc.ViewData, error) {
 	if s.selectedTopic == "" {
-		return decorate(pluginrpc.ViewData{
+		return ui.Decorate(pluginrpc.ViewData{
 			View:         kafkaViewPartitions,
 			Title:        "Kafka Partitions",
 			Info:         s.baseInfo(""),
@@ -243,7 +235,7 @@ func (s *Service) viewPartitionsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"No partitions found", "", "", "", "", "", ""})
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         kafkaViewPartitions,
 		Title:        "Kafka Partitions",
 		Info:         s.baseInfo(fmt.Sprintf("Partitions: %d", len(partitions))),
@@ -256,7 +248,7 @@ func (s *Service) viewPartitionsLocked() (pluginrpc.ViewData, error) {
 
 func (s *Service) viewMessagesLocked() (pluginrpc.ViewData, error) {
 	if s.selectedTopic == "" {
-		return decorate(pluginrpc.ViewData{
+		return ui.Decorate(pluginrpc.ViewData{
 			View:         kafkaViewMessages,
 			Title:        "Kafka Messages",
 			Info:         s.baseInfo(""),
@@ -297,7 +289,7 @@ func (s *Service) viewMessagesLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = append(rows, []string{"No messages found", "", "", "", ""})
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         kafkaViewMessages,
 		Title:        "Kafka Messages",
 		Info:         s.baseInfo(fmt.Sprintf("Messages: %d (latest)", len(messages))),

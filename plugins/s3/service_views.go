@@ -129,8 +129,9 @@ func helpSections() []pluginrpc.HelpSection {
 	}...)
 }
 
-func decorate(view pluginrpc.ViewData, actions ...pluginrpc.KeyBinding) pluginrpc.ViewData {
-	return pluginrpc.Decorate(view, viewNavBindings(), nil, helpSections(), actions...)
+var ui = pluginrpc.ViewUI{
+	Views: viewNavBindings,
+	Help:  helpSections,
 }
 
 func (s *Service) baseInfo(extra string) string {
@@ -146,25 +147,19 @@ func (s *Service) baseInfo(extra string) string {
 		}
 		msg += fmt.Sprintf("\nBucket: %s\nPrefix: %s", s.currentBucket, prefix)
 	}
-	if extra != "" {
-		msg += "\n" + extra
-	}
-	return msg
+	return pluginrpc.FormatInfo(msg, extra)
 }
 
 func (s *Service) disconnectedView(viewID string, err error) pluginrpc.ViewData {
-	return decorate(pluginrpc.ViewData{
-		View:    viewID,
-		Title:   "S3 Manager",
-		Info:    "[yellow]S3 Manager[white]\nStatus: Not Connected\n" + err.Error(),
-		Status:  "not connected",
-		Headers: []string{"Status", "Detail"},
-		Rows:    [][]string{{"error", err.Error()}},
-	}, actionsForView(viewID)...)
+	return ui.Decorate(pluginrpc.StatusErrorView(
+		viewID, "S3 Manager",
+		"[yellow]S3 Manager[white]\nStatus: Not Connected\n"+err.Error(),
+		"not connected", err.Error(),
+	), actionsForView(viewID)...)
 }
 
 func (s *Service) needBucketView(viewID string) pluginrpc.ViewData {
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewID,
 		Title:        "S3 — " + viewID,
 		Info:         s.baseInfo("Select a bucket first (view 0)"),
@@ -215,7 +210,7 @@ func (s *Service) viewBucketsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = [][]string{{"(no buckets)", "", ""}}
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         s3ViewBuckets,
 		Title:        "S3 Buckets",
 		Info:         s.baseInfo(fmt.Sprintf("Buckets: %d", len(buckets))),
@@ -241,7 +236,7 @@ func (s *Service) viewObjectsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = [][]string{{"(empty)", "", "", ""}}
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         s3ViewObjects,
 		Title:        "S3 Objects",
 		Info:         s.baseInfo(fmt.Sprintf("Entries: %d", len(objects))),
@@ -270,7 +265,7 @@ func (s *Service) viewOverviewLocked() (pluginrpc.ViewData, error) {
 		{"Prefix", emptyDash(ov.PrefixSampled)},
 		{"URI", fmt.Sprintf("s3://%s/%s", s.currentBucket, s.currentPrefix)},
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         s3ViewOverview,
 		Title:        "S3 Bucket Overview",
 		Info:         s.baseInfo(""),
@@ -287,7 +282,7 @@ func (s *Service) viewVersionsLocked() (pluginrpc.ViewData, error) {
 	}
 	versions, err := s.client.ListObjectVersions(s.currentBucket, s.currentPrefix)
 	if err != nil {
-		return decorate(pluginrpc.ViewData{
+		return ui.Decorate(pluginrpc.ViewData{
 			View:         s3ViewVersions,
 			Title:        "S3 Versions",
 			Info:         s.baseInfo(err.Error()),
@@ -305,7 +300,7 @@ func (s *Service) viewVersionsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = [][]string{{"(none)", "", "", "", ""}}
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         s3ViewVersions,
 		Title:        "S3 Object Versions",
 		Info:         s.baseInfo(fmt.Sprintf("Versions: %d (max 200)", len(versions))),
@@ -322,7 +317,7 @@ func (s *Service) viewACLLocked() (pluginrpc.ViewData, error) {
 	}
 	owner, grants, err := s.client.GetBucketACL(s.currentBucket)
 	if err != nil {
-		return decorate(pluginrpc.ViewData{
+		return ui.Decorate(pluginrpc.ViewData{
 			View:         s3ViewACL,
 			Title:        "S3 Bucket ACL",
 			Info:         s.baseInfo(err.Error()),
@@ -337,7 +332,7 @@ func (s *Service) viewACLLocked() (pluginrpc.ViewData, error) {
 	for _, g := range grants {
 		rows = append(rows, []string{g.Grantee, g.Type, g.Permission})
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         s3ViewACL,
 		Title:        "S3 Bucket ACL",
 		Info:         s.baseInfo(fmt.Sprintf("Grants: %d", len(grants))),
@@ -358,7 +353,7 @@ func (s *Service) viewLifecycleLocked() (pluginrpc.ViewData, error) {
 		if strings.Contains(msg, "NoSuchLifecycleConfiguration") || strings.Contains(msg, "Lifecycle") {
 			msg = "No lifecycle configuration"
 		}
-		return decorate(pluginrpc.ViewData{
+		return ui.Decorate(pluginrpc.ViewData{
 			View:         s3ViewLifecycle,
 			Title:        "S3 Lifecycle",
 			Info:         s.baseInfo(msg),
@@ -375,7 +370,7 @@ func (s *Service) viewLifecycleLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = [][]string{{"(none)", "", "", ""}}
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         s3ViewLifecycle,
 		Title:        "S3 Lifecycle",
 		Info:         s.baseInfo(fmt.Sprintf("Rules: %d", len(rules))),
@@ -401,7 +396,7 @@ func (s *Service) viewUploadsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = [][]string{{"(none)", "", "", ""}}
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         s3ViewUploads,
 		Title:        "S3 Multipart Uploads",
 		Info:         s.baseInfo(fmt.Sprintf("Incomplete: %d", len(uploads))),

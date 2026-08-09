@@ -33,17 +33,15 @@ func helpSections() []pluginrpc.HelpSection {
 	}...)
 }
 
-func decorate(view pluginrpc.ViewData, actions ...pluginrpc.KeyBinding) pluginrpc.ViewData {
-	return pluginrpc.Decorate(view, viewNavBindings(), nil, helpSections(), actions...)
+var ui = pluginrpc.ViewUI{
+	Views: viewNavBindings,
+	Help:  helpSections,
 }
 
 func (s *Service) baseInfo(extra string) string {
 	msg := fmt.Sprintf("[green]AWS Cost Explorer[white]\nProfile: %s\nRegion: %s\n%s | %s\nView: %s",
 		s.profile, s.region, s.timeRange, s.granularity, s.currentView)
-	if extra != "" {
-		msg += "\n" + extra
-	}
-	return msg
+	return pluginrpc.FormatInfo(msg, extra)
 }
 
 func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
@@ -53,17 +51,11 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	s.currentView = viewID
 
 	if err := s.ensureClientLocked(); err != nil {
-		return pluginrpc.ViewData{
-			View:    viewID,
-			Title:   "AWS Cost Explorer",
-			Info:    "[yellow]AWS Cost Explorer[white]\nStatus: Not Connected\n" + err.Error(),
-			Status:  "not connected",
-			Headers: []string{"Status", "Detail"},
-			Rows:    [][]string{{"error", err.Error()}},
-			KeyBindings: []pluginrpc.KeyBinding{
-				{Key: "R", Label: "Refresh", Action: "refresh"},
-			},
-		}, nil
+		return ui.Decorate(pluginrpc.StatusErrorView(
+			viewID, "AWS Cost Explorer",
+			"[yellow]AWS Cost Explorer[white]\nStatus: Not Connected\n"+err.Error(),
+			"not connected", err.Error(),
+		)), nil
 	}
 
 	switch viewID {
@@ -110,7 +102,7 @@ func (s *Service) viewMainLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = [][]string{{"No data loaded", "", "", "", "", ""}}
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         awsViewMain,
 		Title:        "AWS Cost Explorer",
 		Info:         s.baseInfo(""),
@@ -151,7 +143,7 @@ func (s *Service) viewServicesLocked() (pluginrpc.ViewData, error) {
 		})
 	}
 	rows = append(rows, []string{"TOTAL", fmt.Sprintf("$%.2f", totalCost), "100%", ""})
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         awsViewServices,
 		Title:        "Service Breakdown",
 		Info:         s.baseInfo(fmt.Sprintf("Total: $%.2f", totalCost)),
@@ -168,7 +160,7 @@ func (s *Service) viewBudgetsLocked() (pluginrpc.ViewData, error) {
 	}
 	result, err := s.client.GetBudgets()
 	if err != nil {
-		return decorate(pluginrpc.ViewData{
+		return ui.Decorate(pluginrpc.ViewData{
 			View:         awsViewBudgets,
 			Title:        "AWS Budgets",
 			Info:         s.baseInfo(""),
@@ -185,7 +177,7 @@ func (s *Service) viewBudgetsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = [][]string{{"No budgets found", "Configure budgets in AWS Console", "", "", "", ""}}
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         awsViewBudgets,
 		Title:        "AWS Budgets",
 		Info:         s.baseInfo(fmt.Sprintf("Budgets: %d", len(result.Budgets))),
@@ -206,7 +198,7 @@ func (s *Service) viewCostTypesLocked() (pluginrpc.ViewData, error) {
 		{"Use Blended Costs", "Enabled", "Use blended costs for organizations"},
 		{"Include Support", "Enabled", "Include AWS support costs"},
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         awsViewCostTypes,
 		Title:        "Cost Type Settings",
 		Info:         "[green]Cost Type Configuration[white]\nConfigure which cost types to include in calculations",
@@ -224,7 +216,7 @@ func (s *Service) viewForecastLocked() (pluginrpc.ViewData, error) {
 	now := time.Now()
 	result, err := s.client.GetCostForecast(now.AddDate(0, 0, 1), now.AddDate(0, 3, 0), "MONTHLY")
 	if err != nil {
-		return decorate(pluginrpc.ViewData{
+		return ui.Decorate(pluginrpc.ViewData{
 			View:         awsViewForecast,
 			Title:        "Cost Forecast",
 			Info:         s.baseInfo(""),
@@ -250,7 +242,7 @@ func (s *Service) viewForecastLocked() (pluginrpc.ViewData, error) {
 	if len(tableData) == 0 {
 		tableData = [][]string{{"No forecast data available", "", "", "", ""}}
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         awsViewForecast,
 		Title:        "Cost Forecast",
 		Info:         s.baseInfo("3-month forecast (MONTHLY)"),

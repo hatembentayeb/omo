@@ -66,8 +66,10 @@ func helpSections() []pluginrpc.HelpSection {
 	}...)
 }
 
-func decorate(view pluginrpc.ViewData, actions ...pluginrpc.KeyBinding) pluginrpc.ViewData {
-	return pluginrpc.Decorate(view, viewNavBindings(), moreViewBindings(), helpSections(), actions...)
+var ui = pluginrpc.ViewUI{
+	Views: viewNavBindings,
+	More:  moreViewBindings,
+	Help:  helpSections,
 }
 
 func (s *Service) baseInfo(extra string) string {
@@ -77,10 +79,7 @@ func (s *Service) baseInfo(extra string) string {
 	}
 	msg := fmt.Sprintf("[green]ArgoCD Manager[white]\nServer: %s\nUser: %s\nStatus: %s\nView: %s",
 		s.url, s.username, status, s.currentView)
-	if extra != "" {
-		msg += "\n" + extra
-	}
-	return msg
+	return pluginrpc.FormatInfo(msg, extra)
 }
 
 func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
@@ -92,14 +91,11 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	needsAPI := viewID == viewApplications || viewID == viewProjects || viewID == viewAccounts
 	if needsAPI {
 		if err := s.ensureConnectedLocked(); err != nil {
-			return decorate(pluginrpc.ViewData{
-				View:    viewID,
-				Title:   "ArgoCD Manager",
-				Info:    "[yellow]ArgoCD Manager[white]\nStatus: Not Connected\n" + err.Error(),
-				Status:  "not connected",
-				Headers: []string{"Status", "Detail"},
-				Rows:    [][]string{{"error", err.Error()}},
-			}), nil
+			return ui.Decorate(pluginrpc.StatusErrorView(
+				viewID, "ArgoCD Manager",
+				"[yellow]ArgoCD Manager[white]\nStatus: Not Connected\n"+err.Error(),
+				"not connected", err.Error(),
+			)), nil
 		}
 	}
 
@@ -142,7 +138,7 @@ func (s *Service) viewApplicationsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = [][]string{{"No applications found", "", "", ""}}
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewApplications,
 		Title:        "Applications",
 		Info:         s.baseInfo(fmt.Sprintf("Applications: %d", len(apps))),
@@ -170,7 +166,7 @@ func (s *Service) viewProjectsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = [][]string{{"No projects found", "", "", ""}}
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewProjects,
 		Title:        "Projects",
 		Info:         s.baseInfo(fmt.Sprintf("Projects: %d", len(projects))),
@@ -206,7 +202,7 @@ func (s *Service) viewAccountsLocked() (pluginrpc.ViewData, error) {
 	if len(rows) == 0 {
 		rows = [][]string{{"No accounts found", "", "", ""}}
 	}
-	return decorate(pluginrpc.ViewData{
+	return ui.Decorate(pluginrpc.ViewData{
 		View:         viewAccounts,
 		Title:        "Accounts",
 		Info:         s.baseInfo(fmt.Sprintf("Accounts: %d", len(accounts))),
@@ -219,24 +215,15 @@ func (s *Service) viewAccountsLocked() (pluginrpc.ViewData, error) {
 
 func (s *Service) viewRBACLocked(viewID string) (pluginrpc.ViewData, error) {
 	if err := s.ensureConnectedLocked(); err != nil {
-		return decorate(pluginrpc.ViewData{
-			View:    viewID,
-			Title:   "RBAC",
-			Info:    s.baseInfo(err.Error()),
-			Status:  "error",
-			Headers: []string{"Status", "Detail"},
-			Rows:    [][]string{{"error", err.Error()}},
-		}), nil
+		return ui.Decorate(pluginrpc.StatusErrorView(
+			viewID, "RBAC", s.baseInfo(err.Error()), "error", err.Error(),
+		)), nil
 	}
 	if s.k8sClient == nil {
-		return decorate(pluginrpc.ViewData{
-			View:    viewID,
-			Title:   "RBAC",
-			Info:    s.baseInfo("No kubeconfig configured"),
-			Status:  "unavailable",
-			Headers: []string{"Status", "Detail"},
-			Rows:    [][]string{{"unavailable", "Add kubeconfig or kubeconfig_path to KeePass entry"}},
-		}), nil
+		return ui.Decorate(pluginrpc.StatusErrorView(
+			viewID, "RBAC", s.baseInfo("No kubeconfig configured"), "unavailable",
+			"Add kubeconfig or kubeconfig_path to KeePass entry",
+		)), nil
 	}
 
 	argoCM, err := s.k8sClient.GetConfigMap("argocd-cm")
@@ -259,7 +246,7 @@ func (s *Service) viewRBACLocked(viewID string) (pluginrpc.ViewData, error) {
 		if len(rows) == 0 {
 			rows = [][]string{{"No policy rules found", "", "", "", ""}}
 		}
-		return decorate(pluginrpc.ViewData{
+		return ui.Decorate(pluginrpc.ViewData{
 			View:         viewRBACPolicies,
 			Title:        "RBAC Policies",
 			Info:         s.baseInfo(fmt.Sprintf("Policies: %d", len(s.rbacData.Policies))),
@@ -277,7 +264,7 @@ func (s *Service) viewRBACLocked(viewID string) (pluginrpc.ViewData, error) {
 		if len(rows) == 0 {
 			rows = [][]string{{"No group bindings found", ""}}
 		}
-		return decorate(pluginrpc.ViewData{
+		return ui.Decorate(pluginrpc.ViewData{
 			View:         viewRBACGroups,
 			Title:        "RBAC Groups",
 			Info:         s.baseInfo(fmt.Sprintf("Groups: %d", len(s.rbacData.Groups))),
@@ -303,7 +290,7 @@ func (s *Service) viewRBACLocked(viewID string) (pluginrpc.ViewData, error) {
 		if len(rows) == 0 {
 			rows = [][]string{{"No accounts found in argocd-cm", "", ""}}
 		}
-		return decorate(pluginrpc.ViewData{
+		return ui.Decorate(pluginrpc.ViewData{
 			View:         viewRBAC,
 			Title:        "RBAC Accounts",
 			Info:         s.baseInfo(fmt.Sprintf("RBAC accounts: %d", len(s.rbacData.Accounts))),

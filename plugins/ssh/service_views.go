@@ -58,8 +58,9 @@ func helpSections() []pluginrpc.HelpSection {
 	}...)
 }
 
-func decorate(view pluginrpc.ViewData, actions ...pluginrpc.KeyBinding) pluginrpc.ViewData {
-	return pluginrpc.Decorate(view, viewNavBindings(), nil, helpSections(), actions...)
+var ui = pluginrpc.ViewUI{
+	Views: viewNavBindings,
+	Help:  helpSections,
 }
 
 func (s *Service) baseInfo(extra string) string {
@@ -69,10 +70,7 @@ func (s *Service) baseInfo(extra string) string {
 	}
 	msg := fmt.Sprintf("[green]SSH Manager[white]\nServer: %s@%s:%d\nStatus: %s\nView: %s",
 		s.server.User, s.server.Host, s.server.Port, status, s.currentView)
-	if extra != "" {
-		msg += "\n" + extra
-	}
-	return msg
+	return pluginrpc.FormatInfo(msg, extra)
 }
 
 func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
@@ -85,15 +83,23 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	case viewOverview:
 		return s.viewOverviewLocked()
 	case viewProcesses:
-		return s.viewProcessesLocked()
+		return s.shellTableLocked(viewProcesses, "Processes", "PID",
+			[]string{"USER", "PID", "%CPU", "%MEM", "VSZ", "RSS", "TTY", "STAT", "START", "TIME", "COMMAND"},
+			s.client.GetProcesses, func(n int) string { return fmt.Sprintf("Processes: %d", n) }, nil)
 	case viewDisk:
-		return s.viewDiskLocked()
+		return s.shellTableLocked(viewDisk, "Disk Usage", "Filesystem",
+			[]string{"Filesystem", "Size", "Used", "Avail", "Use%", "Mounted"},
+			s.client.GetDiskUsage, nil, normalizeDiskHeaders)
 	case viewNetwork:
-		return s.viewNetworkLocked()
+		return s.shellTableLocked(viewNetwork, "Network", "Local",
+			[]string{"Proto", "Recv-Q", "Send-Q", "Local", "Remote", "State", "Process"},
+			s.client.GetNetworkConnections, nil, nil)
 	case viewDocker:
 		return s.viewDockerLocked()
 	case viewServices:
-		return s.viewServicesLocked()
+		return s.shellTableLocked(viewServices, "Services", "Unit",
+			[]string{"Unit", "Load", "Active", "Sub", "Description"},
+			s.client.GetSystemdServices, func(n int) string { return fmt.Sprintf("Services: %d", n) }, nil)
 	default:
 		return s.viewServersLocked()
 	}
@@ -123,19 +129,15 @@ func (s *Service) viewServersLocked() (pluginrpc.ViewData, error) {
 			tags,
 		})
 	}
-	if len(rows) == 0 {
-		rows = [][]string{{"No server configured", "", "", "", "", "", "", ""}}
-	}
+	rows = pluginrpc.EnsureRows(rows, []string{"No server configured", "", "", "", "", "", "", ""})
 
-	return decorate(pluginrpc.ViewData{
-		View:         viewServers,
-		Title:        "SSH Servers",
-		Info:         s.baseInfo("Configured via host secrets (multi-server discovery skipped in RPC)"),
-		Status:       "ok",
-		Headers:      []string{"Name", "Environment", "Host", "Port", "User", "Auth", "Proxy/Jump", "Tags"},
-		Rows:         rows,
-		SelectionKey: "Name",
-	}, serversActions()...), nil
+	return ui.Decorate(pluginrpc.Table(
+		viewServers, "SSH Servers",
+		s.baseInfo("Configured via host secrets (multi-server discovery skipped in RPC)"),
+		"ok",
+		[]string{"Name", "Environment", "Host", "Port", "User", "Auth", "Proxy/Jump", "Tags"},
+		rows, "Name",
+	), serversActions()...), nil
 }
 
 func (s *Service) viewOverviewLocked() (pluginrpc.ViewData, error) {
@@ -160,90 +162,44 @@ func (s *Service) viewOverviewLocked() (pluginrpc.ViewData, error) {
 		{"Last Login", info.LastLogin},
 		{"Connected For", s.client.GetConnectedDuration().Truncate(time.Second).String()},
 	}
-	return decorate(pluginrpc.ViewData{
-		View:         viewOverview,
-		Title:        "Overview",
-		Info:         s.baseInfo(""),
-		Status:       "ok",
-		Headers:      []string{"Property", "Value"},
-		Rows:         rows,
-		SelectionKey: "Property",
-	}, overviewActions()...), nil
+	return ui.Decorate(pluginrpc.Table(
+		viewOverview, "Overview", s.baseInfo(""), "ok",
+		[]string{"Property", "Value"}, rows, "Property",
+	), overviewActions()...), nil
 }
 
-func (s *Service) viewProcessesLocked() (pluginrpc.ViewData, error) {
+// shellTableLocked builds a connected remote-command table (processes/disk/network/services).
+func (s *Service) shellTableLocked(
+	viewID, title, selectionKey string,
+	defaultHeaders []string,
+	fetch func() ([][]string, error),
+	infoExtra func(n int) string,
+	normalizeHeaders func([]string) []string,
+) (pluginrpc.ViewData, error) {
 	if err := s.ensureConnectedLocked(); err != nil {
-		return s.notConnectedView(viewProcesses, err)
+		return s.notConnectedView(viewID, err)
 	}
-	rows, err := s.client.GetProcesses()
+	rows, err := fetch()
 	if err != nil {
 		return pluginrpc.ViewData{}, err
 	}
-	headers := []string{"USER", "PID", "%CPU", "%MEM", "VSZ", "RSS", "TTY", "STAT", "START", "TIME", "COMMAND"}
+	headers := defaultHeaders
 	if len(rows) > 0 && looksLikeHeader(rows[0]) {
-		headers = rows[0]
+		if normalizeHeaders != nil {
+			headers = normalizeHeaders(rows[0])
+		} else {
+			headers = rows[0]
+		}
 		rows = rows[1:]
 	}
 	rows = padRows(rows, len(headers))
-	return decorate(pluginrpc.ViewData{
-		View:         viewProcesses,
-		Title:        "Processes",
-		Info:         s.baseInfo(fmt.Sprintf("Processes: %d", len(rows))),
-		Status:       "ok",
-		Headers:      headers,
-		Rows:         rows,
-		SelectionKey: "PID",
-	}, shellActions()...), nil
-}
-
-func (s *Service) viewDiskLocked() (pluginrpc.ViewData, error) {
-	if err := s.ensureConnectedLocked(); err != nil {
-		return s.notConnectedView(viewDisk, err)
+	extra := ""
+	if infoExtra != nil {
+		extra = infoExtra(len(rows))
 	}
-	rows, err := s.client.GetDiskUsage()
-	if err != nil {
-		return pluginrpc.ViewData{}, err
-	}
-	headers := []string{"Filesystem", "Size", "Used", "Avail", "Use%", "Mounted"}
-	if len(rows) > 0 && looksLikeHeader(rows[0]) {
-		headers = normalizeDiskHeaders(rows[0])
-		rows = rows[1:]
-	}
-	rows = padRows(rows, len(headers))
-	return decorate(pluginrpc.ViewData{
-		View:         viewDisk,
-		Title:        "Disk Usage",
-		Info:         s.baseInfo(""),
-		Status:       "ok",
-		Headers:      headers,
-		Rows:         rows,
-		SelectionKey: "Filesystem",
-	}, shellActions()...), nil
-}
-
-func (s *Service) viewNetworkLocked() (pluginrpc.ViewData, error) {
-	if err := s.ensureConnectedLocked(); err != nil {
-		return s.notConnectedView(viewNetwork, err)
-	}
-	rows, err := s.client.GetNetworkConnections()
-	if err != nil {
-		return pluginrpc.ViewData{}, err
-	}
-	headers := []string{"Proto", "Recv-Q", "Send-Q", "Local", "Remote", "State", "Process"}
-	if len(rows) > 0 && looksLikeHeader(rows[0]) {
-		headers = rows[0]
-		rows = rows[1:]
-	}
-	rows = padRows(rows, len(headers))
-	return decorate(pluginrpc.ViewData{
-		View:         viewNetwork,
-		Title:        "Network",
-		Info:         s.baseInfo(""),
-		Status:       "ok",
-		Headers:      headers,
-		Rows:         rows,
-		SelectionKey: "Local",
-	}, shellActions()...), nil
+	return ui.Decorate(pluginrpc.Table(
+		viewID, title, s.baseInfo(extra), "ok", headers, rows, selectionKey,
+	), shellActions()...), nil
 }
 
 func (s *Service) viewDockerLocked() (pluginrpc.ViewData, error) {
@@ -252,14 +208,9 @@ func (s *Service) viewDockerLocked() (pluginrpc.ViewData, error) {
 	}
 	rows, err := s.client.GetDockerContainers()
 	if err != nil {
-		return decorate(pluginrpc.ViewData{
-			View:    viewDocker,
-			Title:   "Docker",
-			Info:    s.baseInfo(err.Error()),
-			Status:  "unavailable",
-			Headers: []string{"Status", "Detail"},
-			Rows:    [][]string{{"unavailable", err.Error()}},
-		}, shellActions()...), nil
+		return ui.Decorate(pluginrpc.StatusErrorView(
+			viewDocker, "Docker", s.baseInfo(err.Error()), "unavailable", err.Error(),
+		), shellActions()...), nil
 	}
 	headers := []string{"Names", "Image", "Status", "Ports"}
 	if len(rows) > 0 && looksLikeHeader(rows[0]) {
@@ -267,47 +218,16 @@ func (s *Service) viewDockerLocked() (pluginrpc.ViewData, error) {
 		rows = rows[1:]
 	}
 	rows = padRows(rows, len(headers))
-	return decorate(pluginrpc.ViewData{
-		View:         viewDocker,
-		Title:        "Docker",
-		Info:         s.baseInfo(fmt.Sprintf("Containers: %d", len(rows))),
-		Status:       "ok",
-		Headers:      headers,
-		Rows:         rows,
-		SelectionKey: "Names",
-	}, shellActions()...), nil
-}
-
-func (s *Service) viewServicesLocked() (pluginrpc.ViewData, error) {
-	if err := s.ensureConnectedLocked(); err != nil {
-		return s.notConnectedView(viewServices, err)
-	}
-	rows, err := s.client.GetSystemdServices()
-	if err != nil {
-		return pluginrpc.ViewData{}, err
-	}
-	headers := []string{"Unit", "Load", "Active", "Sub", "Description"}
-	rows = padRows(rows, len(headers))
-	return decorate(pluginrpc.ViewData{
-		View:         viewServices,
-		Title:        "Services",
-		Info:         s.baseInfo(fmt.Sprintf("Services: %d", len(rows))),
-		Status:       "ok",
-		Headers:      headers,
-		Rows:         rows,
-		SelectionKey: "Unit",
-	}, shellActions()...), nil
+	return ui.Decorate(pluginrpc.Table(
+		viewDocker, "Docker", s.baseInfo(fmt.Sprintf("Containers: %d", len(rows))), "ok",
+		headers, rows, "Names",
+	), shellActions()...), nil
 }
 
 func (s *Service) notConnectedView(viewID string, err error) (pluginrpc.ViewData, error) {
-	return decorate(pluginrpc.ViewData{
-		View:    viewID,
-		Title:   "SSH Manager",
-		Info:    s.baseInfo(err.Error()),
-		Status:  "not connected",
-		Headers: []string{"Status", "Detail"},
-		Rows:    [][]string{{"error", err.Error()}},
-	}, connectActions()...), nil
+	return ui.Decorate(pluginrpc.StatusErrorView(
+		viewID, "SSH Manager", s.baseInfo(err.Error()), "not connected", err.Error(),
+	), connectActions()...), nil
 }
 
 func looksLikeHeader(row []string) bool {
