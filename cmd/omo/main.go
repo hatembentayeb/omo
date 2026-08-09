@@ -71,6 +71,12 @@ func main() {
 
 	pages.AddPage("main", omoHost.MainUI, true, true)
 
+	// Always compare against omoHost.PluginsList — RefreshPlugins replaces the list
+	// primitive, so a captured local pointer goes stale and breaks Tab / p / r.
+	pluginsFocused := func() bool {
+		return app.GetFocus() == omoHost.PluginsList
+	}
+
 	// Global key bindings
 	// Tab cycles: plugins list → main content → actions → plugins list
 	// Shift+Tab cycles in reverse
@@ -88,10 +94,10 @@ func main() {
 		if event.Key() == tcell.KeyTab {
 			focus := app.GetFocus()
 			switch {
-			case focus == pluginsList:
+			case pluginsFocused():
 				omoHost.FocusPluginContent()
 			case focus == actionsView:
-				app.SetFocus(pluginsList)
+				app.SetFocus(omoHost.PluginsList)
 			default:
 				app.SetFocus(actionsView)
 			}
@@ -101,26 +107,26 @@ func main() {
 		if event.Key() == tcell.KeyBacktab {
 			focus := app.GetFocus()
 			switch {
-			case focus == pluginsList:
+			case pluginsFocused():
 				app.SetFocus(actionsView)
 			case focus == actionsView:
 				omoHost.FocusPluginContent()
 			default:
-				app.SetFocus(pluginsList)
+				app.SetFocus(omoHost.PluginsList)
 			}
 			return nil
 		}
 
-		// 'r' when sidebar is focused: refresh plugins
-		if event.Rune() == 'r' && app.GetFocus() == pluginsList {
-			omoHost.RefreshPlugins()
-			return nil
-		}
-
-		// 'p' when sidebar is focused: open package manager
-		if event.Rune() == 'p' && app.GetFocus() == pluginsList {
-			omoHost.OpenPackageManager()
-			return nil
+		// Host sidebar shortcuts (plugins list must be focused).
+		if pluginsFocused() {
+			switch event.Rune() {
+			case 'r', 'R':
+				omoHost.RefreshPlugins()
+				return nil
+			case 'p', 'P':
+				omoHost.OpenPackageManager()
+				return nil
+			}
 		}
 
 		return event
