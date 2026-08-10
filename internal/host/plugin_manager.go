@@ -147,6 +147,7 @@ func (m *PluginManager) activateAsync(name, binPath string) {
 		return
 	}
 
+	warm := sess.Client != nil
 	if sess.Client == nil {
 		pluginrpc.RPCLog("activateAsync: Launch …")
 		t0 := time.Now()
@@ -206,6 +207,11 @@ func (m *PluginManager) activateAsync(name, binPath string) {
 	pluginrpc.RPCLog("activateAsync: resolvePluginConfig done in %s err=%v cfg_host=%s", time.Since(t0), cfgErr, cfg["host"])
 	if cfgErr != nil {
 		pluginrpc.RPCLog("activateAsync: config warn: %v", cfgErr)
+	} else if warm {
+		// Keep-warm sessions (e.g. k8sportforward tunnels) must not be reconfigured
+		// on every sidebar click — Configure often resets plugin state.
+		// Ctrl+t target switch still calls Configure directly via applyTarget.
+		pluginrpc.RPCLog("activateAsync: skip Configure (warm session)")
 	} else {
 		pluginrpc.RPCLog("activateAsync: Configure …")
 		if err := sess.Plugin.Configure(pluginrpc.ConfigureRequest{Settings: cfg}); err != nil {

@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/httpstream"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/portforward"
 	"k8s.io/client-go/transport/spdy"
@@ -214,7 +215,7 @@ func (m *ForwardManager) Start(client *K8sClient, kind, namespace, name string, 
 
 func (m *ForwardManager) runForward(client *K8sClient, fwd *ActiveForward) {
 	defer close(fwd.doneChan)
-	defer m.remove(fwd.ID)
+	// Do not auto-remove on exit: keep error/stopped rows visible until Stop().
 
 	restConfig := client.RESTConfig()
 	cs := client.Clientset()
@@ -231,16 +232,18 @@ func (m *ForwardManager) runForward(client *K8sClient, fwd *ActiveForward) {
 		return
 	}
 
-	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, http.MethodPost, reqURL)
-	// Prefer websocket when available (newer clusters), fall back to SPDY.
+	spdyDialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, http.MethodPost, reqURL)
+	dialer := httpstream.Dialer(spdyDialer)
+	// Prefer websocket when available (newer clusters), fall back to SPDY on upgrade failure.
 	if wsDialer, wsErr := portforward.NewSPDYOverWebsocketDialer(reqURL, restConfig); wsErr == nil {
-		dialer = portforward.NewFallbackDialer(wsDialer, dialer, func(err error) bool {
-			return err != nil
+		dialer = portforward.NewFallbackDialer(wsDialer, spdyDialer, func(err error) bool {
+			return httpstream.IsUpgradeFailure(err) || httpstream.IsHTTPSProxyError(err)
 		})
 	}
 
+	var errBuf strings.Builder
 	ports := []string{fmt.Sprintf("%d:%d", fwd.LocalPort, fwd.RemotePort)}
-	pf, err := portforward.NewOnAddresses(dialer, []string{"127.0.0.1"}, ports, fwd.stopChan, fwd.readyChan, io.Discard, io.Discard)
+	pf, err := portforward.NewOnAddresses(dialer, []string{"127.0.0.1"}, ports, fwd.stopChan, fwd.readyChan, io.Discard, &errBuf)
 	if err != nil {
 		fwd.setError(err.Error())
 		return
@@ -252,8 +255,13 @@ func (m *ForwardManager) runForward(client *K8sClient, fwd *ActiveForward) {
 			fwd.mu.Lock()
 			fwd.Status = "stopped"
 			fwd.mu.Unlock()
+			pluginrpc.RPCLog("forward stopped id=%s", fwd.ID)
 		default:
-			fwd.setError(err.Error())
+			msg := err.Error()
+			if extra := strings.TrimSpace(errBuf.String()); extra != "" {
+				msg = msg + ": " + extra
+			}
+			fwd.setError(msg)
 		}
 		return
 	}

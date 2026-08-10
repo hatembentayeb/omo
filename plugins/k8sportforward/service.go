@@ -61,27 +61,49 @@ func (s *Service) Configure(req pluginrpc.ConfigureRequest) error {
 		req.Settings = map[string]string{}
 	}
 
-	// Stop existing forwards when reconnecting.
+	name := req.Settings["name"]
+	server := firstNonEmpty(req.Settings["url"], req.Settings["host"], req.Settings["server"])
+	contextName := req.Settings["context"]
+	namespaceFilter := req.Settings["namespace"]
+	kubeconfig := firstNonEmpty(req.Settings["kubeconfig"], req.Settings["kubeconfig_path"])
+	kubeconfigData := ""
+	if strings.Contains(kubeconfig, "apiVersion:") || strings.Contains(kubeconfig, "clusters:") {
+		kubeconfigData = kubeconfig
+		kubeconfig = ""
+	}
+	if raw := req.Settings["kubeconfig_data"]; raw != "" {
+		kubeconfigData = raw
+	}
+
+	// Warm re-Configure with the same cluster must NOT tear down live tunnels.
+	// The host re-calls Configure every time you switch back to this plugin.
+	sameCluster := s.client != nil && s.client.Connected() &&
+		s.kubeconfig == kubeconfig &&
+		s.kubeconfigData == kubeconfigData &&
+		s.contextName == contextName
+	if sameCluster {
+		s.name = name
+		if server != "" {
+			s.server = server
+		}
+		s.namespaceFilter = namespaceFilter
+		pluginrpc.RPCLog("Service.Configure skip reconnect (same cluster); keeping %d forward(s)", s.forwards.Count())
+		return nil
+	}
+
 	if s.forwards != nil {
-		s.forwards.StopAll()
+		n := s.forwards.StopAll()
+		pluginrpc.RPCLog("Service.Configure stopped %d forward(s) before reconnect", n)
 	}
 	s.forwards = NewForwardManager()
 	s.client = &K8sClient{}
 
-	s.name = req.Settings["name"]
-	s.server = firstNonEmpty(req.Settings["url"], req.Settings["host"], req.Settings["server"])
-	s.contextName = req.Settings["context"]
-	s.namespaceFilter = req.Settings["namespace"]
-	s.kubeconfig = firstNonEmpty(req.Settings["kubeconfig"], req.Settings["kubeconfig_path"])
-	s.kubeconfigData = ""
-	// Inline kubeconfig may arrive as "kubeconfig" when it contains YAML.
-	if strings.Contains(s.kubeconfig, "apiVersion:") || strings.Contains(s.kubeconfig, "clusters:") {
-		s.kubeconfigData = s.kubeconfig
-		s.kubeconfig = ""
-	}
-	if raw := req.Settings["kubeconfig_data"]; raw != "" {
-		s.kubeconfigData = raw
-	}
+	s.name = name
+	s.server = server
+	s.contextName = contextName
+	s.namespaceFilter = namespaceFilter
+	s.kubeconfig = kubeconfig
+	s.kubeconfigData = kubeconfigData
 
 	pluginrpc.RPCLog("Service.Configure name=%s kubeconfig=%s context=%s ns=%s",
 		s.name, s.kubeconfig, s.contextName, s.namespaceFilter)
