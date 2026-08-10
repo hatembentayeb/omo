@@ -52,6 +52,16 @@ func New(app *tview.Application, pages *tview.Pages, logger *pluginapi.Logger, v
 	return h
 }
 
+// Shutdown stops all RPC plugin processes (and anything they own, e.g. port-forwards).
+// Safe to call multiple times.
+func (h *Host) Shutdown() {
+	if h == nil || h.rpcManager == nil {
+		return
+	}
+	h.log("shutting down RPC plugins")
+	h.rpcManager.KillAll()
+}
+
 func (h *Host) log(format string, args ...interface{}) {
 	if h.logger != nil {
 		h.logger.Info(format, args...)
