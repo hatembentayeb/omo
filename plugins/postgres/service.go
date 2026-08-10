@@ -228,7 +228,7 @@ func (s *Service) DoAction(req pluginrpc.ActionRequest) (pluginrpc.ActionResult,
 		return pluginrpc.ActionResult{OK: true, Message: "created database " + name, Next: &view}, nil
 
 	case "drop_database":
-		name := firstNonEmpty(req.Payload["name"], req.Payload["key"])
+		name := strings.TrimSuffix(firstNonEmpty(req.Payload["name"], req.Payload["key"]), " *")
 		if name == "" {
 			return pluginrpc.ActionResult{OK: false, Message: "no database selected"}, nil
 		}
@@ -240,6 +240,25 @@ func (s *Service) DoAction(req pluginrpc.ActionRequest) (pluginrpc.ActionResult,
 		}
 		view, _ := s.buildViewLocked(viewDatabases)
 		return pluginrpc.ActionResult{OK: true, Message: "dropped database " + name, Next: &view}, nil
+
+	case "select_database", "select_db":
+		name := strings.TrimSuffix(firstNonEmpty(req.Payload["database"], req.Payload["name"], req.Payload["key"], req.Payload["db"]), " *")
+		if name == "" {
+			return pluginrpc.ActionResult{OK: false, Message: "no database selected"}, nil
+		}
+		if err := s.ensureConnectedLocked(); err != nil {
+			return pluginrpc.ActionResult{OK: false, Message: err.Error()}, nil
+		}
+		if err := s.client.SwitchDatabase(name); err != nil {
+			return pluginrpc.ActionResult{OK: false, Message: err.Error()}, nil
+		}
+		s.database = name
+		view, _ := s.buildViewLocked(viewTables)
+		return pluginrpc.ActionResult{
+			OK:      true,
+			Message: "switched to database " + name,
+			Next:    &view,
+		}, nil
 
 	case "install_extension":
 		name := firstNonEmpty(req.Payload["name"], req.Payload["key"])

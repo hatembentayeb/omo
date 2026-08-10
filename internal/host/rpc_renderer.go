@@ -188,6 +188,10 @@ func (r *RPCRenderer) Apply(view pluginrpc.ViewData) tview.Primitive {
 				r.dispatchAction("connection_info")
 			case "namespaces":
 				r.dispatchAction("filter_namespace")
+			case "databases":
+				r.dispatchAction("select_database")
+			case "tables":
+				r.dispatchAction("view_columns")
 			}
 		})
 	}
@@ -351,6 +355,8 @@ func (r *RPCRenderer) dispatchAction(action string) {
 		r.promptCreateFolder()
 	case "select_db":
 		r.promptSelectDB()
+	case "select_database":
+		r.runAction("select_database", r.selectionPayload())
 	case "publish":
 		r.promptPublish()
 	case "start_forward":
