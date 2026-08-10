@@ -131,6 +131,7 @@ func (s *Service) viewKeysLocked() (pluginrpc.ViewData, error) {
 	if err != nil {
 		return pluginrpc.ViewData{}, err
 	}
+	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "No keys found"})
 	return ui.Connected(viewKeys, "Redis Keys", s.baseInfo(fmt.Sprintf("Keys loaded: %d", len(rows))), []string{"Key", "Type", "TTL", "Size"}, rows, "Key", keysActions()...), nil
 }
 
