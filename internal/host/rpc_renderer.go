@@ -182,6 +182,12 @@ func (r *RPCRenderer) Apply(view pluginrpc.ViewData) tview.Primitive {
 				r.dispatchAction("open_objects")
 			case "objects":
 				r.dispatchAction("navigate")
+			case "workloads", "services", "pods":
+				r.dispatchAction("start_forward")
+			case "forwards", "ports":
+				r.dispatchAction("connection_info")
+			case "namespaces":
+				r.dispatchAction("filter_namespace")
 			}
 		})
 	}
@@ -347,6 +353,21 @@ func (r *RPCRenderer) dispatchAction(action string) {
 		r.promptSelectDB()
 	case "publish":
 		r.promptPublish()
+	case "start_forward":
+		r.promptStartForward()
+	case "stop_forward":
+		r.promptStopForward()
+	case "stop_all_forwards":
+		ui.ShowStandardConfirmationModal(r.pages, r.app, "Stop All Forwards",
+			"Stop every active port-forward?",
+			func(ok bool) {
+				r.FocusTable()
+				if ok {
+					r.runAction("stop_all_forwards", nil)
+				}
+			})
+	case "filter_namespace":
+		r.promptFilterNamespace()
 	default:
 		r.runAction(action, r.selectionPayload())
 	}
@@ -469,6 +490,142 @@ func (r *RPCRenderer) promptPublish() {
 					})
 				})
 		})
+}
+
+func (r *RPCRenderer) promptStartForward() {
+	payload := r.selectionPayload()
+	if len(payload) == 0 || (payload["col3"] == "" && payload["col2"] == "" && r.currentView != "forwards") {
+		// Allow forwards view reconnect-style only from resource rows.
+		if r.currentView != "workloads" && r.currentView != "services" && r.currentView != "pods" {
+			r.core.Log("[yellow]select a workload, service, or pod")
+			return
+		}
+	}
+
+	remoteDefault := firstPortFromCell(payload["col6"])
+	if remoteDefault == "" {
+		remoteDefault = firstPortFromCell(payload["ports"])
+	}
+	localDefault := strings.TrimSpace(payload["col7"])
+	if localDefault == "" || localDefault == "-" {
+		if remoteDefault != "" {
+			localDefault = remoteDefault
+		} else {
+			localDefault = "auto"
+		}
+	}
+
+	target := strings.TrimSpace(payload["col1"] + " " + payload["col2"] + "/" + payload["col3"])
+	ui.ShowCompactStyledInputModal(r.pages, r.app, "Port Forward", "Remote port:", remoteDefault, 12,
+		func(text string, _ rune) bool {
+			text = strings.TrimSpace(text)
+			if text == "" {
+				return true
+			}
+			n, err := strconv.Atoi(strings.Split(text, "/")[0])
+			return err == nil && n > 0 && n <= 65535
+		},
+		func(remote string, cancelled bool) {
+			if cancelled {
+				r.FocusTable()
+				return
+			}
+			remote = strings.TrimSpace(remote)
+			if remote == "" {
+				remote = remoteDefault
+			}
+			ui.ShowCompactStyledInputModal(r.pages, r.app, "Port Forward",
+				"Local port (or auto):", localDefault, 12,
+				func(text string, _ rune) bool {
+					text = strings.TrimSpace(strings.ToLower(text))
+					if text == "" || text == "auto" || text == "0" {
+						return true
+					}
+					n, err := strconv.Atoi(text)
+					return err == nil && n > 0 && n <= 65535
+				},
+				func(local string, cancelled bool) {
+					if cancelled {
+						r.FocusTable()
+						return
+					}
+					local = strings.TrimSpace(local)
+					if local == "" {
+						local = localDefault
+					}
+					confirm := fmt.Sprintf("Forward %s\n  remote :%s  →  127.0.0.1:%s ?",
+						strings.TrimSpace(target), remote, local)
+					ui.ShowStandardConfirmationModal(r.pages, r.app, "Confirm Forward", confirm,
+						func(ok bool) {
+							r.FocusTable()
+							if !ok {
+								return
+							}
+							payload["remote_port"] = remote
+							payload["local_port"] = local
+							payload["kind"] = payload["col1"]
+							payload["namespace"] = payload["col2"]
+							payload["name"] = payload["col3"]
+							payload["ports"] = payload["col6"]
+							r.runAction("start_forward", payload)
+						})
+				})
+		})
+}
+
+func (r *RPCRenderer) promptStopForward() {
+	payload := r.selectionPayload()
+	label := payload["key"]
+	if payload["col3"] != "" && payload["col2"] != "" {
+		label = payload["col2"] + "/" + payload["col3"]
+	}
+	if label == "" {
+		r.core.Log("[yellow]nothing selected")
+		return
+	}
+	ui.ShowStandardConfirmationModal(r.pages, r.app, "Stop Forward",
+		fmt.Sprintf("Stop port-forward for %q?", label),
+		func(ok bool) {
+			r.FocusTable()
+			if ok {
+				r.runAction("stop_forward", payload)
+			}
+		})
+}
+
+func (r *RPCRenderer) promptFilterNamespace() {
+	payload := r.selectionPayload()
+	placeholder := payload["key"]
+	if r.currentView == "namespaces" && placeholder != "" {
+		r.runAction("filter_namespace", map[string]string{
+			"namespace": placeholder,
+			"key":       placeholder,
+		})
+		return
+	}
+	ui.ShowCompactStyledInputModal(r.pages, r.app, "Filter Namespace", "Namespace (or all):", placeholder, 40, nil,
+		func(ns string, cancelled bool) {
+			r.FocusTable()
+			if cancelled {
+				return
+			}
+			r.runAction("filter_namespace", map[string]string{
+				"namespace": strings.TrimSpace(ns),
+			})
+		})
+}
+
+func firstPortFromCell(cell string) string {
+	cell = strings.TrimSpace(cell)
+	if cell == "" || cell == "-" {
+		return ""
+	}
+	part := strings.Split(cell, ",")[0]
+	part = strings.TrimSpace(strings.Split(part, "/")[0])
+	if _, err := strconv.Atoi(part); err != nil {
+		return ""
+	}
+	return part
 }
 
 func (r *RPCRenderer) runAction(action string, payload map[string]string) {
