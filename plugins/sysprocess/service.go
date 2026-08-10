@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"omo/pkg/pluginapi"
@@ -127,7 +126,12 @@ func (s *Service) DoAction(req pluginrpc.ActionRequest) (pluginrpc.ActionResult,
 		if err != nil {
 			return pluginrpc.ActionResult{OK: false, Message: "invalid pid"}, nil
 		}
-		if err := syscall.Kill(int(pid64), syscall.SIGKILL); err != nil {
+		// Use os.FindProcess + Kill for cross-platform support instead of syscall.Kill
+		proc, err := os.FindProcess(int(pid64))
+		if err != nil {
+			return pluginrpc.ActionResult{OK: false, Message: err.Error()}, nil
+		}
+		if err := proc.Kill(); err != nil {
 			return pluginrpc.ActionResult{OK: false, Message: err.Error()}, nil
 		}
 		s.loadProcessDataLocked()
