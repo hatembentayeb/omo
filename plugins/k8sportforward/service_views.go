@@ -98,8 +98,8 @@ func (s *Service) baseInfo(extra string) string {
 	if s.forwards != nil {
 		active = s.forwards.Count()
 	}
-	msg := fmt.Sprintf("[green]K8s Port Forward[white]\nCluster: %s\nContext: %s\nServer: %s\nNamespace: %s\nActive ●F: %d\nView: %s",
-		name, ctx, server, ns, active, s.currentView)
+	msg := fmt.Sprintf("[green]K8s Port Forward[white]\nCluster: %s\nContext: %s\nServer: %s\nNamespace: %s\nActive %s: %d\nView: %s",
+		name, ctx, server, ns, fwdMarkActive, active, s.currentView)
 	return pluginrpc.FormatInfo(msg, extra)
 }
 
@@ -225,7 +225,7 @@ func (s *Service) viewForwardsLocked() (pluginrpc.ViewData, error) {
 	for _, f := range list {
 		status := f.Status
 		if status == "forwarding" {
-			status = "●F " + status
+			status = fwdMarkActive + " " + status
 		}
 		rows = append(rows, []string{
 			f.ID,
@@ -271,7 +271,7 @@ func (s *Service) viewPortsLocked() (pluginrpc.ViewData, error) {
 			strconv.Itoa(f.RemotePort),
 			f.Address(),
 			fmt.Sprintf("%s/%s", f.Namespace, f.Name),
-			"●F " + f.Status,
+			fwdMarkActive + " " + f.Status,
 			f.ID,
 		})
 	}

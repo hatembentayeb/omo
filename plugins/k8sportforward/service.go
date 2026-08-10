@@ -300,7 +300,7 @@ func (s *Service) actionStopForwardLocked(payload map[string]string) (pluginrpc.
 
 	// From workloads/services/pods: stop by target.
 	kind, namespace, name := resolveTarget(payload)
-	if id == "" || id == fwdMarkActive || id == fwdMarkInactive || strings.HasPrefix(id, "●") || id == "○" {
+	if id == "" || id == fwdMarkActive || id == fwdMarkInactive || id == "○" {
 		if kind != "" && namespace != "" && name != "" {
 			n := s.forwards.StopTarget(kind, namespace, name)
 			viewData, _ := s.buildViewLocked(s.currentView)
@@ -352,7 +352,7 @@ func (s *Service) actionViewDetailsLocked(payload map[string]string) (pluginrpc.
 	} else {
 		b.WriteString("\nActive forwards:\n")
 		for _, f := range fs {
-			fmt.Fprintf(&b, "  ●F  127.0.0.1:%d → %d  (%s)  pod=%s\n", f.LocalPort, f.RemotePort, f.Status, f.Pod)
+			fmt.Fprintf(&b, "  %s  127.0.0.1:%d → %d  (%s)  pod=%s\n", fwdMarkActive, f.LocalPort, f.RemotePort, f.Status, f.Pod)
 		}
 		b.WriteString("\nPoint redis/postgres KeePass entries at 127.0.0.1 and the local port above.\n")
 	}

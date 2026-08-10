@@ -10,7 +10,7 @@ const (
 )
 
 const (
-	fwdMarkActive   = "●F"
+	fwdMarkActive   = "Ⓕ" // U+24BB CIRCLED LATIN CAPITAL LETTER F
 	fwdMarkInactive = "○"
 )
 
