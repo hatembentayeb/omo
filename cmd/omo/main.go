@@ -53,6 +53,7 @@ func main() {
 	pluginsList := omoHost.LoadPlugins()
 	logoView := omoHost.LogoView()
 	actionsView := omoHost.ActionsView()
+	defer omoHost.Shutdown()
 
 	// Three rows: logo+version (5) + plugins list (flex) + actions (4)
 	// Two columns: sidebar (20 wide) + main content (flex)

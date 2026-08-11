@@ -121,12 +121,29 @@ func (u ViewUI) NotConnectedErr(viewID, brand string, err error, actions ...KeyB
 // Decorate wires Views / overflow KeyBindings / Actions / HelpSections onto a view
 // snapshot. moreViews may be nil when all views fit on digits 0-9.
 func Decorate(view ViewData, views, moreViews []KeyBinding, help []HelpSection, actions ...KeyBinding) ViewData {
+	logsBody := view.LogsBody
 	view.ViewBindings = views
 	view.KeyBindings = moreViews
 	view.Actions = actions
 	view.HelpSections = help
-	view.LogLines = nil
+	view.LogsBody = logsBody
 	return view
+}
+
+// Logs builds a decorated logs view (host renders LogsBody in the content area).
+func Logs(viewID, title, info, status, body string) ViewData {
+	return ViewData{
+		View:     viewID,
+		Title:    title,
+		Info:     info,
+		Status:   status,
+		LogsBody: body,
+	}
+}
+
+// Logs builds a decorated connected logs view.
+func (u ViewUI) Logs(viewID, title, info, body string, actions ...KeyBinding) ViewData {
+	return u.Decorate(Logs(viewID, title, info, "connected", body), actions...)
 }
 
 // FormatInfo appends an optional extra line to a base info panel string.

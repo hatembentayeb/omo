@@ -36,13 +36,13 @@ type PluginSession struct {
 
 // PluginManager tracks per-plugin RPC connections (pattern 2: lazy-connect, keep warm).
 type PluginManager struct {
-	mu         sync.Mutex
-	app        *tview.Application
-	pages      *tview.Pages
-	sessions   map[string]*PluginSession
-	active     string
-	logFn      func(string, ...interface{})
-	onActions  func([]pluginrpc.KeyBinding, func(string))
+	mu        sync.Mutex
+	app       *tview.Application
+	pages     *tview.Pages
+	sessions  map[string]*PluginSession
+	active    string
+	logFn     func(string, ...interface{})
+	onActions func([]pluginrpc.KeyBinding, func(string))
 }
 
 func newPluginManager(app *tview.Application, pages *tview.Pages, logFn func(string, ...interface{})) *PluginManager {
@@ -147,6 +147,7 @@ func (m *PluginManager) activateAsync(name, binPath string) {
 		return
 	}
 
+	warm := sess.Client != nil
 	if sess.Client == nil {
 		pluginrpc.RPCLog("activateAsync: Launch …")
 		t0 := time.Now()
@@ -206,6 +207,11 @@ func (m *PluginManager) activateAsync(name, binPath string) {
 	pluginrpc.RPCLog("activateAsync: resolvePluginConfig done in %s err=%v cfg_host=%s", time.Since(t0), cfgErr, cfg["host"])
 	if cfgErr != nil {
 		pluginrpc.RPCLog("activateAsync: config warn: %v", cfgErr)
+	} else if warm {
+		// Keep-warm sessions (e.g. k8sportforward tunnels) must not be reconfigured
+		// on every sidebar click — Configure often resets plugin state.
+		// Ctrl+t target switch still calls Configure directly via applyTarget.
+		pluginrpc.RPCLog("activateAsync: skip Configure (warm session)")
 	} else {
 		pluginrpc.RPCLog("activateAsync: Configure …")
 		if err := sess.Plugin.Configure(pluginrpc.ConfigureRequest{Settings: cfg}); err != nil {
@@ -287,7 +293,6 @@ func (m *PluginManager) failSession(name string, err error) {
 		KeyBindings: []pluginrpc.KeyBinding{
 			{Key: "R", Label: "Refresh", Action: "refresh"},
 		},
-		LogLines: []string{fmt.Sprintf("[red]%v", err)},
 	}
 	m.app.QueueUpdateDraw(func() {
 		if renderer != nil {

@@ -75,6 +75,12 @@ func systemActions() []pluginrpc.KeyBinding {
 	}
 }
 
+func logsActions() []pluginrpc.KeyBinding {
+	// Host owns wrap / mark / find / copy in the Actions column for LogsBody views.
+	// Plugin-side actions can be added here later (e.g. follow, tail size).
+	return nil
+}
+
 func helpSections() []pluginrpc.HelpSection {
 	return pluginrpc.HelpNav(viewNavBindings(), nil,
 		pluginrpc.HelpSection{Title: "Containers", Bindings: containersActions()},
@@ -83,6 +89,15 @@ func helpSections() []pluginrpc.HelpSection {
 		pluginrpc.HelpSection{Title: "Volumes", Bindings: volumesActions()},
 		pluginrpc.HelpSection{Title: "Compose", Bindings: composeActions()},
 		pluginrpc.HelpSection{Title: "System", Bindings: systemActions()},
+		pluginrpc.HelpSection{Title: "Logs", Bindings: []pluginrpc.KeyBinding{
+			{Key: "L", Label: "Open from container/compose"},
+			{Key: "w", Label: "Toggle wrap"},
+			{Key: "a", Label: "Toggle autoscroll"},
+			{Key: "m", Label: "Mark line"},
+			{Key: "/", Label: "Find"},
+			{Key: "y", Label: "Copy all"},
+			{Key: "ESC", Label: "Back"},
+		}},
 	)
 }
 
@@ -127,9 +142,35 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 		return s.viewComposeLocked()
 	case viewSystem:
 		return s.viewSystemLocked()
+	case viewLogs:
+		return s.viewLogsLocked()
 	default:
 		return s.viewContainersLocked()
 	}
+}
+
+func (s *Service) viewLogsLocked() (pluginrpc.ViewData, error) {
+	s.currentView = viewLogs
+	if s.logsTarget == "" {
+		return ui.Logs(viewLogs, "Logs", s.baseInfo("No target — press L on a container/compose project"),
+			"(no logs target selected)"), nil
+	}
+	var body string
+	var err error
+	if s.logsCompose {
+		body, err = s.client.ComposeLogs(s.logsTarget)
+	} else {
+		body, err = s.client.GetContainerLogs(s.logsTarget)
+	}
+	if err != nil {
+		return pluginrpc.ViewData{}, err
+	}
+	title := "Logs: " + s.logsTarget
+	extra := "Target: " + s.logsTarget
+	if s.logsCompose {
+		extra = "Compose: " + s.logsTarget
+	}
+	return ui.Logs(viewLogs, title, s.baseInfo(extra), body, logsActions()...), nil
 }
 
 func (s *Service) viewContainersLocked() (pluginrpc.ViewData, error) {

@@ -87,3 +87,10 @@ plugins:
       - database
       - sql
       - monitoring
+  k8sportforward:
+    description: Port-forward Kubernetes Deployments, StatefulSets, Services, and Pods with multi-tunnel management
+    tags:
+      - kubernetes
+      - networking
+      - port-forward
+      - devops

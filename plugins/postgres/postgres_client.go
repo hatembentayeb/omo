@@ -251,6 +251,27 @@ func (c *PostgresClient) ConnectToInstance(instance PostgresInstance) error {
 	)
 }
 
+// SwitchDatabase reconnects to a different database on the same server.
+func (c *PostgresClient) SwitchDatabase(database string) error {
+	if c.conn == nil {
+		return errors.New("not connected")
+	}
+	if database == "" {
+		return errors.New("database name required")
+	}
+	host, port, user, pass, ssl := c.conn.Host, c.conn.Port, c.conn.Username, c.conn.Password, c.conn.SSLMode
+	_ = c.Disconnect()
+	return c.Connect(host, port, user, pass, database, ssl)
+}
+
+// CurrentDatabase returns the connected database name.
+func (c *PostgresClient) CurrentDatabase() string {
+	if c.conn == nil {
+		return ""
+	}
+	return c.conn.Database
+}
+
 // Disconnect disconnects from the PostgreSQL server
 func (c *PostgresClient) Disconnect() error {
 	if !c.connected {
@@ -534,8 +555,8 @@ func (c *PostgresClient) GetTables() ([]PgTable, error) {
 	}
 
 	query := `
-		SELECT schemaname,
-			   relname,
+		SELECT s.schemaname,
+			   s.relname,
 			   pg_catalog.pg_get_userbyid(c.relowner),
 			   COALESCE(t.spcname, 'pg_default'),
 			   c.reltuples::bigint,
@@ -543,10 +564,9 @@ func (c *PostgresClient) GetTables() ([]PgTable, error) {
 			   pg_size_pretty(pg_total_relation_size(c.oid)),
 			   c.relhasindex
 		FROM pg_stat_user_tables s
-		JOIN pg_class c ON c.relname = s.relname
-			AND c.relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = s.schemaname)
+		JOIN pg_class c ON c.oid = s.relid
 		LEFT JOIN pg_tablespace t ON c.reltablespace = t.oid
-		ORDER BY schemaname, relname`
+		ORDER BY s.schemaname, s.relname`
 
 	rows, err := c.db.QueryContext(c.ctx, query)
 	if err != nil {

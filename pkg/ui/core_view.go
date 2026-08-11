@@ -29,10 +29,11 @@ type KeyBindingHelp struct {
 // It manages components like tables, help text, and navigation breadcrumbs.
 type CoreView struct {
 	// Core components
-	app        *tview.Application // Reference to the main application
-	pages      *tview.Pages       // Modal container (optional)
-	mainLayout *tview.Flex        // Main component layout
-	title      string             // Plugin title
+	app          *tview.Application // Reference to the main application
+	pages        *tview.Pages       // Modal container (optional)
+	mainLayout   *tview.Flex        // Main component layout
+	contentPages *tview.Pages       // Swaps table ↔ logs in the content area
+	title        string             // Plugin title
 
 	// Header row panels
 	infoPanel    *tview.TextView // Left: connection / status
@@ -40,6 +41,12 @@ type CoreView struct {
 	keysPanel    *tview.TextView // Right (former logs): expanded key shortcuts
 	helpExpanded bool
 	breadcrumbs  *tview.TextView
+
+	// In-place log viewer (replaces table; header stays).
+	logs             *logsView
+	logsKeysSaved    bool
+	savedKeyBindings map[string]string
+	savedKeyHandlers map[string]func()
 
 	// Optional "?" modal content (grouped by view).
 	helpSections []HelpSection
@@ -100,10 +107,10 @@ type CoreView struct {
 //   - A fully initialized CoreView instance ready to be used
 func NewCoreView(app *tview.Application, title string) *CoreView {
 	c := &CoreView{
-		app:         app,
-		title:       title,
-		selectedRow: -1,
-		stopRefresh: make(chan struct{}),
+		app:            app,
+		title:          title,
+		selectedRow:    -1,
+		stopRefresh:    make(chan struct{}),
 		viewBindings:   make(map[string]string),
 		viewBindingIDs: make(map[string]string),
 		keyBindings: map[string]string{

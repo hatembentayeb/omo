@@ -11,8 +11,8 @@ import (
 
 // initUI builds:
 //
-//	header: connection info | Views (0-9) | Actions (former logs column)
-//	then table + breadcrumbs
+//	header: connection info | Views (0-9) | Actions
+//	then content (table or in-place logs) + breadcrumbs
 func (c *CoreView) initUI() {
 	c.breadcrumbs = tview.NewTextView()
 	c.breadcrumbs.SetDynamicColors(true)
@@ -100,12 +100,17 @@ func (c *CoreView) initUI() {
 			return x, y, width, height
 		})
 
+	// Content area swaps between the table and the in-place logs viewer.
+	c.contentPages = tview.NewPages()
+	c.contentPages.SetBackgroundColor(tcell.ColorDefault)
+	c.contentPages.AddPage(tableContentPage, c.table, true, true)
+
 	c.mainLayout = tview.NewFlex()
 	c.mainLayout.SetDirection(tview.FlexRow)
 	c.mainLayout.SetBackgroundColor(tcell.ColorDefault)
 	c.mainLayout.SetBorder(false)
 	c.mainLayout.AddItem(headerRow, 5, 0, false).
 		AddItem(separator, 1, 0, false).
-		AddItem(c.table, 0, 1, true).
+		AddItem(c.contentPages, 0, 1, true).
 		AddItem(c.breadcrumbs, 1, 0, false)
 }

@@ -38,11 +38,13 @@ type ViewData struct {
 	ViewBindings []KeyBinding
 	// KeyBindings are expanded shortcuts shown in the right header column (former logs).
 	KeyBindings []KeyBinding
-	// Actions are per-view operations for the host sidebar only (current view).
+	// Actions are per-view operations for the host Actions column (current view).
 	Actions []KeyBinding
 	// HelpSections drive the "?" modal, grouped by view / topic.
 	HelpSections []HelpSection
-	LogLines     []string
+	// LogsBody, when non-empty, asks the host to render the in-place Logs view
+	// (content area) instead of the table. Same header chrome as every other view.
+	LogsBody string
 }
 
 // ActionRequest invokes a plugin-side action (refresh, delete, …).

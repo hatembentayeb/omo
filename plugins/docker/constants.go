@@ -8,4 +8,5 @@ const (
 	viewStats      = "stats"
 	viewCompose    = "compose"
 	viewSystem     = "system"
+	viewLogs       = "logs"
 )

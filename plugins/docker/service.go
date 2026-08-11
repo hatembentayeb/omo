@@ -20,6 +20,8 @@ type Service struct {
 	tlsVerify   bool
 	certPath    string
 	currentView string
+	logsTarget  string // container id or compose project for logs view
+	logsCompose bool
 }
 
 // NewService creates a docker RPC service.
@@ -208,17 +210,13 @@ func (s *Service) DoAction(req pluginrpc.ActionRequest) (pluginrpc.ActionResult,
 		if id == "" {
 			return pluginrpc.ActionResult{OK: false, Message: "no selection"}, nil
 		}
-		var body string
-		var err error
-		if s.currentView == viewCompose {
-			body, err = s.client.ComposeLogs(id)
-		} else {
-			body, err = s.client.GetContainerLogs(id)
-		}
+		s.logsTarget = id
+		s.logsCompose = s.currentView == viewCompose
+		view, err := s.viewLogsLocked()
 		if err != nil {
 			return pluginrpc.ActionResult{OK: false, Message: err.Error()}, nil
 		}
-		return pluginrpc.ActionResult{OK: true, ModalTitle: "Logs: " + id, ModalBody: body}, nil
+		return pluginrpc.ActionResult{OK: true, Message: "logs " + id, Next: &view}, nil
 
 	case "inspect":
 		if id == "" {
@@ -314,7 +312,11 @@ func (s *Service) DoAction(req pluginrpc.ActionRequest) (pluginrpc.ActionResult,
 		if err != nil {
 			return pluginrpc.ActionResult{OK: false, Message: err.Error()}, nil
 		}
-		return pluginrpc.ActionResult{OK: true, ModalTitle: "Recent Events", ModalBody: body}, nil
+		s.logsTarget = ""
+		s.logsCompose = false
+		s.currentView = viewLogs
+		view := ui.Logs(viewLogs, "Recent Events", s.baseInfo("Docker events"), body, logsActions()...)
+		return pluginrpc.ActionResult{OK: true, Message: "events", Next: &view}, nil
 
 	case "compose_up":
 		if id == "" {

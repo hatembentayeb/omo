@@ -113,9 +113,7 @@ func (c *CoreView) ShowHelpModal() {
 		title = c.title + " Help"
 	}
 	ShowInfoModal(c.pages, c.app, title, c.getExpandedHelpText(), func() {
-		if table := c.GetTable(); table != nil {
-			c.app.SetFocus(table)
-		}
+		c.FocusContent()
 	})
 }
 

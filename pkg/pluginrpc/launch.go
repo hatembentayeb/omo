@@ -56,6 +56,8 @@ func Launch(binPath string) (*plugin.Client, Plugin, error) {
 			plugin.ProtocolNetRPC,
 		},
 		Logger: logger,
+		// Reap plugin children when Kill() is called (host Shutdown / KillAll).
+		Managed: true,
 		// Avoid hanging forever if the plugin never handshakes.
 		StartTimeout: 15 * time.Second,
 	})

@@ -42,6 +42,7 @@ func usersActions() []pluginrpc.KeyBinding {
 
 func databasesActions() []pluginrpc.KeyBinding {
 	return []pluginrpc.KeyBinding{
+		{Key: "S", Label: "Switch DB", Action: "select_database"},
 		{Key: "N", Label: "New DB", Action: "create_database"},
 		{Key: "D", Label: "Drop DB", Action: "drop_database"},
 	}
@@ -172,8 +173,12 @@ func (s *Service) viewDatabasesLocked() (pluginrpc.ViewData, error) {
 	}
 	rows := make([][]string, 0, len(databases))
 	for _, d := range databases {
+		name := d.Name
+		if name == s.database {
+			name = name + " *"
+		}
 		rows = append(rows, []string{
-			d.Name, d.Owner, d.Encoding, d.Collation, d.Size, d.Tablespace, fmt.Sprintf("%d", d.ConnLimit),
+			name, d.Owner, d.Encoding, d.Collation, d.Size, d.Tablespace, fmt.Sprintf("%d", d.ConnLimit),
 		})
 	}
 	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "-", "-", "-", "No databases"})
@@ -196,7 +201,7 @@ func (s *Service) viewTablesLocked() (pluginrpc.ViewData, error) {
 		})
 	}
 	rows = pluginrpc.EnsureRows(rows, []string{"-", "-", "-", "-", "-", "-", "-", "No tables"})
-	return ui.Connected(viewTables, "PostgreSQL Tables", s.baseInfo(""), []string{"Schema", "Table", "Owner", "Rows", "Size", "Total Size", "Indexes", "Tablespace"}, rows, "Table", tablesActions()...), nil
+	return ui.Connected(viewTables, "PostgreSQL Tables", s.baseInfo(fmt.Sprintf("DB: %s · tables: %d", s.database, len(tables))), []string{"Schema", "Table", "Owner", "Rows", "Size", "Total Size", "Indexes", "Tablespace"}, rows, "Table", tablesActions()...), nil
 }
 
 func (s *Service) viewSchemasLocked() (pluginrpc.ViewData, error) {
