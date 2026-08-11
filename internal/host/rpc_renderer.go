@@ -158,15 +158,36 @@ func (r *RPCRenderer) Apply(view pluginrpc.ViewData) tview.Primitive {
 	if len(view.Headers) > 0 {
 		r.core.SetTableHeaders(view.Headers)
 	}
-	r.core.SetTableData(view.Rows)
 	if view.Info != "" {
 		r.core.SetInfoText(view.Info)
 	} else if view.Status != "" {
 		r.core.SetInfoText(fmt.Sprintf("[green]%s[white]\n%s", title, view.Status))
 	}
 
+	if view.LogsBody != "" {
+		// Logs view: same header (Info|Views|Actions), content area shows logs.
+		logsTitle := title
+		viewID := r.currentView
+		r.core.ShowLogs(logsTitle, view.LogsBody, func() (string, error) {
+			if r.plugin == nil {
+				return "", fmt.Errorf("plugin not loaded")
+			}
+			v, err := r.plugin.GetView(pluginrpc.ViewRequest{View: viewID})
+			if err != nil {
+				return "", err
+			}
+			if v.LogsBody == "" {
+				return "", fmt.Errorf("no log content returned")
+			}
+			return v.LogsBody, nil
+		})
+	} else {
+		r.core.CloseLogs()
+		r.core.SetTableData(view.Rows)
+	}
+
 	// Enter: view key / peek pubsub channel
-	if table := r.core.GetTable(); table != nil {
+	if table := r.core.GetTable(); table != nil && view.LogsBody == "" {
 		table.SetSelectedFunc(func(row, _ int) {
 			if row <= 0 {
 				return
@@ -200,22 +221,21 @@ func (r *RPCRenderer) Apply(view pluginrpc.ViewData) tview.Primitive {
 	r.root.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		return r.core.StandardKeyHandler(event, nil)
 	})
+	if view.LogsBody != "" {
+		r.core.FocusContent()
+	}
 	pluginrpc.RPCLog("RPCRenderer.Apply done bindings=%d view=%s", len(view.KeyBindings), r.currentView)
 	return r.root
 }
 
-// FocusTable moves keyboard focus to the table. Call only from the tview
-// thread (e.g. inside QueueUpdateDraw), never from SetSelectedFunc.
+// FocusTable moves keyboard focus to the content area (logs if open, else table).
+// Call only from the tview thread (e.g. inside QueueUpdateDraw), never from SetSelectedFunc.
 func (r *RPCRenderer) FocusTable() {
 	if r.core == nil {
-		return
-	}
-	table := r.core.GetTable()
-	if table == nil {
 		r.app.SetFocus(r.root)
 		return
 	}
-	r.app.SetFocus(table)
+	r.core.FocusContent()
 }
 
 // Primitive returns the root pages primitive.

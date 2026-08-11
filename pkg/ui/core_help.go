@@ -154,7 +154,12 @@ func (c *CoreView) getViewsText() string {
 
 // getKeysText renders the right header column (former logs) — current-view keys only.
 func (c *CoreView) getKeysText() string {
-	return formatBindingsColumns(buildSortedBindings(c.keyBindings), 5, 2)
+	bindings := buildSortedBindings(c.keyBindings)
+	cols := 2
+	if c.logs != nil || len(bindings) > 10 {
+		cols = 3 // logs actions need the extra column to fit in the 5-row header
+	}
+	return formatBindingsColumns(bindings, 5, cols)
 }
 
 // refreshHeaderPanels updates views + keys columns.

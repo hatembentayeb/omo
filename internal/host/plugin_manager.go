@@ -36,13 +36,13 @@ type PluginSession struct {
 
 // PluginManager tracks per-plugin RPC connections (pattern 2: lazy-connect, keep warm).
 type PluginManager struct {
-	mu         sync.Mutex
-	app        *tview.Application
-	pages      *tview.Pages
-	sessions   map[string]*PluginSession
-	active     string
-	logFn      func(string, ...interface{})
-	onActions  func([]pluginrpc.KeyBinding, func(string))
+	mu        sync.Mutex
+	app       *tview.Application
+	pages     *tview.Pages
+	sessions  map[string]*PluginSession
+	active    string
+	logFn     func(string, ...interface{})
+	onActions func([]pluginrpc.KeyBinding, func(string))
 }
 
 func newPluginManager(app *tview.Application, pages *tview.Pages, logFn func(string, ...interface{})) *PluginManager {
@@ -293,7 +293,6 @@ func (m *PluginManager) failSession(name string, err error) {
 		KeyBindings: []pluginrpc.KeyBinding{
 			{Key: "R", Label: "Refresh", Action: "refresh"},
 		},
-		LogLines: []string{fmt.Sprintf("[red]%v", err)},
 	}
 	m.app.QueueUpdateDraw(func() {
 		if renderer != nil {
