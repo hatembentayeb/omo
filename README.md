@@ -1,11 +1,9 @@
 <p align="center">
-  <img src="logo.svg" alt="omo" width="96">
+  <img src="logo-banner.svg" alt="omo — Oh My Ops" width="420">
 </p>
 
-<h1 align="center">omo</h1>
-
 <p align="center">
-  <strong>Your entire infrastructure. One terminal.</strong><br>
+  <strong>All your ops tools. One terminal.</strong><br>
   A keyboard-first ops dashboard for Redis, Docker, Kafka, Postgres, Kubernetes, AWS, Git, and more —
   backed by a local KeePass vault.
 </p>

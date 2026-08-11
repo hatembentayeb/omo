@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 200" fill="none" role="img" aria-label="omo">
+  <defs>
+    <linearGradient id="ring" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#e85d4c"/>
+      <stop offset="50%" stop-color="#f0a020"/>
+      <stop offset="100%" stop-color="#ffd56f"/>
+    </linearGradient>
+    <linearGradient id="markBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a1628"/>
+      <stop offset="100%" stop-color="#1b3a4b"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#080e1a"/>
+      <stop offset="100%" stop-color="#0d1525"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="680" height="200" rx="28" fill="url(#panel)"/>
+  <rect x="1" y="1" width="678" height="198" rx="27" stroke="#ffffff" stroke-opacity="0.08" fill="none"/>
+
+  <g transform="translate(40, 36)">
+    <rect width="128" height="128" rx="28" fill="url(#markBg)"/>
+    <circle cx="64" cy="64" r="38" stroke="url(#ring)" stroke-width="10" fill="none" opacity="0.95"/>
+    <path d="M86 36 L98 28 L94 44 Z" fill="#ffd56f"/>
+    <circle cx="92" cy="32" r="3" fill="#fff5d6" opacity="0.9"/>
+  </g>
+
+  <text
+    x="200"
+    y="118"
+    fill="#edf2fc"
+    font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
+    font-size="96"
+    font-weight="800"
+    letter-spacing="-4"
+  >omo</text>
+  <text
+    x="204"
+    y="158"
+    fill="#7a8faa"
+    font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
+    font-size="18"
+    font-weight="600"
+    letter-spacing="4.5"
+  >OH MY OPS</text>
+</svg>
