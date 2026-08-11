@@ -371,6 +371,20 @@ func (m *PluginManager) FocusActive() bool {
 	return true
 }
 
+// ActivePrimitive returns the mounted UI for the active running plugin, if any.
+func (m *PluginManager) ActivePrimitive() tview.Primitive {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.active == "" {
+		return nil
+	}
+	sess := m.sessions[m.active]
+	if sess == nil || sess.Renderer == nil || sess.State != ConnRunning {
+		return nil
+	}
+	return sess.Renderer.Primitive()
+}
+
 func resolvePluginConfig(pluginName string) (map[string]string, error) {
 	pluginrpc.RPCLog("resolvePluginConfig %s", pluginName)
 	if !pluginapi.HasSecrets() {

@@ -22,125 +22,234 @@ import (
 	"github.com/rivo/tview"
 )
 
-func NewPackageManager(app *tview.Application, pages *tview.Pages, pluginsDir string) *ui.CoreView {
-	core := ui.NewCoreView(app, "Package Manager")
-	core.SetModalPages(pages)
+const (
+	viewAll       = "all"
+	viewInstalled = "installed"
+	viewUpdates   = "updates"
+	viewAvailable = "available"
+)
 
-	core.SetTableHeaders([]string{"", "Plugin", "Installed", "Latest", "Status", "Tags"})
-	core.SetSelectionKey("Plugin")
-
-	core.AddKeyBinding("I", "Install", nil)
-	core.AddKeyBinding("U", "Update", nil)
-	core.AddKeyBinding("D", "Remove", nil)
-	core.AddKeyBinding("S", "Sync Index", nil)
-	core.AddKeyBinding("A", "Install All", nil)
-	core.AddKeyBinding("Z", "Update All", nil)
-	core.AddKeyBinding("Q", "Back", nil)
-
-	var index *pluginapi.PluginIndex
-
-	core.SetRefreshCallback(func() ([][]string, error) {
-		return refreshPluginList(core, &index)
-	})
-
-	core.SetRowSelectedCallback(func(row int) {
-		data := core.GetTableData()
-		if row >= 0 && row < len(data) {
-			updateDetailPanel(core, &index, data[row][1])
-		}
-	})
-
-	core.SetActionCallback(func(action string, payload map[string]interface{}) error {
-		if action == "rowSelected" {
-			if rowData, ok := payload["rowData"].([]string); ok && len(rowData) > 1 {
-				updateDetailPanel(core, &index, rowData[1])
-			}
-			return nil
-		}
-
-		if action != "keypress" {
-			return nil
-		}
-		key, ok := payload["key"].(string)
-		if !ok {
-			return nil
-		}
-
-		switch key {
-		case "S":
-			handleSyncIndex(core, app, pages, &index)
-		case "I":
-			handleInstallPlugin(core, app, pages, index)
-		case "U":
-			handleUpdatePlugin(core, app, pages, index)
-		case "D":
-			handleRemovePlugin(core, app, pages)
-		case "A":
-			handleInstallAll(core, app, pages, index)
-		case "Z":
-			handleUpdateAll(core, app, pages, index)
-		case "Q":
-			core.UnregisterHandlers()
-			core.StopAutoRefresh()
-			pages.SwitchToPage("main")
-		case "?":
-			ui.ShowInfoModal(pages, app, "Package Manager Help", helpText(), func() {
-				app.SetFocus(core.GetTable())
-			})
-		}
-		return nil
-	})
-
-	core.RefreshData()
-	core.RegisterHandlers()
-	core.StartAutoRefresh(120 * time.Second)
-
-	if index == nil {
-		go func() {
-			cached, err := pluginapi.LoadLocalIndex()
-			if err == nil && cached != nil && len(cached.Plugins) > 0 {
-				return
-			}
-			app.QueueUpdateDraw(func() {
-				core.Log("[yellow]⟳ Auto-syncing plugin index...")
-			})
-			fetched, err := pluginapi.FetchIndex("")
-			app.QueueUpdateDraw(func() {
-				if err != nil {
-					core.Log(fmt.Sprintf("[red]✗ Auto-sync failed: %v", err))
-					return
-				}
-				index = fetched
-				pluginapi.SaveLocalIndex(index)
-				core.Log(fmt.Sprintf("[green]✓ Index synced — %d plugins available", len(index.Plugins)))
-				core.RefreshData()
-			})
-		}()
-	}
-
-	return core
+// Manager is the Package Manager UI controller.
+type Manager struct {
+	core       *ui.CoreView
+	app        *tview.Application
+	pages      *tview.Pages
+	index      *pluginapi.PluginIndex
+	filterView string
+	onClose    func()
+	statusMsg  string
+	closed     bool
 }
 
-func refreshPluginList(core *ui.CoreView, index **pluginapi.PluginIndex) ([][]string, error) {
-	if *index == nil {
-		cached, err := pluginapi.LoadLocalIndex()
-		if err == nil && cached != nil {
-			*index = cached
+// New builds the Package Manager. onClose runs when the user exits (Q/ESC);
+// the host should RefreshPlugins, restore MainFrame, and RemovePage.
+func New(app *tview.Application, pages *tview.Pages, onClose func()) *Manager {
+	m := &Manager{
+		app:        app,
+		pages:      pages,
+		filterView: viewAll,
+		onClose:    onClose,
+	}
+	m.core = ui.NewCoreView(app, "Package Manager")
+	m.core.SetModalPages(pages)
+	m.core.SetTableHeaders([]string{"", "Plugin", "Installed", "Latest", "Status", "Tags"})
+	m.core.SetSelectionKey("Plugin")
+	m.core.SetViewStack([]string{"omo", "pkgmgr"})
+
+	m.core.SetRefreshCallback(m.refreshRows)
+	m.core.SetRowSelectedCallback(func(row int) {
+		data := m.core.GetTableData()
+		if row >= 0 && row < len(data) && len(data[row]) > 1 {
+			m.showDetail(data[row][1])
+			m.rebindChrome()
+		}
+	})
+	m.core.SetActionCallback(m.handleCoreAction)
+
+	m.installHelp()
+	m.rebindChrome()
+	m.core.RegisterHandlers()
+	m.core.RefreshData()
+	m.maybeAutoSync()
+	return m
+}
+
+// GetLayout returns the CoreView layout for embedding.
+func (m *Manager) GetLayout() tview.Primitive { return m.core.GetLayout() }
+
+// GetTable returns the table for focus.
+func (m *Manager) GetTable() *ui.Table { return m.core.GetTable() }
+
+// Destroy cleans up the CoreView.
+func (m *Manager) Destroy() {
+	if m.core != nil {
+		m.core.Destroy()
+	}
+}
+
+func (m *Manager) handleCoreAction(action string, payload map[string]interface{}) error {
+	switch action {
+	case "rowSelected":
+		if rowData, ok := payload["rowData"].([]string); ok && len(rowData) > 1 {
+			m.showDetail(rowData[1])
+			m.rebindChrome()
+		}
+		return nil
+	case "navigate_back", "back":
+		m.close()
+		return nil
+	default:
+		return fmt.Errorf("unhandled")
+	}
+}
+
+func (m *Manager) close() {
+	if m.closed {
+		return
+	}
+	m.closed = true
+	m.core.UnregisterHandlers()
+	m.core.StopAutoRefresh()
+	if m.onClose != nil {
+		m.onClose()
+	}
+}
+
+func (m *Manager) setStatus(msg string) {
+	m.statusMsg = msg
+	row := m.core.GetSelectedRowData()
+	if len(row) > 1 {
+		m.showDetail(row[1])
+	} else {
+		m.showOverview()
+	}
+}
+
+func (m *Manager) installHelp() {
+	views := []ui.KeyBindingHelp{
+		{Key: "0", Label: "All"},
+		{Key: "1", Label: "Installed"},
+		{Key: "2", Label: "Updates"},
+		{Key: "3", Label: "Available"},
+	}
+	actions := []ui.KeyBindingHelp{
+		{Key: "I", Label: "Install"},
+		{Key: "U", Label: "Update"},
+		{Key: "D", Label: "Remove"},
+		{Key: "S", Label: "Sync index"},
+		{Key: "A", Label: "Install all"},
+		{Key: "Z", Label: "Update all"},
+		{Key: "Q", Label: "Back"},
+	}
+	global := []ui.KeyBindingHelp{
+		{Key: "R", Label: "Refresh list"},
+		{Key: "/", Label: "Filter / search"},
+		{Key: "?", Label: "Help"},
+		{Key: "ESC", Label: "Back"},
+	}
+	m.core.SetHelpSections([]ui.HelpSection{
+		{Title: "Views (0-3)", Bindings: views},
+		{Title: "Actions", Bindings: actions},
+		{Title: "Global", Bindings: global},
+	})
+}
+
+func (m *Manager) rebindChrome() {
+	m.core.ClearKeyBindings()
+
+	m.core.AddViewBinding("0", "All", viewAll, func() { m.setFilterView(viewAll) })
+	m.core.AddViewBinding("1", "Installed", viewInstalled, func() { m.setFilterView(viewInstalled) })
+	m.core.AddViewBinding("2", "Updates", viewUpdates, func() { m.setFilterView(viewUpdates) })
+	m.core.AddViewBinding("3", "Available", viewAvailable, func() { m.setFilterView(viewAvailable) })
+	m.core.SetActiveView(m.filterView)
+
+	m.core.AddKeyBinding("R", "Refresh", m.refreshLocal)
+	m.core.AddKeyBinding("?", "Help", func() { m.core.ShowHelpModal() })
+	m.core.AddKeyBinding("/", "Filter", func() { m.core.ShowFilterModal() })
+	m.core.AddKeyBinding("S", "Sync Index", m.syncIndex)
+	m.core.AddKeyBinding("A", "Install All", m.installAll)
+	m.core.AddKeyBinding("Z", "Update All", m.updateAll)
+	m.core.AddKeyBinding("Q", "Back", m.close)
+
+	row := m.core.GetSelectedRowData()
+	name := ""
+	if len(row) > 1 {
+		name = row[1]
+	}
+	installed := name != "" && pluginapi.IsInstalled(name)
+	latest := ""
+	if name != "" && m.index != nil {
+		if e := findEntry(m.index, name); e != nil {
+			latest = e.Version
 		}
 	}
+	current := ""
+	if installed {
+		current = pluginapi.InstalledVersion(name)
+	}
 
-	if *index == nil || len((*index).Plugins) == 0 {
-		core.Log("[yellow]No plugin index loaded — press [white::b]S[yellow::-] to sync from remote")
+	switch {
+	case name != "" && !installed:
+		m.core.AddKeyBinding("I", "Install", m.installSelected)
+	case installed && current != latest && latest != "":
+		m.core.AddKeyBinding("U", "Update", m.updateSelected)
+		m.core.AddKeyBinding("D", "Remove", m.removeSelected)
+	case installed:
+		m.core.AddKeyBinding("D", "Remove", m.removeSelected)
+	}
+}
+
+func (m *Manager) setFilterView(id string) {
+	m.filterView = id
+	m.core.SetActiveView(id)
+	m.core.RefreshData()
+	m.rebindChrome()
+	m.app.SetFocus(m.core.GetTable())
+}
+
+func (m *Manager) refreshLocal() {
+	m.setStatus("[yellow]Refreshing…")
+	m.core.RefreshData()
+	m.setStatus(fmt.Sprintf("[green]Refreshed · %s/%s", runtime.GOOS, runtime.GOARCH))
+	m.rebindChrome()
+}
+
+func (m *Manager) refreshRows() ([][]string, error) {
+	if m.index == nil {
+		cached, err := pluginapi.LoadLocalIndex()
+		if err == nil && cached != nil {
+			m.index = cached
+		}
+	}
+	if m.index == nil || len(m.index.Plugins) == 0 {
+		m.setStatus("[yellow]No index — press S to sync")
 		return [][]string{}, nil
 	}
 
-	rows := make([][]string, 0, len((*index).Plugins))
-	for _, entry := range (*index).Plugins {
-		installedVer := pluginapi.InstalledVersion(entry.Name)
+	rows := make([][]string, 0, len(m.index.Plugins))
+	for _, entry := range m.index.Plugins {
 		installed := pluginapi.IsInstalled(entry.Name)
+		installedVer := pluginapi.InstalledVersion(entry.Name)
+		updateAvail := installed && installedVer != entry.Version
+		available := !installed
 
-		icon := "[red]○"
-		status := "[red::b]Not installed"
+		switch m.filterView {
+		case viewInstalled:
+			if !installed {
+				continue
+			}
+		case viewUpdates:
+			if !updateAvail {
+				continue
+			}
+		case viewAvailable:
+			if !available {
+				continue
+			}
+		}
+
+		icon := " "
+		status := "[red]Not installed"
 		verDisplay := "[gray]-"
 		if installed {
 			icon = "[green]●"
@@ -149,38 +258,111 @@ func refreshPluginList(core *ui.CoreView, index **pluginapi.PluginIndex) ([][]st
 			} else {
 				verDisplay = "[yellow]?"
 			}
-			if installedVer == entry.Version {
-				status = "[green]Up to date"
-			} else {
+			if updateAvail {
+				icon = "[yellow]●"
 				status = "[yellow::b]Update available"
+			} else {
+				status = "[green]Up to date"
 			}
 		}
 
-		tags := "[gray]" + strings.Join(entry.Tags, ", ")
+		if !entry.SupportsArch() {
+			status = "[red]Unsupported arch"
+		} else if entry.Checksum() == "" && !installed {
+			status = status + " [gray](no checksum)"
+		}
 
-		rows = append(rows, []string{
-			icon,
-			entry.Name,
-			verDisplay,
-			entry.Version,
-			status,
-			tags,
-		})
+		tags := "[gray]" + strings.Join(entry.Tags, ", ")
+		rows = append(rows, []string{icon, entry.Name, verDisplay, entry.Version, status, tags})
 	}
 
-	updateInfoPanel(core, rows)
+	if len(m.core.GetSelectedRowData()) <= 1 {
+		m.showOverviewFrom(rows)
+	}
 	return rows, nil
 }
 
-func updateDetailPanel(core *ui.CoreView, index **pluginapi.PluginIndex, name string) {
-	if *index == nil {
+func (m *Manager) showOverview() {
+	total := 0
+	installed := 0
+	updates := 0
+	totalSize := int64(0)
+	if m.index != nil {
+		total = len(m.index.Plugins)
+		for _, entry := range m.index.Plugins {
+			if !pluginapi.IsInstalled(entry.Name) {
+				continue
+			}
+			installed++
+			if pluginapi.InstalledVersion(entry.Name) != entry.Version {
+				updates++
+			}
+			if path, ok := pluginapi.InstalledPluginPath(entry.Name); ok {
+				if info, err := os.Stat(path); err == nil {
+					totalSize += info.Size()
+				}
+			}
+		}
+	}
+	m.showOverviewStats(total, installed, updates, totalSize)
+}
+
+func (m *Manager) showOverviewFrom(data [][]string) {
+	total := len(data)
+	if m.index != nil {
+		total = len(m.index.Plugins)
+	}
+	installed := 0
+	updates := 0
+	totalSize := int64(0)
+	if m.index != nil {
+		for _, entry := range m.index.Plugins {
+			if !pluginapi.IsInstalled(entry.Name) {
+				continue
+			}
+			installed++
+			if pluginapi.InstalledVersion(entry.Name) != entry.Version {
+				updates++
+			}
+			if path, ok := pluginapi.InstalledPluginPath(entry.Name); ok {
+				if info, err := os.Stat(path); err == nil {
+					totalSize += info.Size()
+				}
+			}
+		}
+	}
+	_ = data
+	m.showOverviewStats(total, installed, updates, totalSize)
+}
+
+func (m *Manager) showOverviewStats(total, installed, updates int, totalSize int64) {
+	available := total - installed
+	statusLine := ""
+	if m.statusMsg != "" {
+		statusLine = "\n\n" + m.statusMsg
+	}
+	text := "[aqua::b]── Overview ──[white::-]\n\n" +
+		"[aqua]Total:      [white::b]" + strconv.Itoa(total) + "[white::-]\n" +
+		"[aqua]Installed:  [green::b]" + strconv.Itoa(installed) + "[white::-]\n" +
+		"[aqua]Available:  [red]" + strconv.Itoa(available) + "[white::-]\n" +
+		"[aqua]Updates:    [yellow::b]" + strconv.Itoa(updates) + "[white::-]\n" +
+		"[aqua]Disk Usage: [white]" + formatBytes(totalSize) + "\n\n" +
+		"[aqua::b]── Platform ──[white::-]\n\n" +
+		"[aqua]OS:         [white]" + runtime.GOOS + "\n" +
+		"[aqua]Arch:       [white]" + runtime.GOARCH + "\n" +
+		"[aqua]View:       [white]" + m.filterView +
+		statusLine
+	m.core.SetInfoText(text)
+}
+
+func (m *Manager) showDetail(name string) {
+	if m.index == nil {
 		return
 	}
-	entry := findEntry(*index, name)
+	entry := findEntry(m.index, name)
 	if entry == nil {
 		return
 	}
-
 	installed := pluginapi.IsInstalled(entry.Name)
 	installedVer := pluginapi.InstalledVersion(entry.Name)
 
@@ -192,6 +374,9 @@ func updateDetailPanel(core *ui.CoreView, index **pluginapi.PluginIndex, name st
 			statusLine = fmt.Sprintf("[yellow]● Installed (%s → %s)", installedVer, entry.Version)
 		}
 	}
+	if !entry.SupportsArch() {
+		statusLine += "\n[red]This platform arch is not listed for this plugin"
+	}
 
 	pluginPath, ok := pluginapi.InstalledPluginPath(entry.Name)
 	sizeStr := "-"
@@ -201,11 +386,19 @@ func updateDetailPanel(core *ui.CoreView, index **pluginapi.PluginIndex, name st
 		}
 	}
 
-	archStr := strings.Join(entry.Arch, ", ")
-
-	checksumLine := "[gray]not provided"
+	checksumLine := "[yellow]not provided"
 	if cs := entry.Checksum(); cs != "" {
 		checksumLine = "[green]sha256:" + cs[:12] + "..."
+	}
+
+	urlLine := entry.URL
+	if urlLine == "" {
+		urlLine = "-"
+	}
+
+	statusLineExtra := ""
+	if m.statusMsg != "" {
+		statusLineExtra = "\n\n" + m.statusMsg
 	}
 
 	text := fmt.Sprintf(
@@ -217,81 +410,113 @@ func updateDetailPanel(core *ui.CoreView, index **pluginapi.PluginIndex, name st
 			"[aqua]Arch:       [white]%s\n"+
 			"[aqua]Size:       [white]%s\n"+
 			"[aqua]Integrity:  [white]%s\n"+
+			"[aqua]URL:        [white]%s\n"+
 			"[aqua]Tags:       [white]%s\n\n"+
-			"[gray]%s",
+			"[gray]%s%s",
 		entry.Name,
 		statusLine,
 		entry.Version,
 		entry.Author,
 		entry.License,
-		archStr,
+		strings.Join(entry.Arch, ", "),
 		sizeStr,
 		checksumLine,
+		urlLine,
 		strings.Join(entry.Tags, ", "),
 		entry.Description,
+		statusLineExtra,
 	)
-
-	core.SetInfoText(text)
+	m.core.SetInfoText(text)
 }
 
-func handleSyncIndex(core *ui.CoreView, app *tview.Application, pages *tview.Pages, index **pluginapi.PluginIndex) {
-	core.Log("[yellow]⟳ Syncing plugin index...")
+func (m *Manager) maybeAutoSync() {
 	go func() {
+		cached, err := pluginapi.LoadLocalIndex()
+		if err == nil && cached != nil && len(cached.Plugins) > 0 {
+			return
+		}
+		m.app.QueueUpdateDraw(func() {
+			m.setStatus("[yellow]Auto-syncing plugin index…")
+		})
 		fetched, err := pluginapi.FetchIndex("")
-		app.QueueUpdateDraw(func() {
+		m.app.QueueUpdateDraw(func() {
 			if err != nil {
-				core.Log(fmt.Sprintf("[red]✗ Sync failed: %v", err))
-				localPath := "index.yaml"
-				data, readErr := os.ReadFile(localPath)
-				if readErr != nil {
-					core.Log("[red]✗ No local fallback index available")
-					return
-				}
-				parsed, parseErr := pluginapi.ParseIndex(data)
-				if parseErr != nil {
-					core.Log(fmt.Sprintf("[red]✗ Failed to parse local index: %v", parseErr))
-					return
-				}
-				*index = parsed
-				pluginapi.SaveLocalIndex(*index)
-				core.Log(fmt.Sprintf("[green]✓ Loaded %d plugins from local index", len((*index).Plugins)))
-				core.RefreshData()
+				m.setStatus(fmt.Sprintf("[red]Auto-sync failed: %v", err))
 				return
 			}
-			*index = fetched
-			pluginapi.SaveLocalIndex(*index)
-			core.Log(fmt.Sprintf("[green]✓ Index synced — %d plugins available", len((*index).Plugins)))
-			core.RefreshData()
+			m.index = fetched
+			_ = pluginapi.SaveLocalIndex(m.index)
+			m.setStatus(fmt.Sprintf("[green]Index synced — %d plugins", len(m.index.Plugins)))
+			m.core.RefreshData()
+			m.rebindChrome()
 		})
 	}()
 }
 
-func handleInstallPlugin(core *ui.CoreView, app *tview.Application, pages *tview.Pages, index *pluginapi.PluginIndex) {
-	row := core.GetSelectedRowData()
+func (m *Manager) syncIndex() {
+	m.setStatus("[yellow]Syncing plugin index…")
+	go func() {
+		fetched, err := pluginapi.FetchIndex("")
+		m.app.QueueUpdateDraw(func() {
+			if err != nil {
+				data, readErr := os.ReadFile("index.yaml")
+				if readErr != nil {
+					m.setStatus(fmt.Sprintf("[red]Sync failed: %v", err))
+					return
+				}
+				parsed, parseErr := pluginapi.ParseIndex(data)
+				if parseErr != nil {
+					m.setStatus(fmt.Sprintf("[red]Local index parse failed: %v", parseErr))
+					return
+				}
+				m.index = parsed
+				_ = pluginapi.SaveLocalIndex(m.index)
+				m.setStatus(fmt.Sprintf("[green]Loaded %d plugins from local index.yaml", len(m.index.Plugins)))
+				m.core.RefreshData()
+				m.rebindChrome()
+				return
+			}
+			m.index = fetched
+			_ = pluginapi.SaveLocalIndex(m.index)
+			m.setStatus(fmt.Sprintf("[green]Index synced — %d plugins", len(m.index.Plugins)))
+			m.core.RefreshData()
+			m.rebindChrome()
+		})
+	}()
+}
+
+func (m *Manager) installSelected() {
+	row := m.core.GetSelectedRowData()
 	if len(row) < 2 {
-		core.Log("[red]✗ No plugin selected")
+		m.setStatus("[red]No plugin selected")
 		return
 	}
 	name := row[1]
 	if pluginapi.IsInstalled(name) {
-		core.Log(fmt.Sprintf("[yellow]⚡ %s is already installed", name))
+		m.setStatus(fmt.Sprintf("[yellow]%s is already installed", name))
 		return
 	}
-	if index == nil {
-		core.Log("[red]✗ No index loaded — press S to sync first")
+	if m.index == nil {
+		m.setStatus("[red]No index — press S to sync")
 		return
 	}
-	entry := findEntry(index, name)
+	entry := findEntry(m.index, name)
 	if entry == nil {
 		return
 	}
+	if !entry.SupportsArch() {
+		m.setStatus(fmt.Sprintf("[red]%s does not support %s", name, runtime.GOARCH))
+		return
+	}
+	if entry.Checksum() == "" {
+		m.setStatus(fmt.Sprintf("[yellow]Warning: %s has no checksum for this platform", name))
+	}
 
-	pm := ui.NewProgressModal(pages, app, fmt.Sprintf("Installing %s", name), 100)
+	pm := ui.NewProgressModal(m.pages, m.app, fmt.Sprintf("Installing %s", name), 100)
 	pm.SetCancellable(false)
 	pm.SetAutoClose(false)
 	pm.Show()
-
-	core.Log(fmt.Sprintf("[yellow]⟳ Installing %s v%s...", name, entry.Version))
+	m.setStatus(fmt.Sprintf("[yellow]Installing %s v%s…", name, entry.Version))
 
 	go func() {
 		onProgress := func(downloaded, total int64) {
@@ -303,66 +528,67 @@ func handleInstallPlugin(core *ui.CoreView, app *tview.Application, pages *tview
 			}
 			pm.UpdateProgress(pct, status)
 		}
-
-		err := downloadPlugin(entry, index.DownloadURLTemplate, onProgress)
-
+		err := downloadPlugin(entry, m.index.DownloadURLTemplate, onProgress)
 		if err != nil {
-			pm.UpdateProgress(100, fmt.Sprintf("[red]✗ Failed: %v", err))
-			app.QueueUpdateDraw(func() {
-				core.Log(fmt.Sprintf("[red]✗ Install failed for %s: %v", name, err))
+			pm.UpdateProgress(100, fmt.Sprintf("[red]Failed: %v", err))
+			m.app.QueueUpdateDraw(func() {
+				m.setStatus(fmt.Sprintf("[red]Install failed for %s: %v", name, err))
 			})
 			time.AfterFunc(2*time.Second, func() {
-				app.QueueUpdateDraw(func() { pm.Close() })
+				m.app.QueueUpdateDraw(func() { pm.Close() })
 			})
 			return
 		}
-
 		pm.UpdateProgress(95, fmt.Sprintf("Verifying %s...", name))
-		pluginapi.RecordInstalledVersion(name, entry.Version)
-		pm.UpdateProgress(100, fmt.Sprintf("[green]✓ %s installed!", name))
-		app.QueueUpdateDraw(func() {
-			core.Log(fmt.Sprintf("[green]✓ %s v%s installed successfully", name, entry.Version))
+		_ = pluginapi.RecordInstalledVersion(name, entry.Version)
+		pm.UpdateProgress(100, fmt.Sprintf("[green]%s installed!", name))
+		m.app.QueueUpdateDraw(func() {
+			m.setStatus(fmt.Sprintf("[green]%s v%s installed", name, entry.Version))
 		})
 		time.AfterFunc(time.Second, func() {
-			app.QueueUpdateDraw(func() {
+			m.app.QueueUpdateDraw(func() {
 				pm.Close()
-				core.RefreshData()
+				m.core.RefreshData()
+				m.rebindChrome()
 			})
 		})
 	}()
 }
 
-func handleUpdatePlugin(core *ui.CoreView, app *tview.Application, pages *tview.Pages, index *pluginapi.PluginIndex) {
-	row := core.GetSelectedRowData()
+func (m *Manager) updateSelected() {
+	row := m.core.GetSelectedRowData()
 	if len(row) < 2 {
-		core.Log("[red]✗ No plugin selected")
+		m.setStatus("[red]No plugin selected")
 		return
 	}
 	name := row[1]
 	if !pluginapi.IsInstalled(name) {
-		core.Log(fmt.Sprintf("[yellow]%s is not installed — press I to install", name))
+		m.setStatus(fmt.Sprintf("[yellow]%s is not installed — press I", name))
 		return
 	}
-	if index == nil {
-		core.Log("[red]✗ No index loaded")
+	if m.index == nil {
+		m.setStatus("[red]No index loaded")
 		return
 	}
-	entry := findEntry(index, name)
+	entry := findEntry(m.index, name)
 	if entry == nil {
 		return
 	}
 	current := pluginapi.InstalledVersion(name)
 	if current == entry.Version {
-		core.Log(fmt.Sprintf("[green]✓ %s is already at latest (%s)", name, current))
+		m.setStatus(fmt.Sprintf("[green]%s already at latest (%s)", name, current))
+		return
+	}
+	if !entry.SupportsArch() {
+		m.setStatus(fmt.Sprintf("[red]%s does not support %s", name, runtime.GOARCH))
 		return
 	}
 
-	pm := ui.NewProgressModal(pages, app, fmt.Sprintf("Updating %s", name), 100)
+	pm := ui.NewProgressModal(m.pages, m.app, fmt.Sprintf("Updating %s", name), 100)
 	pm.SetCancellable(false)
 	pm.SetAutoClose(false)
 	pm.Show()
-
-	core.Log(fmt.Sprintf("[yellow]⟳ Updating %s: %s → %s...", name, current, entry.Version))
+	m.setStatus(fmt.Sprintf("[yellow]Updating %s: %s → %s…", name, current, entry.Version))
 
 	go func() {
 		onProgress := func(downloaded, total int64) {
@@ -374,47 +600,44 @@ func handleUpdatePlugin(core *ui.CoreView, app *tview.Application, pages *tview.
 			}
 			pm.UpdateProgress(pct, status)
 		}
-
-		err := downloadPlugin(entry, index.DownloadURLTemplate, onProgress)
-
+		err := downloadPlugin(entry, m.index.DownloadURLTemplate, onProgress)
 		if err != nil {
-			pm.UpdateProgress(100, fmt.Sprintf("[red]✗ Failed: %v", err))
-			app.QueueUpdateDraw(func() {
-				core.Log(fmt.Sprintf("[red]✗ Update failed for %s: %v", name, err))
+			pm.UpdateProgress(100, fmt.Sprintf("[red]Failed: %v", err))
+			m.app.QueueUpdateDraw(func() {
+				m.setStatus(fmt.Sprintf("[red]Update failed for %s: %v", name, err))
 			})
 			time.AfterFunc(2*time.Second, func() {
-				app.QueueUpdateDraw(func() { pm.Close() })
+				m.app.QueueUpdateDraw(func() { pm.Close() })
 			})
 			return
 		}
-
 		pm.UpdateProgress(95, fmt.Sprintf("Verifying %s...", name))
-		pluginapi.RecordInstalledVersion(name, entry.Version)
-		pm.UpdateProgress(100, fmt.Sprintf("[green]✓ %s updated!", name))
-		app.QueueUpdateDraw(func() {
-			core.Log(fmt.Sprintf("[green]✓ %s updated to v%s", name, entry.Version))
+		_ = pluginapi.RecordInstalledVersion(name, entry.Version)
+		pm.UpdateProgress(100, fmt.Sprintf("[green]%s updated!", name))
+		m.app.QueueUpdateDraw(func() {
+			m.setStatus(fmt.Sprintf("[green]%s updated to v%s", name, entry.Version))
 		})
 		time.AfterFunc(time.Second, func() {
-			app.QueueUpdateDraw(func() {
+			m.app.QueueUpdateDraw(func() {
 				pm.Close()
-				core.RefreshData()
+				m.core.RefreshData()
+				m.rebindChrome()
 			})
 		})
 	}()
 }
 
-func handleRemovePlugin(core *ui.CoreView, app *tview.Application, pages *tview.Pages) {
-	row := core.GetSelectedRowData()
+func (m *Manager) removeSelected() {
+	row := m.core.GetSelectedRowData()
 	if len(row) < 2 {
-		core.Log("[red]✗ No plugin selected")
+		m.setStatus("[red]No plugin selected")
 		return
 	}
 	name := row[1]
 	if !pluginapi.IsInstalled(name) {
-		core.Log(fmt.Sprintf("[yellow]%s is not installed", name))
+		m.setStatus(fmt.Sprintf("[yellow]%s is not installed", name))
 		return
 	}
-
 	pluginPath, ok := pluginapi.InstalledPluginPath(name)
 	sizeStr := ""
 	if ok {
@@ -422,198 +645,204 @@ func handleRemovePlugin(core *ui.CoreView, app *tview.Application, pages *tview.
 			sizeStr = fmt.Sprintf(" (%s)", formatBytes(info.Size()))
 		}
 	}
-
 	ui.ShowStandardConfirmationModal(
-		pages, app,
+		m.pages, m.app,
 		"Remove Plugin",
 		fmt.Sprintf("Remove [red::b]%s[white::-]%s?\n\nThis will delete the plugin binary.", name, sizeStr),
 		func(confirmed bool) {
 			if !confirmed {
-				app.SetFocus(core.GetTable())
+				m.app.SetFocus(m.core.GetTable())
 				return
 			}
 			pluginDir := filepath.Join(pluginapi.PluginsDir(), name)
 			if err := os.RemoveAll(pluginDir); err != nil {
-				core.Log(fmt.Sprintf("[red]✗ Remove failed: %v", err))
+				m.setStatus(fmt.Sprintf("[red]Remove failed: %v", err))
 			} else {
-				pluginapi.RemoveInstalledRecord(name)
-				core.Log(fmt.Sprintf("[green]✓ %s removed", name))
-				core.RefreshData()
+				_ = pluginapi.RemoveInstalledRecord(name)
+				m.setStatus(fmt.Sprintf("[green]%s removed", name))
+				m.core.RefreshData()
+				m.rebindChrome()
 			}
-			app.SetFocus(core.GetTable())
+			m.app.SetFocus(m.core.GetTable())
 		},
 	)
 }
 
-func handleInstallAll(core *ui.CoreView, app *tview.Application, pages *tview.Pages, index *pluginapi.PluginIndex) {
-	if index == nil {
-		core.Log("[red]✗ No index loaded — press S to sync first")
+func (m *Manager) installAll() {
+	if m.index == nil {
+		m.setStatus("[red]No index — press S to sync")
 		return
 	}
-
 	var toInstall []pluginapi.IndexEntry
-	for _, entry := range index.Plugins {
-		if !pluginapi.IsInstalled(entry.Name) {
-			toInstall = append(toInstall, entry)
+	for _, entry := range m.index.Plugins {
+		if pluginapi.IsInstalled(entry.Name) {
+			continue
 		}
+		if !entry.SupportsArch() {
+			continue
+		}
+		toInstall = append(toInstall, entry)
 	}
-
 	if len(toInstall) == 0 {
-		core.Log("[green]✓ All plugins are already installed")
+		m.setStatus("[green]Nothing to install for this platform")
 		return
 	}
-
 	ui.ShowStandardConfirmationModal(
-		pages, app,
+		m.pages, m.app,
 		"Install All",
 		fmt.Sprintf("Install [aqua::b]%d[white::-] plugins?\n\n%s", len(toInstall), pluginNameList(toInstall)),
 		func(confirmed bool) {
 			if !confirmed {
-				app.SetFocus(core.GetTable())
+				m.app.SetFocus(m.core.GetTable())
 				return
 			}
-			app.SetFocus(core.GetTable())
-
-			total := len(toInstall)
-			pm := ui.NewProgressModal(pages, app, "Installing All Plugins", total)
-			pm.SetCancellable(false)
-			pm.SetAutoClose(false)
-			pm.Show()
-
-			core.Log(fmt.Sprintf("[yellow]⟳ Installing %d plugins...", total))
-
-			go func() {
-				installed := 0
-				failed := 0
-				var mu sync.Mutex
-				var wg sync.WaitGroup
-				sem := make(chan struct{}, 3)
-
-				for i, entry := range toInstall {
-					wg.Add(1)
-					go func(idx int, e pluginapi.IndexEntry) {
-						defer wg.Done()
-						sem <- struct{}{}
-						defer func() { <-sem }()
-
-						pm.UpdateProgress(idx, fmt.Sprintf("Downloading %s (%d/%d)...", e.Name, idx+1, total))
-
-						if err := downloadPlugin(&e, index.DownloadURLTemplate, nil); err != nil {
-							mu.Lock()
-							failed++
-							mu.Unlock()
-							app.QueueUpdateDraw(func() {
-								core.Log(fmt.Sprintf("[red]✗ %s: %v", e.Name, err))
-							})
-							return
-						}
-						pluginapi.RecordInstalledVersion(e.Name, e.Version)
-						mu.Lock()
-						installed++
-						mu.Unlock()
-						app.QueueUpdateDraw(func() {
-							core.Log(fmt.Sprintf("[green]✓ %s v%s installed", e.Name, e.Version))
-						})
-					}(i, entry)
-				}
-
-				wg.Wait()
-
-				if failed == 0 {
-					pm.UpdateProgress(total, fmt.Sprintf("[green]✓ All %d plugins installed!", installed))
-				} else {
-					pm.UpdateProgress(total, fmt.Sprintf("[yellow]Done: %d installed, %d failed", installed, failed))
-				}
-				app.QueueUpdateDraw(func() {
-					core.Log(fmt.Sprintf("[green]✓ Bulk install complete: %d installed, %d failed", installed, failed))
-				})
-				time.AfterFunc(2*time.Second, func() {
-					app.QueueUpdateDraw(func() {
-						pm.Close()
-						core.RefreshData()
-					})
-				})
-			}()
+			m.app.SetFocus(m.core.GetTable())
+			m.runBulkInstall(toInstall)
 		},
 	)
 }
 
-func handleUpdateAll(core *ui.CoreView, app *tview.Application, pages *tview.Pages, index *pluginapi.PluginIndex) {
-	if index == nil {
-		core.Log("[red]✗ No index loaded")
-		return
-	}
-
-	var toUpdate []pluginapi.IndexEntry
-	for _, entry := range index.Plugins {
-		if pluginapi.IsInstalled(entry.Name) {
-			current := pluginapi.InstalledVersion(entry.Name)
-			if current != entry.Version {
-				toUpdate = append(toUpdate, entry)
-			}
-		}
-	}
-
-	if len(toUpdate) == 0 {
-		core.Log("[green]✓ All installed plugins are up to date")
-		return
-	}
-
-	total := len(toUpdate)
-	pm := ui.NewProgressModal(pages, app, "Updating All Plugins", total)
+func (m *Manager) runBulkInstall(toInstall []pluginapi.IndexEntry) {
+	total := len(toInstall)
+	pm := ui.NewProgressModal(m.pages, m.app, "Installing All Plugins", total)
 	pm.SetCancellable(false)
 	pm.SetAutoClose(false)
 	pm.Show()
-
-	core.Log(fmt.Sprintf("[yellow]⟳ Updating %d plugins...", total))
+	m.setStatus(fmt.Sprintf("[yellow]Installing %d plugins…", total))
 
 	go func() {
-		updated := 0
-		failed := 0
-		for i, entry := range toUpdate {
-			pm.UpdateProgress(i, fmt.Sprintf("Updating %s (%d/%d)...", entry.Name, i+1, total))
-			if err := downloadPlugin(&entry, index.DownloadURLTemplate, nil); err != nil {
-				failed++
-				app.QueueUpdateDraw(func() {
-					core.Log(fmt.Sprintf("[red]✗ Failed to update %s: %v", entry.Name, err))
-				})
-				continue
-			}
-			pluginapi.RecordInstalledVersion(entry.Name, entry.Version)
-			updated++
-			app.QueueUpdateDraw(func() {
-				core.Log(fmt.Sprintf("[green]✓ %s updated to v%s", entry.Name, entry.Version))
-			})
-		}
+		var (
+			mu        sync.Mutex
+			installed int
+			failed    int
+			done      int
+			wg        sync.WaitGroup
+		)
+		sem := make(chan struct{}, 3)
+		for _, entry := range toInstall {
+			wg.Add(1)
+			go func(e pluginapi.IndexEntry) {
+				defer wg.Done()
+				sem <- struct{}{}
+				defer func() { <-sem }()
 
-		if failed == 0 {
-			pm.UpdateProgress(total, fmt.Sprintf("[green]✓ All %d plugins updated!", updated))
-		} else {
-			pm.UpdateProgress(total, fmt.Sprintf("[yellow]Done: %d updated, %d failed", updated, failed))
+				err := downloadPlugin(&e, m.index.DownloadURLTemplate, nil)
+				mu.Lock()
+				done++
+				cur := done
+				if err != nil {
+					failed++
+					mu.Unlock()
+					pm.UpdateProgress(cur, fmt.Sprintf("Failed %s (%d/%d)", e.Name, cur, total))
+					return
+				}
+				_ = pluginapi.RecordInstalledVersion(e.Name, e.Version)
+				installed++
+				mu.Unlock()
+				pm.UpdateProgress(cur, fmt.Sprintf("Installed %s (%d/%d)", e.Name, cur, total))
+			}(entry)
 		}
-		app.QueueUpdateDraw(func() {
-			core.Log(fmt.Sprintf("[green]✓ Bulk update complete: %d updated, %d failed", updated, failed))
+		wg.Wait()
+		msg := fmt.Sprintf("[green]Done: %d installed, %d failed", installed, failed)
+		if failed == 0 {
+			msg = fmt.Sprintf("[green]All %d plugins installed!", installed)
+		}
+		pm.UpdateProgress(total, msg)
+		m.app.QueueUpdateDraw(func() {
+			m.setStatus(msg)
 		})
 		time.AfterFunc(2*time.Second, func() {
-			app.QueueUpdateDraw(func() {
+			m.app.QueueUpdateDraw(func() {
 				pm.Close()
-				core.RefreshData()
+				m.core.RefreshData()
+				m.rebindChrome()
 			})
 		})
 	}()
 }
 
-// progressFunc is called during download with (bytesDownloaded, totalBytes).
-// totalBytes is -1 if Content-Length is unknown.
+func (m *Manager) updateAll() {
+	if m.index == nil {
+		m.setStatus("[red]No index loaded")
+		return
+	}
+	var toUpdate []pluginapi.IndexEntry
+	for _, entry := range m.index.Plugins {
+		if !pluginapi.IsInstalled(entry.Name) {
+			continue
+		}
+		if pluginapi.InstalledVersion(entry.Name) == entry.Version {
+			continue
+		}
+		if !entry.SupportsArch() {
+			continue
+		}
+		toUpdate = append(toUpdate, entry)
+	}
+	if len(toUpdate) == 0 {
+		m.setStatus("[green]All installed plugins are up to date")
+		return
+	}
+	ui.ShowStandardConfirmationModal(
+		m.pages, m.app,
+		"Update All",
+		fmt.Sprintf("Update [aqua::b]%d[white::-] plugins?\n\n%s", len(toUpdate), pluginNameList(toUpdate)),
+		func(confirmed bool) {
+			if !confirmed {
+				m.app.SetFocus(m.core.GetTable())
+				return
+			}
+			m.app.SetFocus(m.core.GetTable())
+			m.runBulkUpdate(toUpdate)
+		},
+	)
+}
+
+func (m *Manager) runBulkUpdate(toUpdate []pluginapi.IndexEntry) {
+	total := len(toUpdate)
+	pm := ui.NewProgressModal(m.pages, m.app, "Updating All Plugins", total)
+	pm.SetCancellable(false)
+	pm.SetAutoClose(false)
+	pm.Show()
+	m.setStatus(fmt.Sprintf("[yellow]Updating %d plugins…", total))
+
+	go func() {
+		updated := 0
+		failed := 0
+		for i, entry := range toUpdate {
+			pm.UpdateProgress(i, fmt.Sprintf("Updating %s (%d/%d)…", entry.Name, i+1, total))
+			if err := downloadPlugin(&entry, m.index.DownloadURLTemplate, nil); err != nil {
+				failed++
+				continue
+			}
+			_ = pluginapi.RecordInstalledVersion(entry.Name, entry.Version)
+			updated++
+		}
+		msg := fmt.Sprintf("[yellow]Done: %d updated, %d failed", updated, failed)
+		if failed == 0 {
+			msg = fmt.Sprintf("[green]All %d plugins updated!", updated)
+		}
+		pm.UpdateProgress(total, msg)
+		m.app.QueueUpdateDraw(func() { m.setStatus(msg) })
+		time.AfterFunc(2*time.Second, func() {
+			m.app.QueueUpdateDraw(func() {
+				pm.Close()
+				m.core.RefreshData()
+				m.rebindChrome()
+			})
+		})
+	}()
+}
+
+// --- download / extract (unchanged pipeline) ---
+
 type progressFunc func(downloaded, total int64)
 
 func downloadPlugin(entry *pluginapi.IndexEntry, urlTemplate string, onProgress progressFunc) error {
 	url := entry.DownloadURL(urlTemplate)
-
 	if err := pluginapi.EnsurePluginDirs(entry.Name); err != nil {
 		return fmt.Errorf("create dirs: %w", err)
 	}
-
 	destPath := pluginapi.PluginBinPath(entry.Name)
 	tmpPath := destPath + ".tmp"
 	archivePath := destPath + ".download"
@@ -624,26 +853,21 @@ func downloadPlugin(entry *pluginapi.IndexEntry, urlTemplate string, onProgress 
 		return fmt.Errorf("download: %w", err)
 	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("HTTP %d from %s", resp.StatusCode, url)
 	}
 
 	totalBytes := resp.ContentLength
-
 	archiveFile, err := os.Create(archivePath)
 	if err != nil {
 		return fmt.Errorf("create archive: %w", err)
 	}
-
 	hasher := sha256.New()
 	dest := io.MultiWriter(archiveFile, hasher)
-
 	var src io.Reader = resp.Body
 	if onProgress != nil {
 		src = &progressReader{reader: resp.Body, total: totalBytes, onProgress: onProgress}
 	}
-
 	if _, err := io.Copy(dest, src); err != nil {
 		archiveFile.Close()
 		os.Remove(archivePath)
@@ -681,12 +905,10 @@ func downloadPlugin(entry *pluginapi.IndexEntry, urlTemplate string, onProgress 
 			return fmt.Errorf("rename: %w", err)
 		}
 	}
-
 	if err := os.Chmod(tmpPath, 0755); err != nil {
 		os.Remove(tmpPath)
 		return err
 	}
-
 	return os.Rename(tmpPath, destPath)
 }
 
@@ -714,10 +936,8 @@ func extractPluginFromTarGz(r io.Reader, pluginName, destPath string) error {
 		return fmt.Errorf("gzip: %w", err)
 	}
 	defer gz.Close()
-
 	tr := tar.NewReader(gz)
 	var anyFile []byte
-
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
@@ -729,14 +949,11 @@ func extractPluginFromTarGz(r io.Reader, pluginName, destPath string) error {
 		if hdr.Typeflag != tar.TypeReg {
 			continue
 		}
-
 		name := filepath.Base(hdr.Name)
 		data, err := io.ReadAll(tr)
 		if err != nil {
 			return fmt.Errorf("read %s: %w", name, err)
 		}
-
-		// Preferred: exact RPC binary name (e.g. "redis").
 		if name == pluginName {
 			return os.WriteFile(destPath, data, 0755)
 		}
@@ -744,7 +961,6 @@ func extractPluginFromTarGz(r io.Reader, pluginName, destPath string) error {
 			anyFile = data
 		}
 	}
-
 	if anyFile != nil {
 		return os.WriteFile(destPath, anyFile, 0755)
 	}
@@ -779,74 +995,4 @@ func formatBytes(b int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
-}
-
-func helpText() string {
-	return fmt.Sprintf(`[yellow::b]Package Manager[white::-]
-[gray]Platform: %s/%s
-
-[aqua::b]Actions[white::-]
-[green]S[white]  Sync index from remote
-[green]I[white]  Install selected plugin
-[green]U[white]  Update selected plugin
-[green]D[white]  Remove selected plugin
-[green]A[white]  Install all available plugins
-[green]Z[white]  Update all installed plugins
-[green]Q[white]  Back to main menu
-[green]?[white]  Show this help
-
-[aqua::b]Navigation[white::-]
-[green]↑/↓[white]  Navigate plugin list
-[green]R[white]    Refresh list
-[green]/[white]    Filter/search
-[green]Esc[white]  Close modal
-
-[aqua::b]Status Icons[white::-]
-[green]●[white]  Installed & up to date
-[yellow]●[white]  Update available
-[red]○[white]  Not installed
-
-[aqua::b]Paths[white::-]
-Plugins: ~/.omo/plugins/<name>/
-Configs: ~/.omo/configs/<name>/`, runtime.GOOS, runtime.GOARCH)
-}
-
-func updateInfoPanel(core *ui.CoreView, data [][]string) {
-	total := len(data)
-	installed := 0
-	updates := 0
-	totalSize := int64(0)
-
-	for _, row := range data {
-		if len(row) < 5 {
-			continue
-		}
-		if strings.Contains(row[4], "Up to date") || strings.Contains(row[4], "Update") {
-			installed++
-			name := row[1]
-			if path, ok := pluginapi.InstalledPluginPath(name); ok {
-				if info, err := os.Stat(path); err == nil {
-					totalSize += info.Size()
-				}
-			}
-		}
-		if strings.Contains(row[4], "Update available") {
-			updates++
-		}
-	}
-
-	available := total - installed
-
-	text := "[aqua::b]── Overview ──[white::-]\n\n" +
-		"[aqua]Total:      [white::b]" + strconv.Itoa(total) + "[white::-]\n" +
-		"[aqua]Installed:  [green::b]" + strconv.Itoa(installed) + "[white::-]\n" +
-		"[aqua]Available:  [red]" + strconv.Itoa(available) + "[white::-]\n" +
-		"[aqua]Updates:    [yellow::b]" + strconv.Itoa(updates) + "[white::-]\n" +
-		"[aqua]Disk Usage: [white]" + formatBytes(totalSize) + "\n\n" +
-		"[aqua::b]── Platform ──[white::-]\n\n" +
-		"[aqua]OS:         [white]" + runtime.GOOS + "\n" +
-		"[aqua]Arch:       [white]" + runtime.GOARCH + "\n\n" +
-		"[gray]Last refresh: " + time.Now().Format("15:04:05")
-
-	core.SetInfoText(text)
 }

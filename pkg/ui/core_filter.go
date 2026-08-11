@@ -27,6 +27,11 @@ func (c *CoreView) GetFilterQuery() string {
 	return c.filterQuery
 }
 
+// ShowFilterModal opens the row filter input (bound to "/").
+func (c *CoreView) ShowFilterModal() {
+	c.showFilterModal()
+}
+
 func (c *CoreView) showFilterModal() {
 	if c.pages == nil {
 		c.Log("[red]Filter unavailable")

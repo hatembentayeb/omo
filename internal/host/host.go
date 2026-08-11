@@ -32,6 +32,9 @@ type Host struct {
 func New(app *tview.Application, pages *tview.Pages, logger *pluginapi.Logger, version string) *Host {
 	mainFrame := tview.NewFrame(nil)
 	mainFrame.SetBackgroundColor(tcell.ColorDefault)
+	// NewFrame defaults to 1-cell margins; keep content flush with the grid border.
+	mainFrame.SetBorders(0, 0, 0, 0, 0, 0)
+	mainFrame.SetBorderPadding(0, 0, 0, 0)
 
 	mainUI := tview.NewGrid()
 	mainUI.SetBackgroundColor(tcell.ColorDefault)
@@ -197,10 +200,39 @@ func (h *Host) RefreshPlugins() {
 // OpenPackageManager shows the package manager UI.
 func (h *Host) OpenPackageManager() {
 	h.log("opening package manager")
-	pm := packagemanager.NewPackageManager(h.App, h.Pages, h.PluginsDir)
-	h.Pages.AddPage("packageManager", pm.GetLayout(), true, false)
+	const pageID = "packageManager"
+	if h.Pages.HasPage(pageID) {
+		h.Pages.RemovePage(pageID)
+	}
+
+	var pm *packagemanager.Manager
+	pm = packagemanager.New(h.App, h.Pages, func() {
+		h.RefreshPlugins()
+		h.restoreMainContent()
+		if h.Pages.HasPage(pageID) {
+			h.Pages.RemovePage(pageID)
+		}
+		if pm != nil {
+			pm.Destroy()
+		}
+		h.resetHostActions()
+		h.App.SetFocus(h.PluginsList)
+	})
+
+	h.Pages.AddPage(pageID, pm.GetLayout(), true, false)
 	h.MainFrame.SetPrimitive(pm.GetLayout())
 	h.App.SetFocus(pm.GetTable())
+}
+
+func (h *Host) restoreMainContent() {
+	if h.rpcManager != nil {
+		if p := h.rpcManager.ActivePrimitive(); p != nil {
+			h.MainFrame.SetPrimitive(p)
+			h.rpcManager.FocusActive()
+			return
+		}
+	}
+	h.MainFrame.SetPrimitive(Cover(h.App, h.version))
 }
 
 func discoverPlugins(pluginsDir string) (*tview.List, error) {
