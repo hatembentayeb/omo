@@ -35,6 +35,19 @@ func (e *IndexEntry) Checksum() string {
 	return e.Checksums[key]
 }
 
+// SupportsArch reports whether the entry lists the current GOARCH (or has no arch list).
+func (e *IndexEntry) SupportsArch() bool {
+	if len(e.Arch) == 0 {
+		return true
+	}
+	for _, a := range e.Arch {
+		if a == runtime.GOARCH || a == runtime.GOOS+"-"+runtime.GOARCH {
+			return true
+		}
+	}
+	return false
+}
+
 // PluginIndex represents the full index file.
 type PluginIndex struct {
 	APIVersion          string       `yaml:"api_version"`

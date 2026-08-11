@@ -1,6 +1,8 @@
 package host
 
 import (
+	"fmt"
+
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
@@ -12,89 +14,77 @@ const logo = `[#FF6B00]
 ██    ██ ██   ██ ██  ██  ██    ██    ██    ██ ██           ██ 
  ██████  ██   ██ ██      ██    ██     ██████  ██      ███████ [white]
 `
-const (
-	subtitle    = `[#4CAF50]OhMyOps - Terminal Operations Dashboard[white]`
-	welcome     = `[#FFD700]Welcome to OhMyOps![white]`
-	description = `[#00BCD4]A powerful terminal-based operations toolkit for DevOps professionals[white]`
-	features    = `[#E91E63]• Streamline your DevOps workflows efficiently
-• Extend functionality with custom plugins
-• Manage your infrastructure with ease[white]`
-	quickStart = `[#FFD700]Quick Start Guide[white]`
-	commands   = `[#03A9F4]• Browse available plugins in the left sidebar
-• Press [#FF9900]'r'[white] to refresh the plugin list
-• Press [#FF9900]'a'[white] to access settings
-• Select a plugin to activate its features[white]`
-)
 
-// Cover returns the cover page.
-func Cover(app *tview.Application) tview.Primitive {
-	// Create styled logo with glow effect
+// Cover returns the home splash shown before a plugin is selected.
+func Cover(app *tview.Application, version string) tview.Primitive {
+	if version == "" {
+		version = "dev"
+	}
+
 	logoBox := tview.NewTextView()
 	logoBox.SetDynamicColors(true)
 	logoBox.SetTextAlign(tview.AlignCenter)
 	logoBox.SetBackgroundColor(tcell.ColorDefault)
+	logoBox.SetText(logo + "\n[#FF8C40]Terminal operations, one plugin at a time[white]")
 
-	// Add subtle shadow effect to logo
-	logoWithShadow := logo + "\n[#FF8C40]  OMO - Terminal Operations Dashboard  [white]"
-	logoBox.SetText(logoWithShadow)
+	about := fmt.Sprintf(
+		"[#FFD700]OhMyOps[white]\n\n"+
+			"[#4CAF50]Version[white]  %s\n\n"+
+			"[#00BCD4]A TUI host for ops plugins — Docker, Redis,\n"+
+			"Kubernetes, Kafka, Git, S3, Postgres, and more.\n\n"+
+			"Pick a plugin from the sidebar. Each screen\n"+
+			"shares the same chrome: Info · Views · Actions.[white]",
+		version,
+	)
 
-	// Create the info content
-	infoContent := welcome + "\n\n" +
-		"[#4CAF50]Version:[white] v1.0.0\n" +
-		"[#4CAF50]Available Plugins:[white] " + "Discover in sidebar\n\n" +
-		description
+	aboutBox := tview.NewTextView()
+	aboutBox.SetDynamicColors(true)
+	aboutBox.SetTextAlign(tview.AlignLeft)
+	aboutBox.SetBorder(true)
+	aboutBox.SetBorderColor(tcell.ColorDarkCyan)
+	aboutBox.SetTitle(" About ")
+	aboutBox.SetTitleColor(tcell.ColorOrange)
+	aboutBox.SetBorderPadding(1, 1, 2, 2)
+	aboutBox.SetBackgroundColor(tcell.ColorDefault)
+	aboutBox.SetText(about)
 
-	// Create a framed info box
-	infoBox := tview.NewTextView()
-	infoBox.SetDynamicColors(true)
-	infoBox.SetTextAlign(tview.AlignCenter)
-	infoBox.SetBorder(true)
-	infoBox.SetBorderColor(tcell.ColorDarkCyan)
-	infoBox.SetTitle(" About ")
-	infoBox.SetTitleColor(tcell.ColorOrange)
-	infoBox.SetBorderPadding(1, 1, 2, 2)
-	infoBox.SetBackgroundColor(tcell.ColorDefault)
-	infoBox.SetText(infoContent)
+	start := "[#FFD700]Start here[white]\n\n" +
+		"[#FF9900]Enter[white]   Open selected plugin\n" +
+		"[#FF9900]Tab[white]     Cycle sidebar · content · actions\n" +
+		"[#FF9900]p[white]       Package Manager (install / update)\n" +
+		"[#FF9900]r[white]       Refresh plugin list\n" +
+		"[#FF9900]Ctrl+t[white]  Switch target / connection\n" +
+		"[#FF9900]?[white]       Help for the active view\n\n" +
+		"[#4CAF50]Inside a plugin[white]\n" +
+		"[#FF9900]0-9[white]     Switch views\n" +
+		"[#FF9900]/[white]       Filter the table\n" +
+		"[#FF9900]R[white]       Refresh data\n" +
+		"[#FF9900]ESC[white]     Back"
 
-	// Create features content
-	enhancedFeatures := "[#FFD700]✨ Plugin System[white]\n" +
-		"   Extend functionality with powerful plugins\n\n" +
-		"[#FFD700]✨ Easy Installation[white]\n" +
-		"   Simple command-line installation for plugins\n\n" +
-		"[#FFD700]✨ Configuration[white]\n" +
-		"   Flexible configuration for all your needs\n\n" +
-		"[#FFD700]✨ Getting Started[white]\n" +
-		"   " + commands
+	startBox := tview.NewTextView()
+	startBox.SetDynamicColors(true)
+	startBox.SetTextAlign(tview.AlignLeft)
+	startBox.SetBorder(true)
+	startBox.SetBorderColor(tcell.ColorDarkCyan)
+	startBox.SetTitle(" Keys ")
+	startBox.SetTitleColor(tcell.ColorOrange)
+	startBox.SetBorderPadding(1, 1, 2, 2)
+	startBox.SetBackgroundColor(tcell.ColorDefault)
+	startBox.SetText(start)
 
-	// Create a features showcase
-	featuresBox := tview.NewTextView()
-	featuresBox.SetDynamicColors(true)
-	featuresBox.SetTextAlign(tview.AlignLeft)
-	featuresBox.SetBorder(true)
-	featuresBox.SetBorderColor(tcell.ColorDarkCyan)
-	featuresBox.SetTitle(" Features ")
-	featuresBox.SetTitleColor(tcell.ColorOrange)
-	featuresBox.SetBorderPadding(1, 1, 2, 2)
-	featuresBox.SetBackgroundColor(tcell.ColorDefault)
-	featuresBox.SetText(enhancedFeatures)
-
-	// Create a grid layout for better organization
 	grid := tview.NewGrid()
-	grid.SetColumns(0, 40, 40, 0)
-	grid.SetRows(0, 12, 0, 15, 0)
+	grid.SetColumns(0, 42, 42, 0)
+	grid.SetRows(0, 11, 1, 16, 0)
 	grid.SetBorders(false)
 	grid.SetBackgroundColor(tcell.ColorDefault)
-
-	// Add items to the grid with proper positioning
 	grid.AddItem(logoBox, 1, 1, 1, 2, 0, 0, true)
-	grid.AddItem(infoBox, 3, 1, 1, 1, 0, 0, false)
-	grid.AddItem(featuresBox, 3, 2, 1, 1, 0, 0, false)
+	grid.AddItem(aboutBox, 3, 1, 1, 1, 0, 0, false)
+	grid.AddItem(startBox, 3, 2, 1, 1, 0, 0, false)
 
-	// Create a frame around everything for a polished look
 	frame := tview.NewFrame(grid)
 	frame.SetBorders(0, 0, 0, 0, 0, 0)
 	frame.SetBackgroundColor(tcell.ColorDefault)
-	frame.AddText("Press Tab to navigate", true, tview.AlignCenter, tcell.ColorDimGray)
+	frame.AddText("Select a plugin · p opens Package Manager", true, tview.AlignCenter, tcell.ColorDimGray)
 
 	app.SetFocus(logoBox)
 	return frame
