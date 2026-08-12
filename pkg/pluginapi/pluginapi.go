@@ -16,6 +16,8 @@ import (
 //	├── plugins/<name>/<name>        ← RPC plugin executables (go-plugin)
 //	├── secrets/omo.kdbx             ← KeePass secrets database (all config + secrets)
 //	├── keys/omo.key                 ← KeePass key file (auto-generated)
+//	├── index.yaml                   ← cached plugin catalog
+//	├── installed.yaml               ← installed plugin versions
 //	└── logs/<name>.log              ← per-plugin + main app log files
 const OmoHome = ".omo"
 
@@ -52,6 +54,26 @@ func PluginsDir() string {
 // LogsDir returns the absolute path to ~/.omo/logs.
 func LogsDir() string {
 	return filepath.Join(OmoDir(), "logs")
+}
+
+// SecretsDir returns the absolute path to ~/.omo/secrets.
+func SecretsDir() string {
+	return filepath.Join(OmoDir(), "secrets")
+}
+
+// KeysDir returns the absolute path to ~/.omo/keys.
+func KeysDir() string {
+	return filepath.Join(OmoDir(), "keys")
+}
+
+// IndexPath returns the absolute path to ~/.omo/index.yaml.
+func IndexPath() string {
+	return filepath.Join(OmoDir(), "index.yaml")
+}
+
+// InstalledManifestPath returns the absolute path to ~/.omo/installed.yaml.
+func InstalledManifestPath() string {
+	return filepath.Join(OmoDir(), "installed.yaml")
 }
 
 // PluginBinPath returns the RPC plugin executable path for a given plugin name.

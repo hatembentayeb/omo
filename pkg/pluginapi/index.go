@@ -170,7 +170,7 @@ func RemoveInstalledRecord(pluginName string) error {
 
 // manifest is a simple name→version map stored as YAML.
 func manifestPath() string {
-	return filepath.Join(OmoDir(), "installed.yaml")
+	return InstalledManifestPath()
 }
 
 func loadManifest() map[string]string {

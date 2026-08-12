@@ -312,6 +312,7 @@ Run `omo secrets` with no args for full help.
 | **Enter** | Activate |
 | **r** | Refresh plugins *(plugins list focused)* |
 | **p** | Open Package Manager *(plugins list focused)* |
+| **i** | Open Settings / Info *(plugins list focused)* |
 
 ### Inside a plugin
 

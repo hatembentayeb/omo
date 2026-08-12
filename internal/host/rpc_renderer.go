@@ -172,9 +172,9 @@ func (r *RPCRenderer) Apply(view pluginrpc.ViewData) tview.Primitive {
 		r.core.SetTableHeaders(view.Headers)
 	}
 	if view.Info != "" {
-		r.core.SetInfoText(view.Info)
+		r.core.SetInfoText(pluginrpc.ColorizeInfoPanel(view.Info))
 	} else if view.Status != "" {
-		r.core.SetInfoText(fmt.Sprintf("[green]%s[white]\n%s", title, view.Status))
+		r.core.SetInfoText(pluginrpc.ColorizeInfoPanel(fmt.Sprintf("%s\nStatus: %s", title, view.Status)))
 	}
 
 	if view.LogsBody != "" {
@@ -330,7 +330,7 @@ func (r *RPCRenderer) fetchRows() ([][]string, error) {
 		return nil, err
 	}
 	if view.Info != "" {
-		r.core.SetInfoText(view.Info)
+		r.core.SetInfoText(pluginrpc.ColorizeInfoPanel(view.Info))
 	}
 	return view.Rows, nil
 }

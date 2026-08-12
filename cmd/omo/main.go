@@ -139,6 +139,9 @@ func main() {
 			case 'p', 'P':
 				omoHost.OpenPackageManager()
 				return nil
+			case 'i', 'I', 's', 'S':
+				omoHost.OpenSettings()
+				return nil
 			}
 		}
 

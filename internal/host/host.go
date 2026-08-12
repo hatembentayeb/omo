@@ -8,6 +8,7 @@ import (
 
 	"omo/internal/packagemanager"
 	"omo/internal/registry"
+	"omo/internal/settings"
 	"omo/pkg/pluginapi"
 	"omo/pkg/pluginrpc"
 
@@ -201,6 +202,7 @@ func (h *Host) resetHostActions() {
 	h.ActionsList.Clear()
 	h.ActionsList.AddItem("  ↻ Refresh Plugins", "", 0, func() { h.RefreshPlugins() })
 	h.ActionsList.AddItem("  ⬡ Package Manager", "", 0, func() { h.OpenPackageManager() })
+	h.ActionsList.AddItem("  ⚙ Settings / Info", "", 0, func() { h.OpenSettings() })
 }
 
 // RefreshPlugins reloads the plugins list.
@@ -237,6 +239,32 @@ func (h *Host) OpenPackageManager() {
 	h.Pages.AddPage(pageID, pm.GetLayout(), true, false)
 	h.MainFrame.SetPrimitive(pm.GetLayout())
 	h.App.SetFocus(pm.GetTable())
+}
+
+// OpenSettings shows host Settings / Info (~/.omo inventory and management).
+func (h *Host) OpenSettings() {
+	h.log("opening settings")
+	const pageID = "settings"
+	if h.Pages.HasPage(pageID) {
+		h.Pages.RemovePage(pageID)
+	}
+
+	var sm *settings.Manager
+	sm = settings.New(h.App, h.Pages, h.version, h.RefreshPlugins, func() {
+		h.restoreMainContent()
+		if h.Pages.HasPage(pageID) {
+			h.Pages.RemovePage(pageID)
+		}
+		if sm != nil {
+			sm.Destroy()
+		}
+		h.resetHostActions()
+		h.App.SetFocus(h.PluginsList)
+	})
+
+	h.Pages.AddPage(pageID, sm.GetLayout(), true, false)
+	h.MainFrame.SetPrimitive(sm.GetLayout())
+	h.App.SetFocus(sm.GetTable())
 }
 
 func (h *Host) restoreMainContent() {

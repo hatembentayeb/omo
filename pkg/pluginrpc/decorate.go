@@ -146,23 +146,6 @@ func (u ViewUI) Logs(viewID, title, info, body string, actions ...KeyBinding) Vi
 	return u.Decorate(Logs(viewID, title, info, "connected", body), actions...)
 }
 
-// FormatInfo appends an optional extra line to a base info panel string.
-func FormatInfo(base, extra string) string {
-	if extra == "" {
-		return base
-	}
-	return base + "\n" + extra
-}
-
-// NotConnectedInfo builds the standard yellow "Not Connected" info panel.
-func NotConnectedInfo(brand, detail string) string {
-	msg := "[yellow]" + brand + "[white]\nStatus: Not Connected"
-	if detail == "" {
-		return msg
-	}
-	return msg + "\n" + detail
-}
-
 // Table builds a standard selectable table ViewData.
 func Table(viewID, title, info, status string, headers []string, rows [][]string, selectionKey string) ViewData {
 	return ViewData{

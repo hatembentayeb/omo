@@ -52,6 +52,7 @@ func Cover(app *tview.Application, version string) tview.Primitive {
 		"[#FF9900]Enter[white]   Open selected plugin\n" +
 		"[#FF9900]Tab[white]     Cycle sidebar · content · actions\n" +
 		"[#FF9900]p[white]       Package Manager (install / update)\n" +
+		"[#FF9900]i[white]       Settings / Info (~/.omo)\n" +
 		"[#FF9900]r[white]       Refresh plugin list\n" +
 		"[#FF9900]Ctrl+t[white]  Switch target / connection\n" +
 		"[#FF9900]?[white]       Help for the active view\n\n" +
@@ -84,7 +85,7 @@ func Cover(app *tview.Application, version string) tview.Primitive {
 	frame := tview.NewFrame(grid)
 	frame.SetBorders(0, 0, 0, 0, 0, 0)
 	frame.SetBackgroundColor(tcell.ColorDefault)
-	frame.AddText("Select a plugin · p opens Package Manager", true, tview.AlignCenter, tcell.ColorDimGray)
+	frame.AddText("Select a plugin · p Package Manager · i Settings", true, tview.AlignCenter, tcell.ColorDimGray)
 
 	app.SetFocus(logoBox)
 	return frame
