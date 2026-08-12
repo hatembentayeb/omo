@@ -4,8 +4,12 @@
 
 <p align="center">
   <strong>All your ops tools. One terminal.</strong><br>
-  A keyboard-first ops dashboard for Redis, Docker, Kafka, Postgres, Kubernetes, AWS, Git, and more —
-  backed by a local KeePass vault.
+  Open-source · Self-hosted · Runs locally
+</p>
+
+<p align="center">
+  Docker, Kubernetes, Git, SSH, Redis, Postgres, Argo CD, and more — one keyboard-driven TUI,
+  backed by a local KeePass vault and out-of-process plugins.
 </p>
 
 <p align="center">
@@ -23,6 +27,7 @@
   <a href="#why-omo">Why omo</a> ·
   <a href="#install">Install</a> ·
   <a href="#quick-start">Quick start</a> ·
+  <a href="#screenshots">Screenshots</a> ·
   <a href="#plugins">Plugins</a> ·
   <a href="#architecture">Architecture</a> ·
   <a href="#development">Development</a> ·
@@ -32,11 +37,11 @@
 ---
 
 <p align="center">
-  <img src="assets/demo.gif" alt="omo demo" width="880">
+  <img src="assets/screenshots/tui-dashboard.jpg" alt="omo cover screen — plugin rail and OHMYOPS dashboard" width="880">
 </p>
 
 <p align="center">
-  <sub>Browse containers, queues, databases, and cloud costs without leaving the terminal.</sub>
+  <sub>Plugin rail on the left. Active tool on the right. Keyboard shortcuts always visible.</sub>
 </p>
 
 ---
@@ -45,7 +50,7 @@
 
 Ops work is fragmented. You bounce between the AWS console, `kubectl`, Redis Insight, Docker Desktop, Argo CD, GitHub, SSH sessions, and a password manager — each with its own UI, auth, and muscle memory.
 
-**omo** collapses that into one TUI:
+**omo** is a local TUI host. No SaaS. No telemetry. Secrets stay in KeePass under `~/.omo/`. Plugins talk over RPC so a crash in one tool never takes down the cockpit.
 
 | Pain today | With omo |
 |------------|----------|
@@ -60,11 +65,11 @@ Built for SREs, platform engineers, and indie operators who live in the terminal
 
 ## Features
 
-- **13 official plugins** — Docker, Redis, Kafka, RabbitMQ, Postgres, SSH, Argo CD, Kubernetes users, AWS Costs, S3, Git, GitHub, system processes
+- **14 official plugins** — Docker, Redis, Kafka, RabbitMQ, Postgres, SSH, Argo CD, Kubernetes users, Kubernetes port-forward, AWS Costs, S3, Git, GitHub, system processes
 - **KeePass-backed secrets** — auto-created on first launch; open with KeePassXC or `omo secrets`
 - **Package Manager** — sync the plugin index from GitHub and install/update plugins in-app
 - **Multi-target** — `Ctrl+t` switches instances (e.g. `redis/production/cache` ↔ `redis/staging/cache`)
-- **Keyboard-first** — Tab focus, filter (`/`), refresh (`R`), help (`?`)
+- **Keyboard-first** — Tab focus, filter (`/`), refresh (`R`), help (`?`); Tab stays inside open modals
 - **Safe by design** — credentials stay local; plugins receive config via `Configure`, not nested secret RPC
 - **Cross-platform host** — Linux / macOS / Windows; plugins ship as standalone executables
 
@@ -129,7 +134,7 @@ Every connection is a KeePass entry:
 <plugin>/<environment>/<instance>
 ```
 
-Examples: `redis/production/cache-01`, `docker/development/local`, `s3/prod/main`.
+Examples: `redis/production/cache-01`, `docker/development/local`, `k8sportforward/development/playground`.
 
 **Option A — CLI (scriptable):**
 
@@ -157,11 +162,41 @@ Select the plugin in the sidebar. Use `Ctrl+t` to pick the target, `?` for plugi
 
 ---
 
-## Screenshot
+## Screenshots
+
+No mockups — these are the same screens you run every day.
 
 <p align="center">
-  <img src="assets/screenshot.png" alt="omo screenshot" width="880">
+  <img src="assets/screenshots/tui-dashboard.jpg" alt="omo cover screen with plugin rail, OHMYOPS logo, About and Keys panels" width="880">
 </p>
+<p align="center"><sub><strong>Dashboard</strong> — plugin rail on the left, cover in the center. Pick a tool or open the Package Manager with <code>p</code>.</sub></p>
+
+<p align="center">
+  <img src="assets/screenshots/tui-packagemanager.jpg" alt="omo Package Manager listing installed plugins with versions, status, and tags" width="880">
+</p>
+<p align="center"><sub><strong>Package Manager</strong> — sync the index, install, and update plugins without leaving the TUI.</sub></p>
+
+<p align="center">
+  <img src="assets/screenshots/tui-docker.jpg" alt="omo Docker Manager container table with name, image, state, status, and ports" width="880">
+</p>
+<p align="center"><sub><strong>Docker</strong> — containers, images, networks, volumes, and compose — keyboard-first.</sub></p>
+
+<p align="center">
+  <img src="assets/screenshots/tui-docker-logs.jpg" alt="omo Docker logs view with line numbers, wrap, find, and autoscroll controls" width="880">
+</p>
+<p align="center"><sub><strong>Logs</strong> — shared in-place logs view — wrap, find, marks, and copy from any plugin.</sub></p>
+
+<p align="center">
+  <img src="assets/screenshots/tui-k8s-portforward.jpg" alt="omo Kubernetes port-forward workloads table with namespace, ports, and forward status" width="880">
+</p>
+<p align="center"><sub><strong>Kubernetes</strong> — workloads, services, pods, and port-forwards against your cluster context.</sub></p>
+
+<p align="center">
+  <img src="assets/screenshots/tui-postgres.jpg" alt="omo PostgreSQL Manager users table with roles, privileges, and connection counts" width="880">
+</p>
+<p align="center"><sub><strong>Postgres</strong> — users, databases, tables, and schemas in one keyboard-driven manager.</sub></p>
+
+More on the site: [oh-myops.com](https://oh-myops.com/#screenshots).
 
 ---
 
@@ -177,6 +212,7 @@ Select the plugin in the sidebar. Use `Ctrl+t` to pick the target, `?` for plugi
 | **ssh** | Remote shell, processes, disk, services | `ssh/<env>/<server>` |
 | **argocd** | Apps, projects, accounts, RBAC | `argocd/<env>/<instance>` |
 | **k8suser** | Cert-based users & roles | `k8suser/<env>/<cluster>` |
+| **k8sportforward** | Deployments / StatefulSets / Services / Pods port-forward | `k8sportforward/<env>/<cluster>` |
 | **awsCosts** | Cost explorer, budgets, forecasts | `awsCosts/<env>/<profile>` |
 | **s3** | Buckets, objects, ACL, lifecycle, multipart | `s3/<env>/<profile>` |
 | **git** | Status, commits, branches, stash | `git/<env>/<repo>` |
@@ -227,6 +263,14 @@ Empty fields are ignored — only set what the plugin needs.
 |-------|-------|
 | URL | `unix:///var/run/docker.sock` |
 
+**Kubernetes port-forward** — `k8sportforward/development/playground`
+
+| Field | Value |
+|-------|-------|
+| `kubeconfig` | `~/.kube/config` |
+| `context` | `kind-omo-playground` *(optional)* |
+| `namespace` | `demo` *(optional default filter)* |
+
 **SSH** — `ssh/production/web-01`
 
 | Field | Value |
@@ -263,7 +307,7 @@ Run `omo secrets` with no args for full help.
 
 | Key | Action |
 |-----|--------|
-| **Tab** / **Shift+Tab** | Cycle focus (plugins ↔ main ↔ actions) |
+| **Tab** / **Shift+Tab** | Cycle focus (plugins ↔ main ↔ actions); inside a modal, move between its fields/buttons only |
 | **↑ / ↓** | Move selection |
 | **Enter** | Activate |
 | **r** | Refresh plugins *(plugins list focused)* |
@@ -277,7 +321,7 @@ Run `omo secrets` with no args for full help.
 | **R** | Refresh view |
 | **/** | Filter rows |
 | **?** | Help (plugin + global bindings) |
-| **Esc** | Back / home |
+| **Esc** | Back / home / dismiss modal |
 
 Plugin-specific actions are listed in `?` and in the actions column.
 
@@ -414,6 +458,7 @@ The host loads KeePass settings and calls `Configure` with a `map[string]string`
 
 - [x] `omo secrets` CLI
 - [x] RPC plugins (no Go `.so` version skew)
+- [x] Kubernetes port-forward plugin
 - [ ] Richer plugin SDK / lifecycle docs
 - [ ] Prometheus / Grafana plugin
 - [ ] Theme / color customization
