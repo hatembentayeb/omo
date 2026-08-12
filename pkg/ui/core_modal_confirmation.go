@@ -80,7 +80,11 @@ func ShowStandardConfirmationModal(
 		}
 	})
 
-	// Show the modal
+	// Show the modal and focus Yes so Enter confirms; Tab moves Yes ↔ No.
 	pages.AddPage(pageID, flex, true, true)
-	app.SetFocus(form)
+	if yes := form.GetButton(0); yes != nil {
+		app.SetFocus(yes)
+	} else {
+		app.SetFocus(form)
+	}
 }

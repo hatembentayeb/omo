@@ -93,7 +93,8 @@ func ShowCompactStyledInputModal(
 		AddItem(innerFlex, width, 1, true).
 		AddItem(nil, 0, 1, false)
 
-	// Show the modal
+	// Show the modal; focus the field. Tab moves field → OK → Cancel inside the form
+	// (host Tab is disabled while any non-main page is front).
 	pages.AddPage(pageID, flex, true, true)
 	app.SetFocus(inputField)
 }

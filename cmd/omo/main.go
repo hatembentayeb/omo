@@ -78,15 +78,20 @@ func main() {
 	pluginsFocused := func() bool {
 		return app.GetFocus() == omoHost.PluginsList
 	}
+	// Any page other than "main" is a modal (confirm, input, info, …).
+	modalOpen := func() bool {
+		front, _ := pages.GetFrontPage()
+		return front != "" && front != "main"
+	}
 
 	// Global key bindings
 	// Tab cycles: plugins list → main content → actions → plugins list
 	// Shift+Tab cycles in reverse
+	// While a modal is open, Tab/Shift+Tab stay inside that modal (fields/buttons).
 	// Ctrl+t opens target/instance selector for the active RPC plugin
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyCtrlT {
-			// Don't intercept while a modal page is open.
-			if front, _ := pages.GetFrontPage(); front != "" && front != "main" {
+			if modalOpen() {
 				return event
 			}
 			omoHost.SelectTarget()
@@ -94,6 +99,9 @@ func main() {
 		}
 
 		if event.Key() == tcell.KeyTab {
+			if modalOpen() {
+				return event // modal form/list owns Tab
+			}
 			focus := app.GetFocus()
 			switch {
 			case pluginsFocused():
@@ -107,6 +115,9 @@ func main() {
 		}
 
 		if event.Key() == tcell.KeyBacktab {
+			if modalOpen() {
+				return event // modal form/list owns Shift+Tab
+			}
 			focus := app.GetFocus()
 			switch {
 			case pluginsFocused():
@@ -120,7 +131,7 @@ func main() {
 		}
 
 		// Host sidebar shortcuts (plugins list must be focused).
-		if pluginsFocused() {
+		if pluginsFocused() && !modalOpen() {
 			switch event.Rune() {
 			case 'r', 'R':
 				omoHost.RefreshPlugins()
