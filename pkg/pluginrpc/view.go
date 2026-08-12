@@ -64,11 +64,13 @@ type ExternalSession struct {
 
 // ActionResult is returned after DoAction; optional Next replaces cached view.
 // ModalTitle/ModalBody ask the host to show an info modal (key content, doctor, etc.).
+// Reaction is an optional 1–2 word label for the host logo mood flash (e.g. "yay!", "nope").
 type ActionResult struct {
 	OK              bool
 	Message         string
 	Next            *ViewData
 	ModalTitle      string
 	ModalBody       string
+	Reaction        string
 	ExternalSession *ExternalSession
 }

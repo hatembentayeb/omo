@@ -43,6 +43,7 @@ type PluginManager struct {
 	active    string
 	logFn     func(string, ...interface{})
 	onActions func([]pluginrpc.KeyBinding, func(string))
+	onMood    func(phase string, ok bool, action, reaction string)
 }
 
 func newPluginManager(app *tview.Application, pages *tview.Pages, logFn func(string, ...interface{})) *PluginManager {
@@ -59,6 +60,11 @@ func newPluginManager(app *tview.Application, pages *tview.Pages, logFn func(str
 // SetActionsHook wires sidebar updates when a plugin view is applied.
 func (m *PluginManager) SetActionsHook(fn func([]pluginrpc.KeyBinding, func(string))) {
 	m.onActions = fn
+}
+
+// SetMoodHook wires the top-left logo reaction flashes for plugin actions.
+func (m *PluginManager) SetMoodHook(fn func(phase string, ok bool, action, reaction string)) {
+	m.onMood = fn
 }
 
 func (m *PluginManager) setSecrets(pluginapi.SecretsProvider) {
@@ -101,6 +107,7 @@ func (m *PluginManager) Activate(name, binPath string) (tview.Primitive, error) 
 		pluginrpc.RPCLog("creating RPCRenderer for %s", name)
 		renderer = NewRPCRenderer(m.app, m.pages, name, nil)
 		renderer.SetActionsHook(m.onActions)
+		renderer.SetMoodHook(m.onMood)
 		m.mu.Lock()
 		if m.sessions[name] == sess {
 			sess.Renderer = renderer

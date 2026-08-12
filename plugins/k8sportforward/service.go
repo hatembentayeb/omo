@@ -178,9 +178,10 @@ func (s *Service) DoAction(req pluginrpc.ActionRequest) (pluginrpc.ActionResult,
 		n := s.forwards.StopAll()
 		view, _ := s.buildViewLocked(viewForwards)
 		return pluginrpc.ActionResult{
-			OK:      true,
-			Message: fmt.Sprintf("stopped %d forward(s)", n),
-			Next:    &view,
+			OK:       true,
+			Message:  fmt.Sprintf("stopped %d forward(s)", n),
+			Next:     &view,
+			Reaction: "bye",
 		}, nil
 
 	case "filter_namespace":
@@ -250,28 +251,28 @@ func (s *Service) ensureConnectedLocked() error {
 
 func (s *Service) actionStartForwardLocked(payload map[string]string) (pluginrpc.ActionResult, error) {
 	if err := s.ensureConnectedLocked(); err != nil {
-		return pluginrpc.ActionResult{OK: false, Message: err.Error()}, nil
+		return pluginrpc.ActionResult{OK: false, Message: err.Error(), Reaction: "nope"}, nil
 	}
 
 	kind, namespace, name := resolveTarget(payload)
 	if kind == "" || namespace == "" || name == "" {
-		return pluginrpc.ActionResult{OK: false, Message: "select a workload, service, or pod first"}, nil
+		return pluginrpc.ActionResult{OK: false, Message: "select a workload, service, or pod first", Reaction: "pick?"}, nil
 	}
 
 	ports := parsePortList(firstNonEmpty(payload["ports"], payload["col6"], payload["col5"], payload["col4"]))
 	remote, err := parseRemotePortInput(payload["remote_port"], ports)
 	if err != nil {
-		return pluginrpc.ActionResult{OK: false, Message: err.Error()}, nil
+		return pluginrpc.ActionResult{OK: false, Message: err.Error(), Reaction: "port?"}, nil
 	}
 
 	local, err := parseLocalPortInput(payload["local_port"])
 	if err != nil {
-		return pluginrpc.ActionResult{OK: false, Message: err.Error()}, nil
+		return pluginrpc.ActionResult{OK: false, Message: err.Error(), Reaction: "port?"}, nil
 	}
 
 	fwd, err := s.forwards.Start(s.client, kind, namespace, name, local, remote)
 	if err != nil {
-		return pluginrpc.ActionResult{OK: false, Message: err.Error()}, nil
+		return pluginrpc.ActionResult{OK: false, Message: err.Error(), Reaction: "nope"}, nil
 	}
 
 	view, _ := s.buildViewLocked(s.currentView)
@@ -279,7 +280,8 @@ func (s *Service) actionStartForwardLocked(payload map[string]string) (pluginrpc
 		OK: true,
 		Message: fmt.Sprintf("forwarding %s/%s %d → 127.0.0.1:%d (use in redis/postgres as host=127.0.0.1 port=%d)",
 			namespace, name, remote, fwd.LocalPort, fwd.LocalPort),
-		Next: &view,
+		Next:     &view,
+		Reaction: "yay!",
 		ModalTitle: "Port Forward Active",
 		ModalBody: fmt.Sprintf(
 			"Target:  %s %s/%s\nPod:     %s\nRemote:  %d\nLocal:   127.0.0.1:%d\n\nKeePass tip for redis/postgres plugins:\n  URL  = 127.0.0.1\n  port = %d\n",
@@ -305,12 +307,13 @@ func (s *Service) actionStopForwardLocked(payload map[string]string) (pluginrpc.
 			n := s.forwards.StopTarget(kind, namespace, name)
 			viewData, _ := s.buildViewLocked(s.currentView)
 			return pluginrpc.ActionResult{
-				OK:      true,
-				Message: fmt.Sprintf("stopped %d forward(s) for %s/%s", n, namespace, name),
-				Next:    &viewData,
+				OK:       true,
+				Message:  fmt.Sprintf("stopped %d forward(s) for %s/%s", n, namespace, name),
+				Next:     &viewData,
+				Reaction: "bye",
 			}, nil
 		}
-		return pluginrpc.ActionResult{OK: false, Message: "no forward selected"}, nil
+		return pluginrpc.ActionResult{OK: false, Message: "no forward selected", Reaction: "huh?"}, nil
 	}
 
 	if err := s.forwards.Stop(id); err != nil {
@@ -318,15 +321,16 @@ func (s *Service) actionStopForwardLocked(payload map[string]string) (pluginrpc.
 			n := s.forwards.StopTarget(kind, namespace, name)
 			viewData, _ := s.buildViewLocked(s.currentView)
 			return pluginrpc.ActionResult{
-				OK:      true,
-				Message: fmt.Sprintf("stopped %d forward(s)", n),
-				Next:    &viewData,
+				OK:       true,
+				Message:  fmt.Sprintf("stopped %d forward(s)", n),
+				Next:     &viewData,
+				Reaction: "bye",
 			}, nil
 		}
-		return pluginrpc.ActionResult{OK: false, Message: err.Error()}, nil
+		return pluginrpc.ActionResult{OK: false, Message: err.Error(), Reaction: "nope"}, nil
 	}
 	viewData, _ := s.buildViewLocked(s.currentView)
-	return pluginrpc.ActionResult{OK: true, Message: "stopped " + id, Next: &viewData}, nil
+	return pluginrpc.ActionResult{OK: true, Message: "stopped " + id, Next: &viewData, Reaction: "bye"}, nil
 }
 
 func (s *Service) actionViewDetailsLocked(payload map[string]string) (pluginrpc.ActionResult, error) {

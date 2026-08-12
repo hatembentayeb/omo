@@ -23,6 +23,7 @@ type RPCRenderer struct {
 	currentView string
 	homeView    string // first/default view id for breadcrumbs + ESC
 	onActions   func([]pluginrpc.KeyBinding, func(string))
+	onMood      func(phase string, ok bool, action, reaction string)
 }
 
 // NewRPCRenderer builds a CoreView shell for an RPC plugin.
@@ -58,6 +59,18 @@ func (r *RPCRenderer) SetPlugin(p pluginrpc.Plugin) {
 // SetActionsHook wires the host sidebar to per-view plugin actions.
 func (r *RPCRenderer) SetActionsHook(fn func([]pluginrpc.KeyBinding, func(string))) {
 	r.onActions = fn
+}
+
+// SetMoodHook wires logo mood flashes for action pending/result beats.
+func (r *RPCRenderer) SetMoodHook(fn func(phase string, ok bool, action, reaction string)) {
+	r.onMood = fn
+}
+
+func (r *RPCRenderer) flashMood(phase string, ok bool, action, reaction string) {
+	if r.onMood == nil {
+		return
+	}
+	r.onMood(phase, ok, action, reaction)
 }
 
 // ShowLoading sets a loading message without QueueUpdateDraw / table.Select.
@@ -327,16 +340,19 @@ func (r *RPCRenderer) refresh() {
 		r.core.Log("[yellow]plugin still loading…")
 		return
 	}
+	r.flashMood("pending", true, "refresh", "")
 	viewID := r.currentView
 	go func() {
 		view, err := r.plugin.GetView(pluginrpc.ViewRequest{View: viewID})
 		r.app.QueueUpdateDraw(func() {
 			if err != nil {
 				r.core.Log(fmt.Sprintf("[red]refresh failed: %v", err))
+				r.flashMood("fail", false, "refresh", "")
 				return
 			}
 			r.Apply(view)
 			r.FocusTable()
+			r.flashMood("ok", true, "refresh", "fresh")
 		})
 	}()
 }
@@ -663,6 +679,10 @@ func (r *RPCRenderer) runAction(action string, payload map[string]string) {
 		payload = r.selectionPayload()
 	}
 	viewID := r.currentView
+	// Skip chrome noise for pure navigation / refresh spam.
+	if shouldMood(action) {
+		r.flashMood("pending", true, action, "")
+	}
 	go func() {
 		result, err := r.plugin.DoAction(pluginrpc.ActionRequest{
 			Action:  action,
@@ -675,6 +695,9 @@ func (r *RPCRenderer) runAction(action string, payload map[string]string) {
 				if result.Message != "" {
 					r.core.Log("[green]" + result.Message)
 				}
+				if shouldMood(action) {
+					r.flashMood("ok", true, action, result.Reaction)
+				}
 				r.launchExternalSession(sess)
 			})
 			return
@@ -682,6 +705,9 @@ func (r *RPCRenderer) runAction(action string, payload map[string]string) {
 		r.app.QueueUpdateDraw(func() {
 			if err != nil {
 				r.core.Log(fmt.Sprintf("[red]action %s failed: %v", action, err))
+				if shouldMood(action) {
+					r.flashMood("fail", false, action, "")
+				}
 				return
 			}
 			if result.Message != "" {
@@ -690,6 +716,13 @@ func (r *RPCRenderer) runAction(action string, payload map[string]string) {
 				} else {
 					r.core.Log("[red]" + result.Message)
 				}
+			}
+			if shouldMood(action) {
+				phase := "ok"
+				if !result.OK {
+					phase = "fail"
+				}
+				r.flashMood(phase, result.OK, action, result.Reaction)
 			}
 			if result.ModalTitle != "" || result.ModalBody != "" {
 				title := result.ModalTitle
@@ -710,4 +743,8 @@ func (r *RPCRenderer) runAction(action string, payload map[string]string) {
 			}
 		})
 	}()
+}
+
+func shouldMood(action string) bool {
+	return strings.TrimSpace(action) != ""
 }

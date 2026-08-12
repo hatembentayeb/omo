@@ -22,6 +22,7 @@ type Host struct {
 	MainUI          *tview.Grid
 	PluginsList     *tview.List
 	ActionsList     *tview.List
+	Logo            *LogoMood
 	activePluginIdx int
 	rpcManager      *PluginManager
 	PluginsDir      string
@@ -45,6 +46,7 @@ func New(app *tview.Application, pages *tview.Pages, logger *pluginapi.Logger, v
 		MainFrame:       mainFrame,
 		MainUI:          mainUI,
 		PluginsList:     tview.NewList(),
+		Logo:            newLogoMood(app, version),
 		activePluginIdx: -1,
 		PluginsDir:      pluginapi.PluginsDir(),
 		logger:          logger,
@@ -52,6 +54,7 @@ func New(app *tview.Application, pages *tview.Pages, logger *pluginapi.Logger, v
 	}
 	h.rpcManager = newPluginManager(app, pages, h.log)
 	h.rpcManager.SetActionsHook(h.UpdatePluginActions)
+	h.rpcManager.SetMoodHook(h.FlashLogo)
 	return h
 }
 
@@ -147,14 +150,26 @@ func (h *Host) SelectTarget() {
 	h.rpcManager.ShowTargetSelector()
 }
 
-// LogoView returns a compact OMO logo with version for the top-left corner.
+// LogoView returns the top-left OMO mark (also used for action mood flashes).
 func (h *Host) LogoView() tview.Primitive {
-	tv := tview.NewTextView()
-	tv.SetDynamicColors(true)
-	tv.SetTextAlign(tview.AlignCenter)
-	tv.SetBackgroundColor(tcell.ColorDefault)
-	tv.SetText(fmt.Sprintf("[#FF6B00::b]█▀█ █▀▄▀█ █▀█\n█▄█ █ ▀ █ █▄█\n[#666666]%s", h.version))
-	return tv
+	if h.Logo == nil {
+		h.Logo = newLogoMood(h.App, h.version)
+	}
+	return h.Logo.View()
+}
+
+// FlashLogo drives the sidebar logo reaction for pending/result action beats.
+// phase: "pending" | "ok" | "fail" (empty treated as ok/fail via ok bool).
+func (h *Host) FlashLogo(phase string, ok bool, action, reaction string) {
+	if h == nil || h.Logo == nil {
+		return
+	}
+	switch strings.ToLower(phase) {
+	case "pending":
+		h.Logo.FlashPending(action)
+	default:
+		h.Logo.FlashResult(ok, action, reaction)
+	}
 }
 
 // ActionsView returns the host sidebar list (Refresh Plugins / Package Manager).
