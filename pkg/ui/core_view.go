@@ -82,8 +82,9 @@ type CoreView struct {
 	isLoading bool
 
 	// Callbacks for plugin integration
-	onRowSelected func(row int)
-	onAction      func(action string, payload map[string]interface{}) error
+	onRowSelected      func(row int)
+	onHighlightChanged func(row int) // arrow-key highlight (no Enter)
+	onAction           func(action string, payload map[string]interface{}) error
 
 	// Navigation stack
 	navStack []string

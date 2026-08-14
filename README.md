@@ -65,7 +65,7 @@ Built for SREs, platform engineers, and indie operators who live in the terminal
 
 ## Features
 
-- **14 official plugins** — Docker, Redis, Kafka, RabbitMQ, Postgres, SSH, Argo CD, Kubernetes users, Kubernetes port-forward, AWS Costs, S3, Git, GitHub, system processes
+- **15 official plugins** — Docker, Redis, Kafka, RabbitMQ, Postgres, SSH, Argo CD, Kubernetes users, Kubernetes port-forward, Bunny DNS, AWS Costs, S3, Git, GitHub, system processes
 - **KeePass-backed secrets** — auto-created on first launch; open with KeePassXC or `omo secrets`
 - **Package Manager** — sync the plugin index from GitHub and install/update plugins in-app
 - **Multi-target** — `Ctrl+t` switches instances (e.g. `redis/production/cache` ↔ `redis/staging/cache`)
@@ -213,6 +213,7 @@ More on the site: [oh-myops.com](https://oh-myops.com/#screenshots).
 | **argocd** | Apps, projects, accounts, RBAC | `argocd/<env>/<instance>` |
 | **k8suser** | Cert-based users & roles | `k8suser/<env>/<cluster>` |
 | **k8sportforward** | Deployments / StatefulSets / Services / Pods port-forward | `k8sportforward/<env>/<cluster>` |
+| **bunnydns** | Bunny.net DNS zones, records, DNSSEC, stats, certificates | `bunnydns/<env>/<account>` |
 | **awsCosts** | Cost explorer, budgets, forecasts | `awsCosts/<env>/<profile>` |
 | **s3** | Buckets, objects, ACL, lifecycle, multipart | `s3/<env>/<profile>` |
 | **git** | Status, commits, branches, stash | `git/<env>/<repo>` |
@@ -270,6 +271,13 @@ Empty fields are ignored — only set what the plugin needs.
 | `kubeconfig` | `~/.kube/config` |
 | `context` | `kind-omo-playground` *(optional)* |
 | `namespace` | `demo` *(optional default filter)* |
+
+**Bunny DNS** — `bunnydns/production/main`
+
+| Field | Value |
+|-------|-------|
+| Password | Bunny account AccessKey |
+| URL | `https://api.bunny.net` *(optional)* |
 
 **SSH** — `ssh/production/web-01`
 
@@ -460,6 +468,7 @@ The host loads KeePass settings and calls `Configure` with a `map[string]string`
 - [x] `omo secrets` CLI
 - [x] RPC plugins (no Go `.so` version skew)
 - [x] Kubernetes port-forward plugin
+- [x] Bunny DNS plugin
 - [ ] Richer plugin SDK / lifecycle docs
 - [ ] Prometheus / Grafana plugin
 - [ ] Theme / color customization

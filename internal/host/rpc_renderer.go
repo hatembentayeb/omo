@@ -195,8 +195,33 @@ func (r *RPCRenderer) Apply(view pluginrpc.ViewData) tview.Primitive {
 			return v.LogsBody, nil
 		})
 	} else {
+		// Drop zone highlight hook before replacing rows so SelectionChanged
+		// cannot treat a records row as a zone id.
+		r.core.SetHighlightChangedCallback(nil)
 		r.core.CloseLogs()
 		r.core.SetTableData(view.Rows)
+	}
+
+	// Highlighted zone row is the active zone — no Enter required.
+	if r.currentView == "zones" {
+		syncZone := func() {
+			if r.plugin == nil {
+				return
+			}
+			payload := r.selectionPayload()
+			if payload["key"] == "" && payload["col0"] == "" {
+				return
+			}
+			go func() {
+				_, _ = r.plugin.DoAction(pluginrpc.ActionRequest{
+					Action:  "select_zone",
+					View:    "zones",
+					Payload: payload,
+				})
+			}()
+		}
+		r.core.SetHighlightChangedCallback(func(_ int) { syncZone() })
+		syncZone() // current highlight on load / refresh
 	}
 
 	// Enter: view key / peek pubsub channel
@@ -226,6 +251,11 @@ func (r *RPCRenderer) Apply(view pluginrpc.ViewData) tview.Primitive {
 				r.dispatchAction("select_database")
 			case "tables":
 				r.dispatchAction("view_columns")
+			case "zones":
+				// Highlight already selected the zone; Enter opens Records.
+				r.dispatchAction("goto_records")
+			case "records":
+				r.dispatchAction("record_details")
 			}
 		})
 	}
@@ -410,6 +440,32 @@ func (r *RPCRenderer) dispatchAction(action string) {
 			})
 	case "filter_namespace":
 		r.promptFilterNamespace()
+	case "create_zone":
+		r.promptCreateZone()
+	case "check_availability":
+		r.promptCheckAvailability()
+	case "create_record":
+		r.promptCreateRecord()
+	case "update_record":
+		r.promptUpdateRecord()
+	case "filter_record_type":
+		r.promptFilterRecordType()
+	case "search_records":
+		// Local table filter only — no Bunny API.
+		r.core.ShowFilterModal()
+	case "clear_record_filters":
+		r.core.ClearFilter()
+		r.runAction("clear_record_filters", nil)
+	case "set_soa_email":
+		r.promptSetSoaEmail()
+	case "delete_zone":
+		r.promptConfirmAction("Confirm Delete Zone", "Delete this DNS zone?", "delete_zone")
+	case "delete_record":
+		r.promptConfirmAction("Confirm Delete Record", "Delete this DNS record?", "delete_record")
+	case "disable_dnssec":
+		r.promptConfirmAction("Disable DNSSEC", "Disable DNSSEC for this zone?", "disable_dnssec")
+	case "issue_wildcard_cert":
+		r.promptConfirmAction("Issue Wildcard Cert", "Request wildcard certificate issuance?", "issue_wildcard_cert")
 	default:
 		r.runAction(action, r.selectionPayload())
 	}
@@ -747,4 +803,132 @@ func (r *RPCRenderer) runAction(action string, payload map[string]string) {
 
 func shouldMood(action string) bool {
 	return strings.TrimSpace(action) != ""
+}
+
+func (r *RPCRenderer) promptConfirmAction(title, body, action string) {
+	payload := r.selectionPayload()
+	ui.ShowStandardConfirmationModal(r.pages, r.app, title, body, func(ok bool) {
+		r.FocusTable()
+		if ok {
+			r.runAction(action, payload)
+		}
+	})
+}
+
+func (r *RPCRenderer) promptCreateZone() {
+	ui.ShowCompactStyledInputModal(r.pages, r.app, "New DNS Zone", "Domain:", "", 48, nil,
+		func(domain string, cancelled bool) {
+			r.FocusTable()
+			if cancelled || strings.TrimSpace(domain) == "" {
+				return
+			}
+			r.runAction("create_zone", map[string]string{"domain": strings.TrimSpace(domain)})
+		})
+}
+
+func (r *RPCRenderer) promptCheckAvailability() {
+	ui.ShowCompactStyledInputModal(r.pages, r.app, "Check Availability", "Domain:", "", 48, nil,
+		func(domain string, cancelled bool) {
+			r.FocusTable()
+			if cancelled || strings.TrimSpace(domain) == "" {
+				return
+			}
+			r.runAction("check_availability", map[string]string{"domain": strings.TrimSpace(domain)})
+		})
+}
+
+func (r *RPCRenderer) promptCreateRecord() {
+	ui.ShowCompactStyledInputModal(r.pages, r.app, "New DNS Record", "Type (A/AAAA/CNAME/TXT/MX/…):", "A", 16, nil,
+		func(typ string, cancelled bool) {
+			if cancelled || strings.TrimSpace(typ) == "" {
+				r.FocusTable()
+				return
+			}
+			typ = strings.ToUpper(strings.TrimSpace(typ))
+			ui.ShowCompactStyledInputModal(r.pages, r.app, "New DNS Record", "Name (@ or subdomain):", "@", 40, nil,
+				func(name string, cancelled bool) {
+					if cancelled {
+						r.FocusTable()
+						return
+					}
+					ui.ShowCompactStyledInputModal(r.pages, r.app, "New DNS Record", "Value:", "", 64, nil,
+						func(value string, cancelled bool) {
+							if cancelled || strings.TrimSpace(value) == "" {
+								r.FocusTable()
+								return
+							}
+							ui.ShowCompactStyledInputModal(r.pages, r.app, "New DNS Record", "TTL:", "300", 10, nil,
+								func(ttl string, cancelled bool) {
+									if cancelled {
+										r.FocusTable()
+										return
+									}
+									payload := map[string]string{
+										"type":  typ,
+										"name":  strings.TrimSpace(name),
+										"value": strings.TrimSpace(value),
+										"ttl":   strings.TrimSpace(ttl),
+									}
+									if typ == "MX" || typ == "SRV" {
+										ui.ShowCompactStyledInputModal(r.pages, r.app, "New DNS Record", "Priority:", "10", 8, nil,
+											func(prio string, cancelled bool) {
+												r.FocusTable()
+												if cancelled {
+													return
+												}
+												payload["priority"] = strings.TrimSpace(prio)
+												r.runAction("create_record", payload)
+											})
+										return
+									}
+									r.FocusTable()
+									r.runAction("create_record", payload)
+								})
+						})
+				})
+		})
+}
+
+func (r *RPCRenderer) promptUpdateRecord() {
+	payload := r.selectionPayload()
+	cur := payload["col3"]
+	ui.ShowCompactStyledInputModal(r.pages, r.app, "Update DNS Record", "Value:", cur, 64, nil,
+		func(value string, cancelled bool) {
+			if cancelled || strings.TrimSpace(value) == "" {
+				r.FocusTable()
+				return
+			}
+			ui.ShowCompactStyledInputModal(r.pages, r.app, "Update DNS Record", "TTL (blank=keep):", payload["col4"], 10, nil,
+				func(ttl string, cancelled bool) {
+					r.FocusTable()
+					if cancelled {
+						return
+					}
+					payload["value"] = strings.TrimSpace(value)
+					payload["ttl"] = strings.TrimSpace(ttl)
+					r.runAction("update_record", payload)
+				})
+		})
+}
+
+func (r *RPCRenderer) promptFilterRecordType() {
+	ui.ShowCompactStyledInputModal(r.pages, r.app, "Filter Records", "Type (blank=all):", "", 12, nil,
+		func(typ string, cancelled bool) {
+			r.FocusTable()
+			if cancelled {
+				return
+			}
+			r.runAction("filter_record_type", map[string]string{"type": strings.TrimSpace(typ)})
+		})
+}
+
+func (r *RPCRenderer) promptSetSoaEmail() {
+	ui.ShowCompactStyledInputModal(r.pages, r.app, "SOA Email", "Email:", "", 48, nil,
+		func(email string, cancelled bool) {
+			r.FocusTable()
+			if cancelled || strings.TrimSpace(email) == "" {
+				return
+			}
+			r.runAction("set_soa_email", map[string]string{"email": strings.TrimSpace(email)})
+		})
 }

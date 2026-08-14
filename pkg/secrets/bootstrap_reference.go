@@ -94,6 +94,12 @@ var pluginReferenceDefinitions = []struct {
 			"Password — personal access token\nUserName — org name when type=org\nURL — API base (empty = github.com API)\n" +
 			"Custom: type (user|org)",
 	},
+	{
+		plugin: "k8sportforward",
+		notes: "Reference path: k8sportforward/<environment>/<instance>\n\n" +
+			"Custom: kubeconfig (path or inline YAML), kubeconfig_path, context, namespace\n" +
+			"URL / UserName / Password — unused for most clusters",
+	},
 }
 
 // ensureReferenceTemplates creates <plugin>/default/default_config when missing.

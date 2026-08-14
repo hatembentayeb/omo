@@ -84,3 +84,10 @@ func (c *CoreView) SetRowSelectedCallback(callback func(row int)) *CoreView {
 	c.onRowSelected = callback
 	return c
 }
+
+// SetHighlightChangedCallback is called when the highlighted table row changes
+// (arrow keys), without requiring Enter.
+func (c *CoreView) SetHighlightChangedCallback(callback func(row int)) *CoreView {
+	c.onHighlightChanged = callback
+	return c
+}
