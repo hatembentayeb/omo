@@ -2,11 +2,11 @@ PLUGINS_DIR := ./plugins
 OMO_HOME := $(HOME)/.omo
 PLUGINS_INSTALL_DIR := $(OMO_HOME)/plugins
 # RPC plugin executables (hashicorp/go-plugin)
-RPC_PLUGINS := redis docker git sysprocess argocd k8suser ssh postgres rabbitmq kafka github s3 awsCosts k8sportforward
+RPC_PLUGINS := redis docker git sysprocess argocd k8suser ssh postgres rabbitmq kafka github s3 awsCosts k8sportforward bunnydns
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS := -ldflags "-X main.Version=$(VERSION)"
 
-.PHONY: all clean install dirs plugin-redis plugin-docker plugin-git plugin-sysprocess plugin-argocd plugin-k8suser plugin-ssh plugin-postgres plugin-rabbitmq plugin-kafka plugin-github plugin-s3 plugin-awsCosts plugin-k8sportforward dev-setup dev-secrets dev-seed dev-up dev-down
+.PHONY: all clean install dirs plugin-redis plugin-docker plugin-git plugin-sysprocess plugin-argocd plugin-k8suser plugin-ssh plugin-postgres plugin-rabbitmq plugin-kafka plugin-github plugin-s3 plugin-awsCosts plugin-k8sportforward plugin-bunnydns dev-setup dev-secrets dev-seed dev-up dev-down
 
 # Build the host binary and all plugins, then install to ~/.omo
 all: dirs
@@ -124,6 +124,13 @@ plugin-k8sportforward: dirs
 	@go build -o $(PLUGINS_INSTALL_DIR)/k8sportforward/k8sportforward ./plugins/k8sportforward/cmd/k8sportforward
 	@chmod +x $(PLUGINS_INSTALL_DIR)/k8sportforward/k8sportforward
 	@echo "Installed $(PLUGINS_INSTALL_DIR)/k8sportforward/k8sportforward"
+
+plugin-bunnydns: dirs
+	@mkdir -p $(PLUGINS_INSTALL_DIR)/bunnydns
+	@echo "Building bunnydns RPC plugin"
+	@go build -o $(PLUGINS_INSTALL_DIR)/bunnydns/bunnydns ./plugins/bunnydns/cmd/bunnydns
+	@chmod +x $(PLUGINS_INSTALL_DIR)/bunnydns/bunnydns
+	@echo "Installed $(PLUGINS_INSTALL_DIR)/bunnydns/bunnydns"
 
 # Create the ~/.omo directory structure
 dirs:

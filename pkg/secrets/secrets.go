@@ -135,13 +135,11 @@ func NewWithPaths(dbPath, keyPath string) (Provider, error) {
 		_ = os.Remove(dbPath)
 	}
 
-	fresh := false
 	switch _, err := os.Stat(dbPath); {
 	case errors.Is(err, os.ErrNotExist):
 		if err := kp.createDatabase(); err != nil {
 			return nil, fmt.Errorf("secrets: create database: %w", err)
 		}
-		fresh = true
 	case err != nil:
 		return nil, fmt.Errorf("secrets: stat database: %w", err)
 	}
@@ -150,11 +148,10 @@ func NewWithPaths(dbPath, keyPath string) (Provider, error) {
 		return nil, fmt.Errorf("secrets: open database: %w", err)
 	}
 
-	// Schema docs only on first create so deliberate cleanup stays clean.
-	if fresh {
-		if err := kp.ensureReferenceTemplates(); err != nil {
-			return nil, err
-		}
+	// Create any missing <plugin>/default/default_config reference docs
+	// (fresh DB and newly registered plugins on existing DBs).
+	if err := kp.ensureReferenceTemplates(); err != nil {
+		return nil, err
 	}
 
 	return kp, nil

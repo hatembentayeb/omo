@@ -94,3 +94,10 @@ plugins:
       - networking
       - port-forward
       - devops
+  bunnydns:
+    description: Manage Bunny.net DNS zones, records, DNSSEC, stats, and certificates
+    tags:
+      - dns
+      - bunny
+      - networking
+      - domains

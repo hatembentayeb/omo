@@ -74,6 +74,9 @@ func (c *CoreView) initUI() {
 		}
 		if row-1 < len(c.tableData) {
 			c.selectedRow = row - 1
+			if c.onHighlightChanged != nil {
+				c.onHighlightChanged(c.selectedRow)
+			}
 		}
 	})
 
