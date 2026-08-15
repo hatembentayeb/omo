@@ -3,15 +3,15 @@ package bunnydns
 import "strconv"
 
 const (
-	viewZones         = "zones"
-	viewRecords       = "records"
-	viewNameservers   = "nameservers"
-	viewDNSSEC        = "dnssec"
-	viewStats         = "stats"
-	viewExport        = "export"
-	viewScan          = "scan"
-	viewAvailability  = "availability"
-	viewCertificates  = "certificates"
+	viewZones        = "zones"
+	viewRecords      = "records"
+	viewNameservers  = "nameservers"
+	viewDNSSEC       = "dnssec"
+	viewStats        = "stats"
+	viewExport       = "export"
+	viewScan         = "scan"
+	viewAvailability = "availability"
+	viewCertificates = "certificates"
 
 	apiBaseDefault = "https://api.bunny.net"
 )
@@ -33,4 +33,24 @@ func recordTypeName(t int) string {
 		return n
 	}
 	return strconv.Itoa(t)
+}
+
+// Human meaning for DNS record types (stats + labels).
+var recordTypeMeaning = map[string]string{
+	"A":        "IPv4 addresses",
+	"AAAA":     "IPv6 addresses",
+	"CNAME":    "hostname aliases",
+	"TXT":      "text / domain verification",
+	"MX":       "mail routing",
+	"NS":       "nameservers",
+	"SRV":      "service locators",
+	"CAA":      "certificate issuers",
+	"PTR":      "reverse DNS",
+	"HTTPS":    "HTTPS service bind",
+	"SVCB":     "service bind",
+	"TLSA":     "TLS cert association",
+	"Redirect": "HTTP redirects",
+	"Flatten":  "CNAME flattening",
+	"PullZone": "Bunny pull zone",
+	"Script":   "edge scripts",
 }

@@ -104,6 +104,9 @@ func (s *Service) DoAction(req pluginrpc.ActionRequest) (pluginrpc.ActionResult,
 	action := req.Action
 	if strings.HasPrefix(action, "goto_") {
 		viewID := strings.TrimPrefix(action, "goto_")
+		if viewID == viewExport {
+			return s.actionExportBindLocked()
+		}
 		view, err := s.buildViewLocked(viewID)
 		if err != nil {
 			return pluginrpc.ActionResult{OK: false, Message: err.Error(), Reaction: "nope"}, nil
@@ -175,7 +178,9 @@ func (s *Service) DoAction(req pluginrpc.ActionRequest) (pluginrpc.ActionResult,
 	case "dnssec_details":
 		return s.actionDNSSECDetailsLocked()
 
-	case "export_zone", "export_zones":
+	case "export_bind", "export_zone":
+		return s.actionExportBindLocked()
+	case "export_zones":
 		return s.actionExportZonesLocked()
 	case "export_records":
 		return s.actionExportRecordsLocked()
@@ -547,6 +552,49 @@ func (s *Service) actionDNSSECDetailsLocked() (pluginrpc.ActionResult, error) {
 	return pluginrpc.ActionResult{OK: true, ModalTitle: "DNSSEC Details", ModalBody: body}, nil
 }
 
+func (s *Service) actionExportBindLocked() (pluginrpc.ActionResult, error) {
+	z, err := s.requireZoneLocked()
+	if err != nil {
+		return pluginrpc.ActionResult{OK: false, Message: err.Error(), Reaction: "pick?"}, nil
+	}
+	zoneFile, err := s.client.ExportZone(z.Id)
+	if err != nil {
+		return pluginrpc.ActionResult{OK: false, Message: err.Error(), Reaction: "nope"}, nil
+	}
+	dir := pluginapi.PluginExportsDir("bunnydns")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return pluginrpc.ActionResult{OK: false, Message: "mkdir " + dir + ": " + err.Error()}, nil
+	}
+	safe := strings.Map(func(r rune) rune {
+		switch r {
+		case '/', '\\', ':', ' ', '\t':
+			return '_'
+		default:
+			return r
+		}
+	}, z.Domain)
+	if safe == "" {
+		safe = fmt.Sprintf("zone-%d", z.Id)
+	}
+	path := filepath.Join(dir, fmt.Sprintf("%s-%s.zone", safe, time.Now().Format("20060102-150405")))
+	if err := os.WriteFile(path, []byte(zoneFile), 0o644); err != nil {
+		return pluginrpc.ActionResult{OK: false, Message: "write " + path + ": " + err.Error()}, nil
+	}
+	pretty := strings.TrimSpace(zoneFile)
+	if pretty == "" {
+		pretty = "(empty zone file)"
+	}
+	const maxModal = 12000
+	if len(pretty) > maxModal {
+		pretty = pretty[:maxModal] + "\n… truncated in modal; full file saved on disk …"
+	}
+	body := fmt.Sprintf("BIND zone file for %s\nSaved to:\n%s\n\n%s\n", z.Domain, path, pretty)
+	return pluginrpc.ActionResult{
+		OK: true, Reaction: "export", Message: "exported " + path,
+		ModalTitle: "Export — " + z.Domain, ModalBody: body,
+	}, nil
+}
+
 func (s *Service) actionExportZonesLocked() (pluginrpc.ActionResult, error) {
 	if err := s.ensureClientLocked(); err != nil {
 		return pluginrpc.ActionResult{OK: false, Message: err.Error()}, nil
@@ -722,21 +770,31 @@ func (s *Service) actionCheckAvailabilityLocked(payload map[string]string) (plug
 	}
 	avail := "no"
 	word := "busy"
+	meaning := strings.TrimSpace(res.Message)
 	if res.Available {
 		avail = "yes"
 		word = "free!"
+		if meaning == "" {
+			meaning = "You can add this domain as a Bunny DNS zone."
+		}
+	} else if meaning == "" {
+		meaning = "Not available — already on this account, or Bunny cannot take over this zone."
 	}
 	s.availHistory = append([]availCheck{{
-		Domain: domain, Available: avail, Message: res.Message, When: time.Now().Format(time.RFC3339),
+		Domain: domain, Available: avail, Message: meaning, When: time.Now().Format(time.RFC3339),
 	}}, s.availHistory...)
 	if len(s.availHistory) > 50 {
 		s.availHistory = s.availHistory[:50]
 	}
 	view, _ := s.buildViewLocked(viewAvailability)
-	body := fmt.Sprintf("Domain:    %s\nAvailable: %v\nMessage:   %s\n", domain, res.Available, res.Message)
+	status := "No — cannot be added"
+	if res.Available {
+		status = "Yes — can be added as a DNS zone"
+	}
+	body := fmt.Sprintf("Domain:  %s\nStatus:  %s\nDetail:  %s\n", domain, status, meaning)
 	return pluginrpc.ActionResult{
-		OK: true, Next: &view, Reaction: word,
-		ModalTitle: "Availability", ModalBody: body,
+		OK: true, Next: &view, Reaction: word, Message: domain + " · " + avail,
+		ModalTitle: "Availability — " + domain, ModalBody: body,
 	}, nil
 }
 

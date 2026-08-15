@@ -88,11 +88,11 @@ type DnsSecInfo struct {
 }
 
 type DnsStats struct {
-	TotalQueriesServed         int64              `json:"TotalQueriesServed"`
-	QueriesServedChart         map[string]float64 `json:"QueriesServedChart"`
-	NormalQueriesServedChart   map[string]float64 `json:"NormalQueriesServedChart"`
-	SmartQueriesServedChart    map[string]float64 `json:"SmartQueriesServedChart"`
-	QueriesByTypeChart         map[string]int64   `json:"QueriesByTypeChart"`
+	TotalQueriesServed       int64              `json:"TotalQueriesServed"`
+	QueriesServedChart       map[string]float64 `json:"QueriesServedChart"`
+	NormalQueriesServedChart map[string]float64 `json:"NormalQueriesServedChart"`
+	SmartQueriesServedChart  map[string]float64 `json:"SmartQueriesServedChart"`
+	QueriesByTypeChart       map[string]float64 `json:"QueriesByTypeChart"`
 }
 
 type CheckAvailability struct {
@@ -198,11 +198,27 @@ func (c *Client) GetStatistics(zoneID int64) (*DnsStats, error) {
 }
 
 func (c *Client) CheckAvailability(domain string) (*CheckAvailability, error) {
-	q := url.Values{"domain": {domain}}
+	data, err := c.doRaw(http.MethodPost, "/dnszone/checkavailability", map[string]any{"Name": domain})
+	if err != nil {
+		return nil, err
+	}
 	var out CheckAvailability
-	if err := c.doJSON(http.MethodGet, "/dnszone/check?"+q.Encode(), nil, &out); err != nil {
-		if err2 := c.doJSON(http.MethodGet, "/dnszone/availability?"+q.Encode(), nil, &out); err2 != nil {
-			return nil, err
+	if len(data) == 0 {
+		return &out, nil
+	}
+	if err := json.Unmarshal(data, &out); err != nil {
+		var flag bool
+		if json.Unmarshal(data, &flag) == nil {
+			return &CheckAvailability{Available: flag}, nil
+		}
+		return nil, fmt.Errorf("decode availability: %w", err)
+	}
+	if !out.Available {
+		var probe struct {
+			IsAvailable *bool `json:"IsAvailable"`
+		}
+		if json.Unmarshal(data, &probe) == nil && probe.IsAvailable != nil {
+			out.Available = *probe.IsAvailable
 		}
 	}
 	return &out, nil
