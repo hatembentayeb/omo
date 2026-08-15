@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"time"
 
 	"omo/pkg/pluginrpc"
 )
@@ -29,6 +30,7 @@ func zonesActions() []pluginrpc.KeyBinding {
 		{Key: "E", Label: "Details", Action: "zone_details"},
 		{Key: "O", Label: "Open Records", Action: "goto_records"},
 		{Key: "X", Label: "Export CSV", Action: "export_zones"},
+		{Key: "B", Label: "Export BIND", Action: "export_bind"},
 	}
 }
 
@@ -68,13 +70,6 @@ func statsActions() []pluginrpc.KeyBinding {
 	}
 }
 
-func exportActions() []pluginrpc.KeyBinding {
-	return []pluginrpc.KeyBinding{
-		{Key: "Z", Label: "Export Zones", Action: "export_zones"},
-		{Key: "R", Label: "Export Records", Action: "export_records"},
-	}
-}
-
 func scanActions() []pluginrpc.KeyBinding {
 	return []pluginrpc.KeyBinding{
 		{Key: "S", Label: "Trigger Scan", Action: "trigger_scan"},
@@ -105,7 +100,11 @@ func helpSections() []pluginrpc.HelpSection {
 		pluginrpc.HelpSection{Title: "Nameservers", Bindings: nameserversActions()},
 		pluginrpc.HelpSection{Title: "DNSSEC", Bindings: dnssecActions()},
 		pluginrpc.HelpSection{Title: "Stats", Bindings: statsActions()},
-		pluginrpc.HelpSection{Title: "Export", Bindings: exportActions()},
+		pluginrpc.HelpSection{Title: "Export", Bindings: []pluginrpc.KeyBinding{
+			{Key: "5", Label: "BIND zone file (modal)", Action: "goto_export"},
+			{Key: "B", Label: "Export BIND", Action: "export_bind"},
+			{Key: "X", Label: "Export CSV", Action: "export_zones"},
+		}},
 		pluginrpc.HelpSection{Title: "Scan", Bindings: scanActions()},
 		pluginrpc.HelpSection{Title: "Availability", Bindings: availabilityActions()},
 		pluginrpc.HelpSection{Title: "Certificates", Bindings: certificatesActions()},
@@ -153,7 +152,8 @@ func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	case viewStats:
 		return s.viewStatsLocked()
 	case viewExport:
-		return s.viewExportLocked()
+		// Export is a modal (key 5 / B), not a table. Stay on zones.
+		return s.viewZonesLocked()
 	case viewScan:
 		return s.viewScanLocked()
 	case viewAvailability:
@@ -285,52 +285,125 @@ func (s *Service) viewStatsLocked() (pluginrpc.ViewData, error) {
 	if err != nil {
 		return ui.NotConnectedErr(viewStats, "Bunny DNS", err)
 	}
-	rows := [][]string{{"TotalQueriesServed", strconv.FormatInt(st.TotalQueriesServed, 10)}}
+
+	total := st.TotalQueriesServed
+	normal := chartTotal(st.NormalQueriesServedChart)
+	smart := chartTotal(st.SmartQueriesServedChart)
+	daySum := chartTotal(st.QueriesServedChart)
+	if total == 0 && daySum > 0 {
+		total = daySum
+	}
+
+	rows := [][]string{
+		{"What this is", "DNS lookups Bunny answered for this zone"},
+		{"Period", "Last 30 days (Bunny default)"},
+		{"Total queries", formatCount(total) + " lookups  (" + formatCountShort(total) + ")"},
+	}
+	if total > 0 && len(st.QueriesServedChart) > 0 {
+		avg := int64(float64(total)/float64(len(st.QueriesServedChart)) + 0.5)
+		rows = append(rows, []string{"Daily average", formatCount(avg) + " lookups per day"})
+	}
+
+	type dayKV struct {
+		k string
+		t time.Time
+		v int64
+	}
+	var days []dayKV
+	var peak, quiet dayKV
+	for k, v := range st.QueriesServedChart {
+		item := dayKV{k: k, v: int64(v + 0.5)}
+		if t, ok := parseChartTime(k); ok {
+			item.t = t
+		}
+		days = append(days, item)
+		if peak.k == "" || item.v > peak.v {
+			peak = item
+		}
+		if quiet.k == "" || item.v < quiet.v {
+			quiet = item
+		}
+	}
+	sort.Slice(days, func(i, j int) bool {
+		if !days[i].t.IsZero() && !days[j].t.IsZero() {
+			return days[i].t.Before(days[j].t)
+		}
+		return days[i].k < days[j].k
+	})
+	if peak.k != "" {
+		rows = append(rows, []string{"Busiest day", formatChartDay(peak.k) + "  —  " + formatCount(peak.v) + " lookups"})
+	}
+	if quiet.k != "" && quiet.k != peak.k {
+		rows = append(rows, []string{"Quietest day", formatChartDay(quiet.k) + "  —  " + formatCount(quiet.v) + " lookups"})
+	}
+	if normal > 0 || smart > 0 {
+		rows = append(rows,
+			[]string{"Standard lookups", formatCount(normal) + "  (" + formatPercent(normal, normal+smart) + ")  regular DNS"},
+			[]string{"Smart DNS lookups", formatCount(smart) + "  (" + formatPercent(smart, normal+smart) + ")  geo / optimized"},
+		)
+	}
+
 	type kv struct {
 		k string
 		v int64
 	}
 	var types []kv
+	var typeTotal int64
 	for k, v := range st.QueriesByTypeChart {
-		types = append(types, kv{k, v})
+		n := int64(v + 0.5)
+		types = append(types, kv{k, n})
+		typeTotal += n
 	}
 	sort.Slice(types, func(i, j int) bool { return types[i].v > types[j].v })
-	for i, t := range types {
-		if i >= 12 {
-			break
+	if len(types) > 0 {
+		rows = append(rows, []string{"", ""})
+		rows = append(rows, []string{"By record type", "which DNS questions clients asked"})
+		maxType := types[0].v
+		if typeTotal == 0 {
+			typeTotal = total
 		}
-		rows = append(rows, []string{"Type " + t.k, strconv.FormatInt(t.v, 10)})
+		for i, t := range types {
+			if i >= 12 {
+				break
+			}
+			bar := sparkBar(float64(t.v), float64(maxType), 10)
+			val := formatCount(t.v) + "  (" + formatPercent(t.v, typeTotal) + ")"
+			if bar != "" {
+				val += "  " + bar
+			}
+			rows = append(rows, []string{recordTypeLabel(t.k), val})
+		}
 	}
-	var days []kv
-	for k, v := range st.QueriesServedChart {
-		days = append(days, kv{k, int64(v)})
-	}
-	sort.Slice(days, func(i, j int) bool { return days[i].k < days[j].k })
-	if len(days) > 10 {
-		days = days[len(days)-10:]
-	}
-	for _, d := range days {
-		rows = append(rows, []string{"Day " + d.k, strconv.FormatInt(d.v, 10)})
-	}
-	return ui.Connected(viewStats, "Stats — "+z.Domain, s.baseInfo(fmt.Sprintf("Queries: %d", st.TotalQueriesServed)),
-		[]string{"Metric", "Value"}, rows, "Metric", statsActions()...), nil
-}
 
-func (s *Service) viewExportLocked() (pluginrpc.ViewData, error) {
-	if err := s.ensureClientLocked(); err != nil {
-		return ui.NotConnectedErr(viewExport, "Bunny DNS", err)
+	if len(days) > 0 {
+		rows = append(rows, []string{"", ""})
+		rows = append(rows, []string{"Recent days", "lookups Bunny served that day"})
+		if len(days) > 14 {
+			days = days[len(days)-14:]
+		}
+		var maxDay int64 = 1
+		for _, d := range days {
+			if d.v > maxDay {
+				maxDay = d.v
+			}
+		}
+		for _, d := range days {
+			bar := sparkBar(float64(d.v), float64(maxDay), 12)
+			val := formatCount(d.v) + " lookups"
+			if bar != "" {
+				val += "  " + bar
+			}
+			rows = append(rows, []string{formatChartDay(d.k), val})
+		}
 	}
-	zone := "(highlight a zone on view 0)"
-	if s.selectedZone != nil && s.selectedZone.Domain != "" {
-		zone = s.selectedZone.Domain
+
+	if total == 0 && len(types) == 0 && len(days) == 0 {
+		rows = append(rows, []string{"Status", "No queries yet in this window"})
 	}
-	rows := [][]string{
-		{"Export Zones", "Z → ~/.omo/exports/bunnydns/zones-*.csv"},
-		{"Export Records", "R → ~/.omo/exports/bunnydns/<zone>-*.csv (current: " + zone + ")"},
-		{"Shortcuts", "Zones X · Records X"},
-	}
-	return ui.Connected(viewExport, "Export", s.baseInfo(""),
-		[]string{"Action", "Detail"}, rows, "Action", exportActions()...), nil
+
+	extra := fmt.Sprintf("%s lookups · last 30 days", formatCountShort(total))
+	return ui.Connected(viewStats, "Stats — "+z.Domain, s.baseInfo(extra),
+		[]string{"Metric", "Meaning"}, rows, "Metric", statsActions()...), nil
 }
 
 func (s *Service) viewScanLocked() (pluginrpc.ViewData, error) {
@@ -354,9 +427,9 @@ func (s *Service) viewScanLocked() (pluginrpc.ViewData, error) {
 func (s *Service) viewAvailabilityLocked() (pluginrpc.ViewData, error) {
 	rows := make([][]string, 0, len(s.availHistory))
 	for _, h := range s.availHistory {
-		rows = append(rows, []string{h.Domain, h.Available, h.Message, h.When})
+		rows = append(rows, []string{h.Domain, h.Available, h.Message, formatCheckedAt(h.When)})
 	}
-	rows = pluginrpc.EnsureRows(rows, []string{"—", "—", "Press A to check a domain", "—"})
+	rows = pluginrpc.EnsureRows(rows, []string{"—", "—", "Press A and type a domain to check", "—"})
 	return ui.Connected(viewAvailability, "Domain Availability", s.baseInfo(fmt.Sprintf("Checks: %d", len(s.availHistory))),
 		[]string{"Domain", "Available", "Message", "Checked"},
 		rows, "Domain", availabilityActions()...), nil
