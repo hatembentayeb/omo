@@ -256,6 +256,8 @@ func (r *RPCRenderer) Apply(view pluginrpc.ViewData) tview.Primitive {
 				r.dispatchAction("goto_records")
 			case "records":
 				r.dispatchAction("record_details")
+			case "overview", "ssl", "http", "whois", "reachability", "reverse", "mail":
+				r.dispatchAction("row_details")
 			}
 		})
 	}
@@ -442,6 +444,10 @@ func (r *RPCRenderer) dispatchAction(action string) {
 		r.promptFilterNamespace()
 	case "create_zone":
 		r.promptCreateZone()
+	case "lookup_domain":
+		r.promptLookupDomain()
+	case "set_resolver":
+		r.promptSetResolver()
 	case "check_availability":
 		r.promptCheckAvailability()
 	case "create_record":
@@ -813,6 +819,28 @@ func (r *RPCRenderer) promptConfirmAction(title, body, action string) {
 			r.runAction(action, payload)
 		}
 	})
+}
+
+func (r *RPCRenderer) promptLookupDomain() {
+	ui.ShowCompactStyledInputModal(r.pages, r.app, "Lookup Domain", "Domain:", "", 48, nil,
+		func(domain string, cancelled bool) {
+			r.FocusTable()
+			if cancelled || strings.TrimSpace(domain) == "" {
+				return
+			}
+			r.runAction("lookup_domain", map[string]string{"domain": strings.TrimSpace(domain)})
+		})
+}
+
+func (r *RPCRenderer) promptSetResolver() {
+	ui.ShowCompactStyledInputModal(r.pages, r.app, "DNS Resolver", "NS (8.8.8.8, 1.1.1.1, 9.9.9.9, system):", "8.8.8.8", 40, nil,
+		func(ns string, cancelled bool) {
+			r.FocusTable()
+			if cancelled || strings.TrimSpace(ns) == "" {
+				return
+			}
+			r.runAction("set_resolver", map[string]string{"resolver": strings.TrimSpace(ns)})
+		})
 }
 
 func (r *RPCRenderer) promptCreateZone() {

@@ -101,3 +101,12 @@ plugins:
       - bunny
       - networking
       - domains
+  dnscheck:
+    description: Dig-style DNS lookup, SSL expiry, mail auth, HTTP, and WHOIS for any domain
+    tags:
+      - dns
+      - ssl
+      - tls
+      - domain
+      - whois
+      - networking
