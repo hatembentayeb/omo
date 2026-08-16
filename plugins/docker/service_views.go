@@ -95,7 +95,8 @@ func helpSections() []pluginrpc.HelpSection {
 			{Key: "a", Label: "Toggle autoscroll"},
 			{Key: "m", Label: "Mark line"},
 			{Key: "/", Label: "Find"},
-			{Key: "y", Label: "Copy all"},
+			{Key: "Y", Label: "Copy all"},
+			{Key: "C", Label: "Copy marked lines"},
 			{Key: "ESC", Label: "Back"},
 		}},
 	)
