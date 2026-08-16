@@ -106,6 +106,13 @@ var pluginReferenceDefinitions = []struct {
 			"URL — domain to inspect (optional; press L in the plugin to query any name)\n" +
 			"Custom: resolver (8.8.8.8, 1.1.1.1, 9.9.9.9, system)",
 	},
+	{
+		plugin: "jira",
+		notes: "Reference path: jira/<environment>/<instance>\n\n" +
+			"URL — https://your-site.atlassian.net\n" +
+			"UserName — Atlassian account email\n" +
+			"Password — API token (id.atlassian.com → Security → API tokens)",
+	},
 }
 
 // ensureReferenceTemplates creates <plugin>/default/default_config when missing.

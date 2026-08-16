@@ -258,6 +258,20 @@ func (r *RPCRenderer) Apply(view pluginrpc.ViewData) tview.Primitive {
 				r.dispatchAction("record_details")
 			case "overview", "ssl", "http", "whois", "reachability", "reverse", "mail":
 				r.dispatchAction("row_details")
+			case "mine", "issues", "backlog":
+				r.dispatchAction("issue_detail")
+			case "boards":
+				r.dispatchAction("select_board")
+			case "sprints":
+				r.dispatchAction("select_sprint")
+			case "transitions":
+				r.dispatchAction("apply_transition")
+			case "comments":
+				r.dispatchAction("comment_detail")
+			case "deploys":
+				r.dispatchAction("deploy_detail")
+			case "filters":
+				r.dispatchAction("run_filter")
 			}
 		})
 	}
@@ -472,6 +486,12 @@ func (r *RPCRenderer) dispatchAction(action string) {
 		r.promptConfirmAction("Disable DNSSEC", "Disable DNSSEC for this zone?", "disable_dnssec")
 	case "issue_wildcard_cert":
 		r.promptConfirmAction("Issue Wildcard Cert", "Request wildcard certificate issuance?", "issue_wildcard_cert")
+	case "add_comment":
+		r.promptAddComment()
+	case "create_issue":
+		r.promptCreateIssue()
+	case "run_jql":
+		r.promptRunJQL()
 	default:
 		r.runAction(action, r.selectionPayload())
 	}
@@ -958,5 +978,42 @@ func (r *RPCRenderer) promptSetSoaEmail() {
 				return
 			}
 			r.runAction("set_soa_email", map[string]string{"email": strings.TrimSpace(email)})
+		})
+}
+
+func (r *RPCRenderer) promptAddComment() {
+	payload := r.selectionPayload()
+	ui.ShowCompactStyledInputModal(r.pages, r.app, "Add Comment", "Comment:", "", 64, nil,
+		func(body string, cancelled bool) {
+			r.FocusTable()
+			if cancelled || strings.TrimSpace(body) == "" {
+				return
+			}
+			payload["body"] = strings.TrimSpace(body)
+			r.runAction("add_comment", payload)
+		})
+}
+
+func (r *RPCRenderer) promptCreateIssue() {
+	payload := r.selectionPayload()
+	ui.ShowCompactStyledInputModal(r.pages, r.app, "New Issue", "Summary:", "", 64, nil,
+		func(summary string, cancelled bool) {
+			r.FocusTable()
+			if cancelled || strings.TrimSpace(summary) == "" {
+				return
+			}
+			payload["summary"] = strings.TrimSpace(summary)
+			r.runAction("create_issue", payload)
+		})
+}
+
+func (r *RPCRenderer) promptRunJQL() {
+	ui.ShowCompactStyledInputModal(r.pages, r.app, "Run JQL", "JQL:", "assignee = currentUser() AND statusCategory != Done", 64, nil,
+		func(jql string, cancelled bool) {
+			r.FocusTable()
+			if cancelled || strings.TrimSpace(jql) == "" {
+				return
+			}
+			r.runAction("run_jql", map[string]string{"jql": strings.TrimSpace(jql)})
 		})
 }
