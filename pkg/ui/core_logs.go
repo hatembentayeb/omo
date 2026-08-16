@@ -1,9 +1,7 @@
 package ui
 
 import (
-	"encoding/base64"
 	"fmt"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -13,10 +11,9 @@ import (
 )
 
 const (
-	logsContentPage   = "logs"
-	tableContentPage  = "table"
-	logsMaxLines      = 50000
-	logsOSC52MaxBytes = 200_000
+	logsContentPage  = "logs"
+	tableContentPage = "table"
+	logsMaxLines     = 50000
 )
 
 // ShowLogs replaces the table content area with the log viewer.
@@ -203,8 +200,8 @@ func (c *CoreView) installLogsKeyBindings() {
 		"/":   "Find",
 		"n":   "Next hit",
 		"N":   "Prev hit",
-		"y":   "Copy all",
-		"Y":   "Copy marks",
+		"Y":   "Copy all",
+		"C":   "Copy marks",
 		"g":   "Top",
 		"G":   "Bottom",
 		"R":   "Refresh",
@@ -223,8 +220,9 @@ func (c *CoreView) installLogsKeyBindings() {
 		"/": func() { v.enterSearch() },
 		"n": func() { v.jumpMatch(true) },
 		"N": func() { v.jumpMatch(false) },
-		"y": func() { v.copyAll() },
-		"Y": func() { v.copyMarked() },
+		"Y": func() { v.copyAll() },
+		"y": func() { v.copyAll() }, // alias — Actions show Y like other plugin keys
+		"C": func() { v.copyMarked() },
 		"g": func() { v.jumpTop() },
 		"G": func() { v.jumpBottom() },
 		"R": func() { v.refresh() },
@@ -607,7 +605,7 @@ func (v *logsView) refresh() {
 
 func (v *logsView) copyAll() {
 	text := strings.Join(v.lines, "\n")
-	if err := copyOSC52(text); err != nil {
+	if err := copyToClipboard(text); err != nil {
 		v.statusMsg = err.Error()
 	} else {
 		v.statusMsg = fmt.Sprintf("copied %d lines", len(v.lines))
@@ -630,21 +628,12 @@ func (v *logsView) copyMarked() {
 	for _, i := range idxs {
 		parts = append(parts, v.lines[i])
 	}
-	if err := copyOSC52(strings.Join(parts, "\n")); err != nil {
+	if err := copyToClipboard(strings.Join(parts, "\n")); err != nil {
 		v.statusMsg = err.Error()
 	} else {
 		v.statusMsg = fmt.Sprintf("copied %d marked lines", len(parts))
 	}
 	v.updateChrome()
-}
-
-func copyOSC52(text string) error {
-	if len(text) > logsOSC52MaxBytes {
-		return fmt.Errorf("too large to copy (%d bytes)", len(text))
-	}
-	payload := base64.StdEncoding.EncodeToString([]byte(text))
-	_, err := os.Stdout.WriteString("\033]52;c;" + payload + "\a")
-	return err
 }
 
 func (v *logsView) render() {
