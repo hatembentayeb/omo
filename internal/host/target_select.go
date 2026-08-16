@@ -103,6 +103,9 @@ func listSecretTargets(pluginName string) ([]secretTarget, error) {
 	if !pluginapi.HasSecrets() {
 		return nil, fmt.Errorf("secrets unavailable")
 	}
+	if err := pluginapi.Secrets().Reload(); err != nil {
+		return nil, fmt.Errorf("reload secrets: %w", err)
+	}
 	paths, err := pluginapi.ListNonReferenceSecrets(pluginName)
 	if err != nil {
 		return nil, err

@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"omo/pkg/pluginapi"
 	"omo/pkg/secrets"
 )
 
@@ -199,7 +200,23 @@ func runSecretsPutCmd(p secrets.Provider, args []string) {
 	}
 	for _, kv := range attrs {
 		idx := strings.Index(kv, "=")
-		existing.CustomAttributes[kv[:idx]] = kv[idx+1:]
+		key, val := kv[:idx], kv[idx+1:]
+		if val == "" {
+			delete(existing.CustomAttributes, key)
+			continue
+		}
+		existing.CustomAttributes[key] = val
+	}
+
+	// Filling real connection fields on a schema template must clear the
+	// reference marker, otherwise the host skips the entry forever.
+	if existing.CustomAttributes[pluginapi.ReferenceEntryAttr] == pluginapi.ReferenceEntryValue &&
+		(existing.UserName != "" || existing.Password != "" || existing.URL != "") {
+		delete(existing.CustomAttributes, pluginapi.ReferenceEntryAttr)
+	}
+	// Explicit false/empty also clears the marker.
+	if v := existing.CustomAttributes[pluginapi.ReferenceEntryAttr]; v != "" && v != pluginapi.ReferenceEntryValue {
+		delete(existing.CustomAttributes, pluginapi.ReferenceEntryAttr)
 	}
 
 	if err := p.Put(path, existing); err != nil {

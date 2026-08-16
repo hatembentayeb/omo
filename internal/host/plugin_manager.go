@@ -397,6 +397,9 @@ func resolvePluginConfig(pluginName string) (map[string]string, error) {
 	if !pluginapi.HasSecrets() {
 		return nil, fmt.Errorf("secrets unavailable")
 	}
+	if err := pluginapi.Secrets().Reload(); err != nil {
+		pluginrpc.RPCLog("resolvePluginConfig: reload warn: %v", err)
+	}
 
 	// Prefer the seeded local path; fall back to first non-reference entry.
 	preferred := pluginName + "/development/local"

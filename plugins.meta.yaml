@@ -110,3 +110,11 @@ plugins:
       - domain
       - whois
       - networking
+  jira:
+    description: Manage Jira Cloud boards, issues, sprints, comments, and deployments
+    tags:
+      - jira
+      - atlassian
+      - issues
+      - boards
+      - developer-tools
