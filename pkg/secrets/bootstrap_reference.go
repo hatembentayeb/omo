@@ -100,6 +100,12 @@ var pluginReferenceDefinitions = []struct {
 			"Custom: kubeconfig (path or inline YAML), kubeconfig_path, context, namespace\n" +
 			"URL / UserName / Password — unused for most clusters",
 	},
+	{
+		plugin: "dnscheck",
+		notes: "Reference path: dnscheck/<environment>/<instance>\n\n" +
+			"URL — domain to inspect (optional; press L in the plugin to query any name)\n" +
+			"Custom: resolver (8.8.8.8, 1.1.1.1, 9.9.9.9, system)",
+	},
 }
 
 // ensureReferenceTemplates creates <plugin>/default/default_config when missing.

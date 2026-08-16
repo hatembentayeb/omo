@@ -2,11 +2,11 @@ PLUGINS_DIR := ./plugins
 OMO_HOME := $(HOME)/.omo
 PLUGINS_INSTALL_DIR := $(OMO_HOME)/plugins
 # RPC plugin executables (hashicorp/go-plugin)
-RPC_PLUGINS := redis docker git sysprocess argocd k8suser ssh postgres rabbitmq kafka github s3 awsCosts k8sportforward bunnydns
+RPC_PLUGINS := redis docker git sysprocess argocd k8suser ssh postgres rabbitmq kafka github s3 awsCosts k8sportforward bunnydns dnscheck
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS := -ldflags "-X main.Version=$(VERSION)"
 
-.PHONY: all clean install dirs plugin-redis plugin-docker plugin-git plugin-sysprocess plugin-argocd plugin-k8suser plugin-ssh plugin-postgres plugin-rabbitmq plugin-kafka plugin-github plugin-s3 plugin-awsCosts plugin-k8sportforward plugin-bunnydns dev-setup dev-secrets dev-seed dev-up dev-down
+.PHONY: all clean install dirs plugin-redis plugin-docker plugin-git plugin-sysprocess plugin-argocd plugin-k8suser plugin-ssh plugin-postgres plugin-rabbitmq plugin-kafka plugin-github plugin-s3 plugin-awsCosts plugin-k8sportforward plugin-bunnydns plugin-dnscheck dev-setup dev-secrets dev-seed dev-up dev-down
 
 # Build the host binary and all plugins, then install to ~/.omo
 all: dirs
@@ -131,6 +131,13 @@ plugin-bunnydns: dirs
 	@go build -o $(PLUGINS_INSTALL_DIR)/bunnydns/bunnydns ./plugins/bunnydns/cmd/bunnydns
 	@chmod +x $(PLUGINS_INSTALL_DIR)/bunnydns/bunnydns
 	@echo "Installed $(PLUGINS_INSTALL_DIR)/bunnydns/bunnydns"
+
+plugin-dnscheck: dirs
+	@mkdir -p $(PLUGINS_INSTALL_DIR)/dnscheck
+	@echo "Building dnscheck RPC plugin"
+	@go build -o $(PLUGINS_INSTALL_DIR)/dnscheck/dnscheck ./plugins/dnscheck/cmd/dnscheck
+	@chmod +x $(PLUGINS_INSTALL_DIR)/dnscheck/dnscheck
+	@echo "Installed $(PLUGINS_INSTALL_DIR)/dnscheck/dnscheck"
 
 # Create the ~/.omo directory structure
 dirs:

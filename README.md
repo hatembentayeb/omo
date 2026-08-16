@@ -214,6 +214,7 @@ More on the site: [oh-myops.com](https://oh-myops.com/#screenshots).
 | **k8suser** | Cert-based users & roles | `k8suser/<env>/<cluster>` |
 | **k8sportforward** | Deployments / StatefulSets / Services / Pods port-forward | `k8sportforward/<env>/<cluster>` |
 | **bunnydns** | Bunny.net DNS zones, records, DNSSEC, stats, certificates | `bunnydns/<env>/<account>` |
+| **dnscheck** | Dig-style DNS, SSL expiry, mail auth, HTTP, WHOIS | `dnscheck/<env>/<domain>` or press **L** |
 | **awsCosts** | Cost explorer, budgets, forecasts | `awsCosts/<env>/<profile>` |
 | **s3** | Buckets, objects, ACL, lifecycle, multipart | `s3/<env>/<profile>` |
 | **git** | Status, commits, branches, stash | `git/<env>/<repo>` |
