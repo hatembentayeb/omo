@@ -15,8 +15,8 @@ const logo = `[#FF6B00]
  ██████  ██   ██ ██      ██    ██     ██████  ██      ███████ [white]
 `
 
-// Cover returns the home splash shown before a plugin is selected.
-func Cover(app *tview.Application, version string) tview.Primitive {
+// Cover returns the home splash shown before the live plugin dashboard.
+func Cover(app *tview.Application, version string, onDashboard func()) tview.Primitive {
 	if version == "" {
 		version = "dev"
 	}
@@ -25,15 +25,15 @@ func Cover(app *tview.Application, version string) tview.Primitive {
 	logoBox.SetDynamicColors(true)
 	logoBox.SetTextAlign(tview.AlignCenter)
 	logoBox.SetBackgroundColor(tcell.ColorDefault)
-	logoBox.SetText(logo + "\n[#FF8C40]Terminal operations, one plugin at a time[white]")
+	logoBox.SetText(logo + "\n[#FF8C40]Terminal operations, all plugins at a glance[white]")
 
 	about := fmt.Sprintf(
 		"[#FFD700]OhMyOps[white]\n\n"+
 			"[#4CAF50]Version[white]  %s\n\n"+
 			"[#00BCD4]A TUI host for ops plugins — Docker, Redis,\n"+
 			"Kubernetes, Kafka, Git, S3, Postgres, and more.\n\n"+
-			"Pick a plugin from the sidebar. Each screen\n"+
-			"shares the same chrome: Info · Views · Actions.[white]",
+			"Open the live dashboard or pick a sidebar plugin.\n"+
+			"Every plugin shares: Info · Views · Actions.[white]",
 		version,
 	)
 
@@ -49,18 +49,15 @@ func Cover(app *tview.Application, version string) tview.Primitive {
 	aboutBox.SetText(about)
 
 	start := "[#FFD700]Start here[white]\n\n" +
-		"[#FF9900]Enter[white]   Open selected plugin\n" +
+		"[#FF9900]Enter[white]   Open live plugin dashboard\n" +
+		"[#FF9900]Sidebar Enter[white] Open selected plugin\n" +
 		"[#FF9900]Tab[white]     Cycle sidebar · content · actions\n" +
-		"[#FF9900]p[white]       Package Manager (install / update)\n" +
-		"[#FF9900]i[white]       Settings / Info (~/.omo)\n" +
-		"[#FF9900]r[white]       Refresh plugin list\n" +
-		"[#FF9900]Ctrl+t[white]  Switch target / connection\n" +
-		"[#FF9900]?[white]       Help for the active view\n\n" +
+		"[#FF9900]p[white]       Package Manager\n" +
+		"[#FF9900]i[white]       Settings / Info\n" +
+		"[#FF9900]r[white]       Refresh plugin list\n\n" +
 		"[#4CAF50]Inside a plugin[white]\n" +
-		"[#FF9900]0-9[white]     Switch views\n" +
-		"[#FF9900]/[white]       Filter the table\n" +
-		"[#FF9900]R[white]       Refresh data\n" +
-		"[#FF9900]ESC[white]     Back"
+		"[#FF9900]0-9[white] Views · [#FF9900]/[white] Filter · [#FF9900]R[white] Refresh\n" +
+		"[#FF9900]ESC[white] Back to dashboard"
 
 	startBox := tview.NewTextView()
 	startBox.SetDynamicColors(true)
@@ -85,7 +82,14 @@ func Cover(app *tview.Application, version string) tview.Primitive {
 	frame := tview.NewFrame(grid)
 	frame.SetBorders(0, 0, 0, 0, 0, 0)
 	frame.SetBackgroundColor(tcell.ColorDefault)
-	frame.AddText("Select a plugin · p Package Manager · i Settings", true, tview.AlignCenter, tcell.ColorDimGray)
+	frame.AddText("Enter Dashboard · sidebar Enter Plugin · p Package Manager · i Settings", true, tview.AlignCenter, tcell.ColorDimGray)
+	frame.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEnter && onDashboard != nil {
+			onDashboard()
+			return nil
+		}
+		return event
+	})
 
 	app.SetFocus(logoBox)
 	return frame

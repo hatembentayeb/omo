@@ -3,6 +3,7 @@ package dnscheck
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"omo/pkg/pluginrpc"
 )
@@ -71,6 +72,47 @@ func (s *Service) baseInfo(extra string) string {
 		}
 	}
 	return pluginrpc.FormatInfo(msg, extra)
+}
+
+func (s *Service) viewDashboardLocked() (pluginrpc.ViewData, error) {
+	if s.domain == "" {
+		return pluginrpc.Widget("DNS Check", "not configured", "", [][2]string{
+			{"Domain", "set KeePass URL"},
+			{"Resolver", resolverLabel(s.resolver)},
+		}), nil
+	}
+	// Prefer a warm report; avoid the full overview (DNS+SSL+HTTP) pulse cost.
+	report := s.report
+	if report == nil || report.Domain != s.domain || report.Resolver != s.resolver {
+		return pluginrpc.Widget("DNS Check", "idle", s.domain, [][2]string{
+			{"Domain", s.domain},
+			{"Resolver", resolverLabel(s.resolver)},
+			{"Result", "open plugin to lookup"},
+			{"Cache", "cold"},
+		}), nil
+	}
+	status := "connected"
+	result := fmt.Sprintf("%d records", len(report.Records))
+	if report.DNSMeta.Error != "" {
+		status = "error"
+		result = pluginrpc.Truncate(report.DNSMeta.Error, 36)
+	}
+	ssl := "-"
+	if report.SSL != nil {
+		if report.SSL.Leaf != nil {
+			ssl = sslExpiryLabel(report.SSL.Leaf.NotAfter)
+		} else if report.SSL.Error != "" {
+			ssl = pluginrpc.Truncate(report.SSL.Error, 24)
+		} else {
+			ssl = sslStatusWord(time.Time{}, report.SSL.Verified, report.SSL.Error)
+		}
+	}
+	return pluginrpc.Widget("DNS Check", status, s.domain, [][2]string{
+		{"Domain", s.domain},
+		{"Resolver", resolverLabel(s.resolver)},
+		{"Result", result},
+		{"SSL", pluginrpc.Truncate(ssl, 24)},
+	}), nil
 }
 
 func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {

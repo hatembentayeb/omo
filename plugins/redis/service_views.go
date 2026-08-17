@@ -84,6 +84,33 @@ func (s *Service) baseInfo(extra string) string {
 	return pluginrpc.FormatInfo(msg, extra)
 }
 
+func (s *Service) viewDashboardLocked() (pluginrpc.ViewData, error) {
+	if err := s.ensureConnectedLocked(); err != nil {
+		return pluginrpc.ViewData{}, err
+	}
+	info, err := s.client.GetServerInfo()
+	if err != nil {
+		return pluginrpc.ViewData{}, err
+	}
+	uptime := dashValue(info["uptime_in_days"])
+	if uptime != "-" {
+		uptime += "d"
+	}
+	return pluginrpc.Widget("Redis", "connected", fmt.Sprintf("%s:%s", s.host, s.port), [][2]string{
+		{"Version", dashValue(info["redis_version"])},
+		{"Uptime", uptime},
+		{"Clients", dashValue(info["connected_clients"])},
+		{"Memory", dashValue(info["used_memory_human"])},
+	}), nil
+}
+
+func dashValue(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return "-"
+	}
+	return value
+}
+
 func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	if viewID == "" {
 		viewID = viewKeys

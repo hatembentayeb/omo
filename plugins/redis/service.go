@@ -86,6 +86,9 @@ func (s *Service) Configure(req pluginrpc.ConfigureRequest) error {
 func (s *Service) GetView(req pluginrpc.ViewRequest) (pluginrpc.ViewData, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if req.View == pluginrpc.DashboardView {
+		return s.viewDashboardLocked()
+	}
 	viewID := req.View
 	if viewID == "" {
 		viewID = s.currentView

@@ -1,5 +1,9 @@
 package pluginrpc
 
+// DashboardView is the shared lightweight summary view requested by the host
+// dashboard. Plugins should keep this view fast, read-only, and side-effect free.
+const DashboardView = "dashboard"
+
 // ViewRequest asks the plugin for a serializable UI snapshot.
 type ViewRequest struct {
 	View string // e.g. "keys"; empty = default / current

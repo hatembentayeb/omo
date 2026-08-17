@@ -23,15 +23,19 @@ const (
 
 // PluginSession is one lazy-connected, keep-warm RPC plugin.
 type PluginSession struct {
-	Name     string
-	BinPath  string
-	Client   *goplugin.Client
-	Plugin   pluginrpc.Plugin
-	State    ConnState
-	Cached   *pluginrpc.ViewData
-	Renderer *RPCRenderer
-	LastUsed time.Time
-	loading  bool
+	Name       string
+	BinPath    string
+	Client     *goplugin.Client
+	Plugin     pluginrpc.Plugin
+	Configured bool
+	State      ConnState
+	Cached     *pluginrpc.ViewData
+	Dashboard  *pluginrpc.ViewData
+	Renderer   *RPCRenderer
+	LastUsed   time.Time
+	LastError  string
+	loading    bool
+	pulseMu    sync.Mutex
 }
 
 // PluginManager tracks per-plugin RPC connections (pattern 2: lazy-connect, keep warm).
@@ -44,6 +48,7 @@ type PluginManager struct {
 	logFn     func(string, ...interface{})
 	onActions func([]pluginrpc.KeyBinding, func(string))
 	onMood    func(phase string, ok bool, action, reaction string)
+	onHome    func()
 }
 
 func newPluginManager(app *tview.Application, pages *tview.Pages, logFn func(string, ...interface{})) *PluginManager {
@@ -65,6 +70,11 @@ func (m *PluginManager) SetActionsHook(fn func([]pluginrpc.KeyBinding, func(stri
 // SetMoodHook wires the top-left logo reaction flashes for plugin actions.
 func (m *PluginManager) SetMoodHook(fn func(phase string, ok bool, action, reaction string)) {
 	m.onMood = fn
+}
+
+// SetHomeHook wires ESC from a plugin's home view back to the dashboard.
+func (m *PluginManager) SetHomeHook(fn func()) {
+	m.onHome = fn
 }
 
 func (m *PluginManager) setSecrets(pluginapi.SecretsProvider) {
@@ -108,6 +118,7 @@ func (m *PluginManager) Activate(name, binPath string) (tview.Primitive, error) 
 		renderer = NewRPCRenderer(m.app, m.pages, name, nil)
 		renderer.SetActionsHook(m.onActions)
 		renderer.SetMoodHook(m.onMood)
+		renderer.SetHomeHook(m.onHome)
 		m.mu.Lock()
 		if m.sessions[name] == sess {
 			sess.Renderer = renderer
@@ -153,6 +164,8 @@ func (m *PluginManager) activateAsync(name, binPath string) {
 		pluginrpc.RPCLog("activateAsync: session gone")
 		return
 	}
+	sess.pulseMu.Lock()
+	defer sess.pulseMu.Unlock()
 
 	warm := sess.Client != nil
 	if sess.Client == nil {
@@ -214,7 +227,7 @@ func (m *PluginManager) activateAsync(name, binPath string) {
 	pluginrpc.RPCLog("activateAsync: resolvePluginConfig done in %s err=%v cfg_host=%s", time.Since(t0), cfgErr, cfg["host"])
 	if cfgErr != nil {
 		pluginrpc.RPCLog("activateAsync: config warn: %v", cfgErr)
-	} else if warm {
+	} else if warm && sess.Configured {
 		// Keep-warm sessions (e.g. k8sportforward tunnels) must not be reconfigured
 		// on every sidebar click — Configure often resets plugin state.
 		// Ctrl+t target switch still calls Configure directly via applyTarget.
@@ -225,6 +238,7 @@ func (m *PluginManager) activateAsync(name, binPath string) {
 			m.failSession(name, fmt.Errorf("configure: %w", err))
 			return
 		}
+		sess.Configured = true
 	}
 
 	pluginrpc.RPCLog("activateAsync: GetView …")
@@ -245,6 +259,7 @@ func (m *PluginManager) activateAsync(name, binPath string) {
 		return
 	}
 	sess.Cached = &view
+	sess.LastError = ""
 	renderer := sess.Renderer
 	m.mu.Unlock()
 
@@ -259,6 +274,144 @@ func (m *PluginManager) activateAsync(name, binPath string) {
 	})
 	pluginrpc.RPCLog("activateAsync SUCCESS total=%s", time.Since(total))
 	m.log("activated RPC plugin %s %s", name, meta.Version)
+}
+
+// DashboardSnapshot returns a live, compact plugin summary without making the
+// plugin active. Calls for one plugin are serialized with normal activation.
+func (m *PluginManager) DashboardSnapshot(name, binPath string) pluginrpc.ViewData {
+	m.mu.Lock()
+	sess := m.sessions[name]
+	if sess == nil {
+		sess = &PluginSession{Name: name, BinPath: binPath, State: ConnPaused}
+		m.sessions[name] = sess
+	}
+	m.mu.Unlock()
+
+	sess.pulseMu.Lock()
+	defer sess.pulseMu.Unlock()
+
+	if sess.Plugin == nil {
+		type launchResult struct {
+			client *goplugin.Client
+			plugin pluginrpc.Plugin
+			err    error
+		}
+		ch := make(chan launchResult, 1)
+		go func() {
+			client, p, err := pluginrpc.Launch(binPath)
+			ch <- launchResult{client: client, plugin: p, err: err}
+		}()
+
+		select {
+		case result := <-ch:
+			if result.err != nil {
+				return m.dashboardError(name, "launch", result.err)
+			}
+			m.mu.Lock()
+			if m.sessions[name] != sess {
+				m.mu.Unlock()
+				result.client.Kill()
+				return m.dashboardError(name, "launch", fmt.Errorf("session replaced"))
+			}
+			sess.Client = result.client
+			sess.Plugin = result.plugin
+			m.mu.Unlock()
+		case <-time.After(8 * time.Second):
+			// Launch may finish after this deadline; clean that process up.
+			go func() {
+				result := <-ch
+				if result.client != nil {
+					result.client.Kill()
+				}
+			}()
+			return m.dashboardError(name, "launch", fmt.Errorf("timed out after 8s"))
+		}
+	}
+
+	if !sess.Configured {
+		cfg, err := resolvePluginConfigWithReload(name, false)
+		if err != nil {
+			// Config-free plugins (for example system process inspection) can
+			// still provide a live widget. Required-config plugins reject this
+			// empty Configure and become a clear not-configured tile.
+			cfg = map[string]string{}
+		}
+		if err := sess.Plugin.Configure(pluginrpc.ConfigureRequest{Settings: cfg}); err != nil {
+			return m.dashboardStatus(name, "not configured", err.Error())
+		}
+		sess.Configured = true
+	}
+
+	view, err := withTimeout(8*time.Second, func() (pluginrpc.ViewData, error) {
+		return sess.Plugin.GetView(pluginrpc.ViewRequest{View: pluginrpc.DashboardView})
+	})
+	if err != nil {
+		return m.dashboardError(name, "widget", err)
+	}
+	if view.View != "" && view.View != pluginrpc.DashboardView {
+		// Legacy plugins usually route unknown views to their default table.
+		// Use that live result as a generic widget, then restore its real view so
+		// opening the plugin later does not inherit "dashboard" as currentView.
+		restoredView := view.View
+		_, _ = withTimeout(3*time.Second, func() (pluginrpc.ViewData, error) {
+			return sess.Plugin.GetView(pluginrpc.ViewRequest{View: restoredView})
+		})
+		status := view.Status
+		if status == "" {
+			status = "connected"
+		}
+		view = pluginrpc.Widget(name, status, view.Info, [][2]string{
+			{"View", firstDashboardValue(view.Title, restoredView)},
+			{"Rows", fmt.Sprintf("%d", len(view.Rows))},
+		})
+	}
+	if view.Title == "" {
+		view.Title = name
+	}
+	if view.Status == "" {
+		view.Status = "connected"
+	}
+	view.View = pluginrpc.DashboardView
+	view.ViewBindings = nil
+	view.KeyBindings = nil
+	view.Actions = nil
+	view.HelpSections = nil
+	if len(view.Rows) > 4 {
+		view.Rows = view.Rows[:4]
+	}
+
+	m.mu.Lock()
+	sess.Dashboard = &view
+	sess.LastError = ""
+	sess.LastUsed = time.Now()
+	m.mu.Unlock()
+	return view
+}
+
+func firstDashboardValue(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return "-"
+}
+
+func (m *PluginManager) dashboardError(name, phase string, err error) pluginrpc.ViewData {
+	detail := phase + ": " + err.Error()
+	m.mu.Lock()
+	if sess := m.sessions[name]; sess != nil {
+		sess.LastError = detail
+	}
+	m.mu.Unlock()
+	return m.dashboardStatus(name, "error", detail)
+}
+
+func (m *PluginManager) dashboardStatus(name, status, detail string) pluginrpc.ViewData {
+	return pluginrpc.Widget(name, status, "", [][2]string{
+		{"Status", status},
+		{"Detail", pluginrpc.Truncate(detail, 60)},
+	})
 }
 
 func withTimeout[T any](d time.Duration, fn func() (T, error)) (T, error) {
@@ -393,12 +546,28 @@ func (m *PluginManager) ActivePrimitive() tview.Primitive {
 }
 
 func resolvePluginConfig(pluginName string) (map[string]string, error) {
-	pluginrpc.RPCLog("resolvePluginConfig %s", pluginName)
+	return resolvePluginConfigWithReload(pluginName, true)
+}
+
+// ReloadSecrets refreshes KeePass once before a multi-plugin dashboard pulse.
+func (m *PluginManager) ReloadSecrets() {
+	if !pluginapi.HasSecrets() {
+		return
+	}
+	if err := pluginapi.Secrets().Reload(); err != nil {
+		pluginrpc.RPCLog("ReloadSecrets warn: %v", err)
+	}
+}
+
+func resolvePluginConfigWithReload(pluginName string, reload bool) (map[string]string, error) {
+	pluginrpc.RPCLog("resolvePluginConfig %s reload=%v", pluginName, reload)
 	if !pluginapi.HasSecrets() {
 		return nil, fmt.Errorf("secrets unavailable")
 	}
-	if err := pluginapi.Secrets().Reload(); err != nil {
-		pluginrpc.RPCLog("resolvePluginConfig: reload warn: %v", err)
+	if reload {
+		if err := pluginapi.Secrets().Reload(); err != nil {
+			pluginrpc.RPCLog("resolvePluginConfig: reload warn: %v", err)
+		}
 	}
 
 	// Prefer the seeded local path; fall back to first non-reference entry.

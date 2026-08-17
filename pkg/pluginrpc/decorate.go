@@ -141,6 +141,25 @@ func Logs(viewID, title, info, status, body string) ViewData {
 	}
 }
 
+// Widget builds a compact, action-free snapshot for the host dashboard.
+// Pairs are rendered as Metric / Value rows and should be limited to the most
+// useful few values so dashboard tiles remain readable.
+func Widget(title, status, info string, pairs [][2]string) ViewData {
+	rows := make([][]string, 0, len(pairs))
+	for _, pair := range pairs {
+		rows = append(rows, []string{pair[0], pair[1]})
+	}
+	return ViewData{
+		View:         DashboardView,
+		Title:        title,
+		Info:         info,
+		Status:       status,
+		Headers:      []string{"Metric", "Value"},
+		Rows:         rows,
+		SelectionKey: "Metric",
+	}
+}
+
 // Logs builds a decorated connected logs view.
 func (u ViewUI) Logs(viewID, title, info, body string, actions ...KeyBinding) ViewData {
 	return u.Decorate(Logs(viewID, title, info, "connected", body), actions...)

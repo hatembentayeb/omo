@@ -64,7 +64,7 @@ func main() {
 
 	omoHost.MainFrame.SetBorders(0, 0, 0, 0, 0, 0)
 	omoHost.MainFrame.SetBorderPadding(0, 0, 0, 0)
-	omoHost.MainFrame.SetPrimitive(host.Cover(app, Version))
+	omoHost.MainFrame.SetPrimitive(host.Cover(app, Version, omoHost.OpenDashboard))
 
 	omoHost.MainUI.AddItem(logoView, 0, 0, 1, 1, 0, 0, false).
 		AddItem(omoHost.MainFrame, 0, 1, 3, 1, 0, 0, false).

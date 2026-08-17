@@ -114,6 +114,36 @@ func (s *Service) baseInfo(extra string) string {
 	return pluginrpc.FormatInfo(msg, extra)
 }
 
+func (s *Service) viewDashboardLocked() (pluginrpc.ViewData, error) {
+	if s.account == nil || !s.client.HasAccount() {
+		return pluginrpc.ViewData{}, fmt.Errorf("not configured")
+	}
+	owner := s.account.Owner
+	if owner == "" {
+		owner = s.account.Name
+	}
+	acctType := s.account.AccountType
+	if acctType == "" {
+		acctType = "-"
+	}
+	active := "none selected"
+	stars := "-"
+	if s.activeRepo != nil {
+		active = s.activeRepo.FullName
+		stars = fmt.Sprintf("%d", s.activeRepo.Stars)
+	}
+	repos := "-"
+	if len(s.cachedRepos) > 0 {
+		repos = fmt.Sprintf("%d cached", len(s.cachedRepos))
+	}
+	return pluginrpc.Widget("GitHub", "connected", owner, [][2]string{
+		{"Account", pluginrpc.Truncate(owner+"/"+acctType, 24)},
+		{"Active repo", pluginrpc.Truncate(active, 24)},
+		{"Stars", stars},
+		{"Repos", repos},
+	}), nil
+}
+
 func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	if viewID == "" {
 		viewID = viewRepos
