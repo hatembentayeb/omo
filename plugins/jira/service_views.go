@@ -126,6 +126,30 @@ func (s *Service) baseInfo(extra string) string {
 	return pluginrpc.FormatInfo(msg, extra)
 }
 
+func (s *Service) viewDashboardLocked() (pluginrpc.ViewData, error) {
+	if err := s.ensureClientLocked(); err != nil {
+		return pluginrpc.ViewData{}, err
+	}
+	user := "-"
+	if current := s.client.User(); current != nil {
+		user = firstNonEmpty(current.DisplayName, current.EmailAddress, current.AccountID)
+	}
+	board := "none selected"
+	if s.selectedBoard != nil {
+		board = s.selectedBoard.Name
+	}
+	issue := "none selected"
+	if s.selectedIssue != nil {
+		issue = s.selectedIssue.Key
+	}
+	return pluginrpc.Widget("Jira", "connected", s.client.Site(), [][2]string{
+		{"User", pluginrpc.Truncate(user, 24)},
+		{"Site", pluginrpc.Truncate(strings.TrimPrefix(s.client.Site(), "https://"), 24)},
+		{"Board", pluginrpc.Truncate(board, 24)},
+		{"Issue", issue},
+	}), nil
+}
+
 func (s *Service) buildViewLocked(viewID string) (pluginrpc.ViewData, error) {
 	if viewID == "" {
 		viewID = viewMine

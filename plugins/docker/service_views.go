@@ -2,6 +2,7 @@ package docker
 
 import (
 	"fmt"
+	"strings"
 
 	"omo/pkg/pluginrpc"
 )
@@ -180,6 +181,26 @@ func (s *Service) viewContainersLocked() (pluginrpc.ViewData, error) {
 	}
 	rows := pluginrpc.EnsureRows(pluginrpc.MapRows(list, func(c DockerContainer) []string { return c.GetTableRow() }), []string{"-", "-", "-", "-", "No containers", "-"})
 	return ui.Connected(viewContainers, "Docker Containers", s.baseInfo(fmt.Sprintf("Containers: %d", len(list))), []string{"ID", "Name", "Image", "State", "Status", "Ports"}, rows, "ID", containersActions()...), nil
+}
+
+func (s *Service) viewDashboardLocked() (pluginrpc.ViewData, error) {
+	info, err := s.client.GetSystemInfo()
+	if err != nil {
+		return pluginrpc.ViewData{}, err
+	}
+	host := strings.TrimSpace(s.hostName)
+	if host == "" {
+		host = strings.TrimSpace(s.hostURL)
+	}
+	if host == "" {
+		host = "local"
+	}
+	return pluginrpc.Widget("Docker", "connected", host, [][2]string{
+		{"Running", fmt.Sprintf("%d", info.ContainersRunning)},
+		{"Containers", fmt.Sprintf("%d", info.Containers)},
+		{"Images", fmt.Sprintf("%d", info.Images)},
+		{"Version", pluginrpc.Truncate(info.ServerVersion, 24)},
+	}), nil
 }
 
 func (s *Service) viewImagesLocked() (pluginrpc.ViewData, error) {

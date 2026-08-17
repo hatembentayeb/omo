@@ -68,6 +68,8 @@ func (m *PluginManager) applyTarget(name string, target secretTarget) {
 
 	go func() {
 		pluginrpc.RPCLog("SelectTarget: Configure %s path=%s", name, target.Path)
+		sess.pulseMu.Lock()
+		defer sess.pulseMu.Unlock()
 		err := sess.Plugin.Configure(pluginrpc.ConfigureRequest{Settings: target.Settings})
 		if err != nil {
 			m.app.QueueUpdateDraw(func() {
@@ -78,6 +80,7 @@ func (m *PluginManager) applyTarget(name string, target secretTarget) {
 			})
 			return
 		}
+		sess.Configured = true
 		viewID := ""
 		if sess.Renderer != nil {
 			viewID = sess.Renderer.currentView

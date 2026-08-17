@@ -24,6 +24,7 @@ type RPCRenderer struct {
 	homeView    string // first/default view id for breadcrumbs + ESC
 	onActions   func([]pluginrpc.KeyBinding, func(string))
 	onMood      func(phase string, ok bool, action, reaction string)
+	onHome      func()
 }
 
 // NewRPCRenderer builds a CoreView shell for an RPC plugin.
@@ -64,6 +65,11 @@ func (r *RPCRenderer) SetActionsHook(fn func([]pluginrpc.KeyBinding, func(string
 // SetMoodHook wires logo mood flashes for action pending/result beats.
 func (r *RPCRenderer) SetMoodHook(fn func(phase string, ok bool, action, reaction string)) {
 	r.onMood = fn
+}
+
+// SetHomeHook handles ESC while already at the plugin home view.
+func (r *RPCRenderer) SetHomeHook(fn func()) {
+	r.onHome = fn
 }
 
 func (r *RPCRenderer) flashMood(phase string, ok bool, action, reaction string) {
@@ -278,6 +284,10 @@ func (r *RPCRenderer) Apply(view pluginrpc.ViewData) tview.Primitive {
 
 	r.core.RegisterHandlers()
 	r.root.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEscape && r.currentView == r.homeView && r.onHome != nil {
+			r.onHome()
+			return nil
+		}
 		return r.core.StandardKeyHandler(event, nil)
 	})
 	if view.LogsBody != "" {

@@ -26,6 +26,7 @@ type Host struct {
 	Logo            *LogoMood
 	activePluginIdx int
 	rpcManager      *PluginManager
+	dashboard       *Dashboard
 	PluginsDir      string
 	logger          *pluginapi.Logger
 	version         string
@@ -56,6 +57,7 @@ func New(app *tview.Application, pages *tview.Pages, logger *pluginapi.Logger, v
 	h.rpcManager = newPluginManager(app, pages, h.log)
 	h.rpcManager.SetActionsHook(h.UpdatePluginActions)
 	h.rpcManager.SetMoodHook(h.FlashLogo)
+	h.rpcManager.SetHomeHook(h.OpenDashboard)
 	return h
 }
 
@@ -112,6 +114,7 @@ func (h *Host) markActive(list *tview.List, i int) string {
 
 func (h *Host) activateRPC(list *tview.List, i int, binPath string) {
 	pluginrpc.RPCLog("host.activateRPC begin bin=%s", binPath)
+	h.dashboard = nil
 
 	curName := h.markActive(list, i)
 
@@ -133,8 +136,36 @@ func (h *Host) activateRPC(list *tview.List, i int, binPath string) {
 	pluginrpc.RPCLog("host.activateRPC mounted loading UI for %s", curName)
 }
 
+func (h *Host) activateInstalled(entry installedPlugin) {
+	for i := 0; i < h.PluginsList.GetItemCount(); i++ {
+		main, secondary := h.PluginsList.GetItemText(i)
+		if stripPluginPrefix(main) == entry.Name && secondary == entry.BinPath {
+			h.activateRPC(h.PluginsList, i, entry.BinPath)
+			return
+		}
+	}
+	// List may be stale after refresh; still open by path.
+	h.dashboard = nil
+	pluginLogger, err := pluginapi.NewLogger(entry.Name)
+	if err != nil {
+		h.log("failed to create logger for %s: %v", entry.Name, err)
+	}
+	pluginapi.SetPluginLogger(pluginLogger)
+	component, err := h.rpcManager.Activate(entry.Name, entry.BinPath)
+	if err != nil {
+		h.showPluginLoadError("Failed to activate RPC plugin", err)
+		return
+	}
+	registry.RegisterPlugin(entry.Name, pluginapi.PluginMetadata{Name: entry.Name})
+	h.MainFrame.SetPrimitive(component)
+}
+
 // FocusPluginContent moves focus into the active plugin view (RPC table or main frame).
 func (h *Host) FocusPluginContent() {
+	if h.dashboard != nil {
+		h.dashboard.Focus()
+		return
+	}
 	if h.rpcManager != nil && h.rpcManager.FocusActive() {
 		return
 	}
@@ -208,10 +239,46 @@ func (h *Host) resetHostActions() {
 // RefreshPlugins reloads the plugins list.
 func (h *Host) RefreshPlugins() {
 	h.log("refreshing plugins")
+	reopenDashboard := h.dashboard != nil
 	h.MainUI.RemoveItem(h.PluginsList)
 	h.PluginsList = h.LoadPlugins()
 	h.MainUI.AddItem(h.PluginsList, 1, 0, 1, 1, 0, 0, true)
+	if reopenDashboard {
+		h.OpenDashboard()
+		return
+	}
 	h.App.SetFocus(h.PluginsList)
+}
+
+// ShowCover mounts the branded splash and focuses its Enter-to-dashboard CTA.
+func (h *Host) ShowCover() {
+	h.dashboard = nil
+	h.MainFrame.SetPrimitive(Cover(h.App, h.version, h.OpenDashboard))
+	if primitive := h.MainFrame.GetPrimitive(); primitive != nil {
+		h.App.SetFocus(primitive)
+	}
+}
+
+// OpenDashboard shows live summaries for all installed RPC plugins.
+func (h *Host) OpenDashboard() {
+	entries, err := discoverPluginEntries(h.PluginsDir)
+	if err != nil {
+		h.showPluginLoadError("Failed to load dashboard", err)
+		return
+	}
+	if h.rpcManager != nil {
+		h.rpcManager.PauseActive()
+	}
+	h.dashboard = NewDashboard(
+		h.App,
+		h.rpcManager,
+		entries,
+		func(entry installedPlugin) { h.activateInstalled(entry) },
+		h.ShowCover,
+	)
+	h.MainFrame.SetPrimitive(h.dashboard.Primitive())
+	h.dashboard.Focus()
+	h.dashboard.Refresh()
 }
 
 // OpenPackageManager shows the package manager UI.
@@ -268,6 +335,11 @@ func (h *Host) OpenSettings() {
 }
 
 func (h *Host) restoreMainContent() {
+	if h.dashboard != nil {
+		h.MainFrame.SetPrimitive(h.dashboard.Primitive())
+		h.dashboard.Focus()
+		return
+	}
 	if h.rpcManager != nil {
 		if p := h.rpcManager.ActivePrimitive(); p != nil {
 			h.MainFrame.SetPrimitive(p)
@@ -275,11 +347,35 @@ func (h *Host) restoreMainContent() {
 			return
 		}
 	}
-	h.MainFrame.SetPrimitive(Cover(h.App, h.version))
+	h.ShowCover()
+}
+
+type installedPlugin struct {
+	Name    string
+	BinPath string
+}
+
+func discoverPluginEntries(pluginsDir string) ([]installedPlugin, error) {
+	entries, err := os.ReadDir(pluginsDir)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]installedPlugin, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		binPath := filepath.Join(pluginsDir, name, name)
+		if info, err := os.Stat(binPath); err == nil && isExecutable(info) {
+			out = append(out, installedPlugin{Name: name, BinPath: binPath})
+		}
+	}
+	return out, nil
 }
 
 func discoverPlugins(pluginsDir string) (*tview.List, error) {
-	entries, err := os.ReadDir(pluginsDir)
+	entries, err := discoverPluginEntries(pluginsDir)
 	if err != nil {
 		return nil, err
 	}
@@ -289,15 +385,7 @@ func discoverPlugins(pluginsDir string) (*tview.List, error) {
 	list.SetBackgroundColor(tcell.ColorDefault)
 
 	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		binPath := filepath.Join(pluginsDir, name, name)
-
-		if info, err := os.Stat(binPath); err == nil && isExecutable(info) {
-			list.AddItem("  → "+name, binPath, 0, nil)
-		}
+		list.AddItem("  → "+entry.Name, entry.BinPath, 0, nil)
 	}
 
 	return list, nil
