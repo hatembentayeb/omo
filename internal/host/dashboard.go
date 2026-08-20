@@ -65,7 +65,7 @@ func (d *Dashboard) build() {
 	help := tview.NewTextView().
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignCenter).
-		SetText("[orange]↑↓←→[white] select  [orange]Enter[white] open  [orange]R[white] refresh  [orange]ESC[white] cover")
+		SetText("[#5FD7FF]<↑↓←→>[#BCBCBC] select  [#5FD7FF]<enter>[#BCBCBC] open  [#5FD7FF]<R>[#BCBCBC] refresh  [#5FD7FF]<esc>[#BCBCBC] cover")
 	help.SetBackgroundColor(tcell.ColorDefault)
 
 	if len(d.entries) == 0 {

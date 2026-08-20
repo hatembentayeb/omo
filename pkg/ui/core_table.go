@@ -180,10 +180,10 @@ func (c *CoreView) SetFilterQuery(query string) *CoreView {
 	afterCount := len(c.tableData)
 	if c.filterQuery == "" {
 		c.Log("[yellow]Filter cleared")
-		c.table.SetTitle(fmt.Sprintf(" [yellow]%s[white] ", c.title))
+		c.table.SetTitle(fmt.Sprintf(" [aqua]%s[white] ", c.title))
 	} else {
 		c.Log(fmt.Sprintf("[green]Filter '%s': %d/%d rows", c.filterQuery, afterCount, beforeCount))
-		c.table.SetTitle(fmt.Sprintf(" [yellow]%s[white] [gray](filter: %s)[white] ", c.title, c.filterQuery))
+		c.table.SetTitle(fmt.Sprintf(" [aqua]%s[white] [gray](filter: %s)[white] ", c.title, c.filterQuery))
 		if afterCount == 0 && c.lazyHasMore {
 			c.Log("[gray]More data available - use PgDn to load more")
 		}

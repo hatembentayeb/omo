@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"omo/internal/packagemanager"
 	"omo/internal/registry"
@@ -30,6 +32,7 @@ type Host struct {
 	PluginsDir      string
 	logger          *pluginapi.Logger
 	version         string
+	splashOnce      sync.Once
 }
 
 func New(app *tview.Application, pages *tview.Pages, logger *pluginapi.Logger, version string) *Host {
@@ -83,6 +86,7 @@ func (h *Host) LoadPlugins() *tview.List {
 		list = tview.NewList().ShowSecondaryText(false)
 		list.SetMainTextColor(tcell.ColorPurple)
 		list.SetBackgroundColor(tcell.ColorDefault)
+		stylePluginList(list)
 		list.AddItem("No plugins found", "", '0', nil)
 		h.log("no plugins found in %s", h.PluginsDir)
 	}
@@ -93,6 +97,7 @@ func (h *Host) LoadPlugins() *tview.List {
 		}
 		h.activateRPC(list, i, s2)
 	})
+	stylePluginList(list)
 
 	h.PluginsList = list
 	return list
@@ -107,7 +112,7 @@ func (h *Host) markActive(list *tview.List, i int) string {
 
 	curMain, curSec := list.GetItemText(i)
 	curName := stripPluginPrefix(curMain)
-	list.SetItemText(i, "[green]  ● [white]"+curName, curSec)
+	list.SetItemText(i, "  ● "+curName, curSec)
 	h.activePluginIdx = i
 	return curName
 }
@@ -209,6 +214,7 @@ func (h *Host) ActionsView() *tview.List {
 	list := tview.NewList().ShowSecondaryText(false)
 	list.SetMainTextColor(tcell.ColorAqua)
 	list.SetBackgroundColor(tcell.ColorDefault)
+	stylePluginList(list)
 	h.ActionsList = list
 	h.resetHostActions()
 	return list
@@ -248,6 +254,49 @@ func (h *Host) RefreshPlugins() {
 		return
 	}
 	h.App.SetFocus(h.PluginsList)
+}
+
+const splashPage = "splash"
+const splashHold = 1200 * time.Millisecond
+
+// ShowStartupSplash covers the whole terminal with a centered OhMyOps mark,
+// then reveals the normal host UI. Any key skips the wait.
+func (h *Host) ShowStartupSplash() {
+	if h == nil || h.Pages == nil {
+		return
+	}
+	h.Pages.AddAndSwitchToPage(splashPage, Splash(), true)
+	go func() {
+		time.Sleep(splashHold)
+		h.App.QueueUpdateDraw(func() {
+			h.DismissSplash()
+		})
+	}()
+}
+
+// SplashVisible reports whether the full-screen startup mark is still showing.
+func (h *Host) SplashVisible() bool {
+	if h == nil || h.Pages == nil {
+		return false
+	}
+	front, _ := h.Pages.GetFrontPage()
+	return front == splashPage
+}
+
+// DismissSplash switches to the host UI. Safe to call more than once.
+func (h *Host) DismissSplash() {
+	if h == nil {
+		return
+	}
+	h.splashOnce.Do(func() {
+		if h.Pages != nil {
+			h.Pages.SwitchToPage("main")
+			h.Pages.RemovePage(splashPage)
+		}
+		if h.App != nil && h.PluginsList != nil {
+			h.App.SetFocus(h.PluginsList)
+		}
+	})
 }
 
 // ShowCover mounts the branded splash and focuses its Enter-to-dashboard CTA.
@@ -374,6 +423,15 @@ func discoverPluginEntries(pluginsDir string) ([]installedPlugin, error) {
 	return out, nil
 }
 
+func stylePluginList(list *tview.List) {
+	if list == nil {
+		return
+	}
+	list.SetHighlightFullLine(true)
+	list.SetSelectedTextColor(tcell.ColorBlack)
+	list.SetSelectedBackgroundColor(tcell.ColorAqua)
+}
+
 func discoverPlugins(pluginsDir string) (*tview.List, error) {
 	entries, err := discoverPluginEntries(pluginsDir)
 	if err != nil {
@@ -383,6 +441,7 @@ func discoverPlugins(pluginsDir string) (*tview.List, error) {
 	list := tview.NewList().ShowSecondaryText(false)
 	list.SetMainTextColor(tcell.ColorPurple)
 	list.SetBackgroundColor(tcell.ColorDefault)
+	stylePluginList(list)
 
 	for _, entry := range entries {
 		list.AddItem("  → "+entry.Name, entry.BinPath, 0, nil)
