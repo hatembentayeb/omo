@@ -82,13 +82,8 @@ func Cover(app *tview.Application, version string, onDashboard func()) tview.Pri
 
 	start := fmt.Sprintf("[%s]Start here[%s]\n\n", ui.HexInfoKey, ui.HexValue) +
 		fmt.Sprintf("[%s]<enter>[%s] Open live plugin dashboard\n", ui.HexActionKey, ui.HexLabel) +
-		fmt.Sprintf("[%s]<D>[%s]     Sidebar: load dashboard tiles\n", ui.HexActionKey, ui.HexLabel) +
 		fmt.Sprintf("[%s]<enter>[%s] Sidebar: open selected plugin\n", ui.HexActionKey, ui.HexLabel) +
-		fmt.Sprintf("[%s]<tab>[%s]   Cycle sidebar · content\n", ui.HexActionKey, ui.HexLabel) +
-		fmt.Sprintf("[%s]<p>[%s]     Package Manager\n", ui.HexActionKey, ui.HexLabel) +
-		fmt.Sprintf("[%s]<i>[%s]     Settings / Info\n", ui.HexActionKey, ui.HexLabel) +
-		fmt.Sprintf("[%s]<t>[%s]     Themes\n", ui.HexActionKey, ui.HexLabel) +
-		fmt.Sprintf("[%s]<r>[%s]     Refresh plugin list\n\n", ui.HexActionKey, ui.HexLabel) +
+		fmt.Sprintf("[%s]<tab>[%s]   Cycle sidebar · content\n\n", ui.HexActionKey, ui.HexLabel) +
 		fmt.Sprintf("[%s]Inside a plugin[%s]\n", ui.HexActionKey, ui.HexValue) +
 		fmt.Sprintf("[%s]<0-9>[%s] Views · [%s]</>[%s] Filter · [%s]<R>[%s] Refresh\n",
 			ui.HexViewKey, ui.HexLabel, ui.HexActionKey, ui.HexLabel, ui.HexActionKey, ui.HexLabel) +
@@ -117,7 +112,6 @@ func Cover(app *tview.Application, version string, onDashboard func()) tview.Pri
 	frame := tview.NewFrame(grid)
 	frame.SetBorders(0, 0, 0, 0, 0, 0)
 	frame.SetBackgroundColor(ui.ColorAppBg)
-	frame.AddText("Enter Dashboard · D Tiles · t Themes · p Packages · i Info", true, tview.AlignCenter, tcell.ColorDimGray)
 	frame.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyEnter && onDashboard != nil {
 			onDashboard()
@@ -126,7 +120,9 @@ func Cover(app *tview.Application, version string, onDashboard func()) tview.Pri
 		return event
 	})
 
-	app.SetFocus(logoBox)
+	if app != nil {
+		app.SetFocus(logoBox)
+	}
 	return frame
 }
 

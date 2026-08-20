@@ -22,8 +22,6 @@ type Dashboard struct {
 	onOpen     func(installedPlugin)
 	onClose    func()
 	root       *tview.Flex
-	title      *tview.TextView
-	help       *tview.TextView
 	grid       *tview.Grid
 	cards      []*tview.TextView
 	selected   int
@@ -58,18 +56,6 @@ func (d *Dashboard) Focus() {
 }
 
 func (d *Dashboard) build() {
-	d.title = tview.NewTextView().
-		SetDynamicColors(true).
-		SetTextAlign(tview.AlignCenter).
-		SetText(dashboardTitle("live summaries"))
-	d.title.SetBackgroundColor(ui.ColorAppBg)
-
-	d.help = tview.NewTextView().
-		SetDynamicColors(true).
-		SetTextAlign(tview.AlignCenter).
-		SetText(dashboardHelp())
-	d.help.SetBackgroundColor(ui.ColorAppBg)
-
 	if len(d.entries) == 0 {
 		d.grid = newDashboardGrid(1)
 		empty := tview.NewTextView().
@@ -99,13 +85,10 @@ func (d *Dashboard) build() {
 
 	d.root = tview.NewFlex().
 		SetDirection(tview.FlexRow).
-		AddItem(d.title, 1, 0, false).
-		AddItem(d.grid, 0, 1, false).
-		AddItem(d.help, 1, 0, false)
+		AddItem(d.grid, 0, 1, false)
 	d.root.SetBackgroundColor(ui.ColorAppBg)
 	d.root.SetInputCapture(d.handleKey)
 	d.paintSelection()
-	d.updateTitle()
 }
 
 // newDashboardGrid uses proportional rows so tiles always fill the content
@@ -192,7 +175,6 @@ func (d *Dashboard) move(delta int) {
 	}
 	d.selected = next
 	d.paintSelection()
-	d.updateTitle()
 }
 
 func (d *Dashboard) paintSelection() {
@@ -205,31 +187,6 @@ func (d *Dashboard) paintSelection() {
 			card.SetTitleColor(ui.ColorBorder)
 		}
 	}
-}
-
-func (d *Dashboard) updateTitle() {
-	if len(d.entries) == 0 {
-		return
-	}
-	d.title.SetText(fmt.Sprintf(
-		"%s  [%s]%s · %d/%d[-]",
-		dashboardHeading(),
-		ui.HexLabel,
-		d.entries[d.selected].Name, d.selected+1, len(d.entries),
-	))
-}
-
-func dashboardHeading() string {
-	return fmt.Sprintf("[%s::b]Plugin Dashboard[%s::-]", ui.HexActionKey, ui.HexValue)
-}
-
-func dashboardTitle(suffix string) string {
-	return fmt.Sprintf("%s  [%s]%s[-]", dashboardHeading(), ui.HexLabel, suffix)
-}
-
-func dashboardHelp() string {
-	return fmt.Sprintf("[%s]<↑↓←→>[%s] select  [%s]<enter>[%s] open  [%s]<R>[%s] refresh  [%s]<esc>[%s] cover",
-		ui.HexActionKey, ui.HexLabel, ui.HexActionKey, ui.HexLabel, ui.HexActionKey, ui.HexLabel, ui.HexActionKey, ui.HexLabel)
 }
 
 // Refresh starts a bounded live pulse. Tiles remain interactive while results

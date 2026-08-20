@@ -47,6 +47,9 @@ func (h *Host) restyle() {
 	if h.Logo != nil {
 		h.Logo.Restyle()
 	}
+	if h.proverb != nil {
+		h.proverb.Restyle()
+	}
 	if h.overlayRestyle != nil {
 		h.overlayRestyle()
 		return
@@ -123,14 +126,6 @@ func (d *Dashboard) ApplyTheme() {
 	}
 	if d.root != nil {
 		d.root.SetBackgroundColor(ui.ColorAppBg)
-	}
-	if d.title != nil {
-		d.title.SetBackgroundColor(ui.ColorAppBg)
-		d.updateTitle()
-	}
-	if d.help != nil {
-		d.help.SetBackgroundColor(ui.ColorAppBg)
-		d.help.SetText(dashboardHelp())
 	}
 	if d.grid != nil {
 		d.grid.SetBackgroundColor(ui.ColorAppBg)

@@ -30,6 +30,7 @@ type Host struct {
 	pluginEntries   []installedPlugin
 	ActionsList     *tview.List
 	Logo            *LogoMood
+	proverb         *headerProverb
 	Footer          *tview.Flex
 	crumbBar        *tview.TextView
 	chromeBar       *tview.TextView
@@ -80,6 +81,7 @@ func New(app *tview.Application, pages *tview.Pages, logger *pluginapi.Logger, v
 		MainUI:          mainUI,
 		PluginsList:     tview.NewTable(),
 		Logo:            newLogoMood(app),
+		proverb:         newHeaderProverb(app),
 		activePluginIdx: -1,
 		PluginsDir:      pluginapi.PluginsDir(),
 		logger:          logger,
@@ -99,11 +101,16 @@ func New(app *tview.Application, pages *tview.Pages, logger *pluginapi.Logger, v
 // Shutdown stops all RPC plugin processes (and anything they own, e.g. port-forwards).
 // Safe to call multiple times.
 func (h *Host) Shutdown() {
-	if h == nil || h.rpcManager == nil {
+	if h == nil {
 		return
 	}
-	h.log("shutting down RPC plugins")
-	h.rpcManager.KillAll()
+	if h.proverb != nil {
+		h.proverb.Stop()
+	}
+	if h.rpcManager != nil {
+		h.log("shutting down RPC plugins")
+		h.rpcManager.KillAll()
+	}
 }
 
 func (h *Host) log(format string, args ...interface{}) {
@@ -317,14 +324,20 @@ func (h *Host) SetCrumbs(text string) {
 }
 
 // SetPluginHeader mounts a full-width header (Info | Views | Actions | Logo).
-// A nil primitive shows the logo alone on the right (cover / dashboard).
+// A nil primitive shows the home header: proverb + wave on the left, logo right.
 func (h *Host) SetPluginHeader(p tview.Primitive) {
 	if h == nil || h.HeaderFrame == nil {
 		return
 	}
 	if p == nil {
-		h.HeaderFrame.SetPrimitive(h.logoBar())
+		h.HeaderFrame.SetPrimitive(h.homeHeader())
+		if h.proverb != nil {
+			h.proverb.Start()
+		}
 		return
+	}
+	if h.proverb != nil {
+		h.proverb.Stop()
 	}
 	h.HeaderFrame.SetPrimitive(p)
 }
@@ -337,11 +350,18 @@ func (h *Host) ShowHomeHeader() {
 	h.SetPluginHeader(nil)
 }
 
-func (h *Host) logoBar() tview.Primitive {
+func (h *Host) homeHeader() tview.Primitive {
 	bar := tview.NewFlex()
 	bar.SetDirection(tview.FlexColumn)
 	bar.SetBackgroundColor(ui.ColorAppBg)
-	empty := tview.NewBox().SetBackgroundColor(ui.ColorAppBg)
+	left := tview.NewFlex()
+	left.SetDirection(tview.FlexRow)
+	left.SetBackgroundColor(ui.ColorAppBg)
+	if h.proverb != nil {
+		left.AddItem(h.proverb.View(), 0, 1, false)
+	} else {
+		left.AddItem(tview.NewBox().SetBackgroundColor(ui.ColorAppBg), 0, 1, false)
+	}
 	slot := tview.NewFlex()
 	slot.SetDirection(tview.FlexRow)
 	slot.SetBackgroundColor(ui.ColorAppBg)
@@ -349,7 +369,7 @@ func (h *Host) logoBar() tview.Primitive {
 	slot.AddItem(pad, 0, 1, false).
 		AddItem(h.LogoView(), 2, 0, false).
 		AddItem(tview.NewBox().SetBackgroundColor(ui.ColorAppBg), 0, 1, false)
-	bar.AddItem(empty, 0, 1, false)
+	bar.AddItem(left, 0, 1, false)
 	bar.AddItem(slot, ui.HeaderLogoWidth, 0, false)
 	return bar
 }
