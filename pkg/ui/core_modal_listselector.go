@@ -10,7 +10,7 @@ import (
 // ShowStandardListSelectorModal displays a modal with a list of items to select from.
 // This function creates and displays a modal dialog with a selectable list of items,
 // allowing the user to choose an option from the provided choices. The modal includes:
-// - A titled border with aqua color
+// - A titled border with the warm gold chrome color
 // - A list of items with name and optional description
 // - Keyboard shortcuts for quick selection
 // - Help text at the bottom showing available keys
@@ -38,23 +38,23 @@ func ShowStandardListSelectorModal(
 	// Create list with items
 	list := tview.NewList()
 	list.SetHighlightFullLine(true)
-	list.SetSelectedBackgroundColor(tcell.ColorAqua)
-	list.SetSelectedTextColor(tcell.ColorBlack)
+	list.SetSelectedBackgroundColor(ColorHighlight)
+	list.SetSelectedTextColor(ColorHighlightText)
 	list.SetBorder(true)
-	list.SetBorderColor(tcell.ColorAqua)
+	list.SetBorderColor(ColorBorder)
 	list.SetTitle(" " + title + " ")
 	list.SetTitleColor(tcell.ColorOrange)
 	list.SetTitleAlign(tview.AlignCenter)
 	list.SetBorderPadding(1, 1, 2, 2)
 
 	// Add items to the list
-	for i, item := range items {
+	for _, item := range items {
 		name := item[0]
 		description := ""
 		if len(item) > 1 {
 			description = item[1]
 		}
-		list.AddItem(name, description, rune('0'+i), nil)
+		list.AddItem(name, description, 0, nil)
 	}
 
 	// Create help text
@@ -65,20 +65,23 @@ func ShowStandardListSelectorModal(
 	helpText.SetDynamicColors(true)
 
 	// Set a fixed width for the modal
-	width := 50
-	height := len(items) + 6 // Adjust based on item count plus border and help text
+	width := 56
+	height := len(items) + 6
+	if height > 22 {
+		height = 22
+	}
 
 	// Create a flexbox container to center the components
 	innerFlex := tview.NewFlex()
 	innerFlex.SetDirection(tview.FlexRow)
-	innerFlex.SetBackgroundColor(tcell.ColorDefault)
+	innerFlex.SetBackgroundColor(ColorAppBg)
 	innerFlex.AddItem(nil, 0, 1, false).
 		AddItem(list, height-2, 1, true).
 		AddItem(helpText, 1, 0, false).
 		AddItem(nil, 0, 1, false)
 
 	flex := tview.NewFlex()
-	flex.SetBackgroundColor(tcell.ColorDefault)
+	flex.SetBackgroundColor(ColorAppBg)
 	flex.AddItem(nil, 0, 1, false).
 		AddItem(innerFlex, width, 1, true).
 		AddItem(nil, 0, 1, false)

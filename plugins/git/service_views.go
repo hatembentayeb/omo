@@ -146,7 +146,7 @@ func (s *Service) viewReposLocked() (pluginrpc.ViewData, error) {
 		case "dirty":
 			statusDisplay = "[yellow]Modified[white]"
 		case "ahead":
-			statusDisplay = "[cyan]Ahead[white]"
+			statusDisplay = "[#e8b86d]Ahead[white]"
 		case "behind":
 			statusDisplay = "[red]Behind[white]"
 		case "":

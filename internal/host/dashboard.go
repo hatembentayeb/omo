@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"omo/pkg/pluginrpc"
+	"omo/pkg/ui"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -21,7 +22,6 @@ type Dashboard struct {
 	onOpen     func(installedPlugin)
 	onClose    func()
 	root       *tview.Flex
-	title      *tview.TextView
 	grid       *tview.Grid
 	cards      []*tview.TextView
 	selected   int
@@ -56,25 +56,13 @@ func (d *Dashboard) Focus() {
 }
 
 func (d *Dashboard) build() {
-	d.title = tview.NewTextView().
-		SetDynamicColors(true).
-		SetTextAlign(tview.AlignCenter).
-		SetText("[#FF6B00::b]Plugin Dashboard[white::-]  [gray]live summaries")
-	d.title.SetBackgroundColor(tcell.ColorDefault)
-
-	help := tview.NewTextView().
-		SetDynamicColors(true).
-		SetTextAlign(tview.AlignCenter).
-		SetText("[#5FD7FF]<↑↓←→>[#BCBCBC] select  [#5FD7FF]<enter>[#BCBCBC] open  [#5FD7FF]<R>[#BCBCBC] refresh  [#5FD7FF]<esc>[#BCBCBC] cover")
-	help.SetBackgroundColor(tcell.ColorDefault)
-
 	if len(d.entries) == 0 {
 		d.grid = newDashboardGrid(1)
 		empty := tview.NewTextView().
 			SetDynamicColors(true).
 			SetTextAlign(tview.AlignCenter).
 			SetText("\n[yellow]No installed plugins found[white]\n\nInstall one from Package Manager.")
-		empty.SetBackgroundColor(tcell.ColorDefault)
+		empty.SetBackgroundColor(ui.ColorAppBg)
 		empty.SetBorder(true)
 		d.grid.AddItem(empty, 0, 0, 1, dashboardColumns, 0, 0, false)
 	} else {
@@ -85,7 +73,7 @@ func (d *Dashboard) build() {
 			card := tview.NewTextView()
 			card.SetDynamicColors(true)
 			card.SetWrap(false)
-			card.SetBackgroundColor(tcell.ColorDefault)
+			card.SetBackgroundColor(ui.ColorAppBg)
 			card.SetBorder(true)
 			card.SetBorderPadding(0, 0, 1, 1)
 			card.SetTitle(" " + entry.Name + " ")
@@ -97,20 +85,17 @@ func (d *Dashboard) build() {
 
 	d.root = tview.NewFlex().
 		SetDirection(tview.FlexRow).
-		AddItem(d.title, 1, 0, false).
-		AddItem(d.grid, 0, 1, false).
-		AddItem(help, 1, 0, false)
-	d.root.SetBackgroundColor(tcell.ColorDefault)
+		AddItem(d.grid, 0, 1, false)
+	d.root.SetBackgroundColor(ui.ColorAppBg)
 	d.root.SetInputCapture(d.handleKey)
 	d.paintSelection()
-	d.updateTitle()
 }
 
 // newDashboardGrid uses proportional rows so tiles always fill the content
 // area instead of leaving dead space below a fixed-height grid.
 func newDashboardGrid(rows int) *tview.Grid {
 	grid := tview.NewGrid()
-	grid.SetBackgroundColor(tcell.ColorDefault)
+	grid.SetBackgroundColor(ui.ColorAppBg)
 	grid.SetBorders(false)
 	grid.SetColumns(0, 0, 0)
 	grid.SetRows(make([]int, rows)...)
@@ -190,29 +175,18 @@ func (d *Dashboard) move(delta int) {
 	}
 	d.selected = next
 	d.paintSelection()
-	d.updateTitle()
 }
 
 func (d *Dashboard) paintSelection() {
 	for i, card := range d.cards {
 		if i == d.selected {
-			card.SetBorderColor(tcell.ColorOrange)
-			card.SetTitleColor(tcell.ColorOrange)
+			card.SetBorderColor(ui.ColorHighlight)
+			card.SetTitleColor(ui.ColorHighlight)
 		} else {
-			card.SetBorderColor(tcell.ColorDarkCyan)
-			card.SetTitleColor(tcell.ColorAqua)
+			card.SetBorderColor(ui.ColorBorder)
+			card.SetTitleColor(ui.ColorBorder)
 		}
 	}
-}
-
-func (d *Dashboard) updateTitle() {
-	if len(d.entries) == 0 {
-		return
-	}
-	d.title.SetText(fmt.Sprintf(
-		"[#FF6B00::b]Plugin Dashboard[white::-]  [gray]%s · %d/%d",
-		d.entries[d.selected].Name, d.selected+1, len(d.entries),
-	))
 }
 
 // Refresh starts a bounded live pulse. Tiles remain interactive while results
@@ -295,7 +269,7 @@ func (d *Dashboard) renderCard(index int, view pluginrpc.ViewData) {
 		if len(row) > 1 {
 			value = pluginrpc.Truncate(row[1], 28)
 		}
-		fmt.Fprintf(&b, "[aqua]%s:[white] %s\n", key, value)
+		fmt.Fprintf(&b, "[%s]%s:[%s] %s\n", ui.HexInfoKey, key, ui.HexValue, value)
 		shown++
 	}
 	if shown == 0 {

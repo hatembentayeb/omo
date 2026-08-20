@@ -56,42 +56,43 @@ func buildSortedBindings(keyBindings map[string]string) []keyBinding {
 	return bindings
 }
 
-func longestDescription(bindings []keyBinding) int {
-	longest := 0
-	for _, b := range bindings {
-		if len(b.description) > longest {
-			longest = len(b.description)
+// clipPad truncates s to width runes (ellipsis if needed) and right-pads so
+// header columns stay aligned.
+func clipPad(s string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	r := []rune(s)
+	if len(r) > width {
+		if width == 1 {
+			return string(r[0])
 		}
+		return string(append(r[:width-1], '…'))
 	}
-	return longest
+	return s + strings.Repeat(" ", width-len(r))
 }
 
-func bindingCell(b keyBinding, longestDesc int) string {
-	paddingSpaces := longestDesc - len(b.description) + 1
-	if paddingSpaces < 1 {
-		paddingSpaces = 1
-	}
-	return fmt.Sprintf("%s %s%s", shortcutAction(b.key), b.description, strings.Repeat(" ", paddingSpaces))
+func bindingCell(b keyBinding, labelWidth int) string {
+	return fmt.Sprintf("%s %s ", shortcutAction(b.key), clipPad(b.description, labelWidth))
 }
 
-// k9s-style shortcuts: magenta view keys, cyan action keys, gray labels.
-// Hex tags are used because tview's named-color lookup is easy to miss.
+// Shortcuts follow the active theme: view keys, action keys, labels.
 const (
-	shortcutViewColor  = "#FF87FF"
-	shortcutActionColor = "#5FD7FF"
-	shortcutLabelColor = "#BCBCBC"
+	headerViewNameWidth   = 12
+	headerActionNameWidth = 11
+	headerColGap          = 3
 )
 
 func shortcutView(key string) string {
-	return fmt.Sprintf("[%s]<%s>[%s]", shortcutViewColor, key, shortcutLabelColor)
+	return fmt.Sprintf("[%s]<%s>[%s]", HexViewKey, key, HexLabel)
 }
 
 func shortcutViewActive(key string) string {
-	return fmt.Sprintf("[%s::b]<%s>[%s::-]", shortcutViewColor, key, shortcutLabelColor)
+	return fmt.Sprintf("[%s::b]<%s>[%s::-]", HexViewKey, key, HexLabel)
 }
 
 func shortcutAction(key string) string {
-	return fmt.Sprintf("[%s]<%s>[%s]", shortcutActionColor, key, shortcutLabelColor)
+	return fmt.Sprintf("[%s]<%s>[%s]", HexActionKey, key, HexLabel)
 }
 
 func shortcutKey(key string) string {
@@ -110,7 +111,7 @@ func formatBindingsColumns(bindings []keyBinding, maxRows, maxCols int) string {
 		maxCols = 1
 	}
 
-	longestDesc := longestDescription(bindings)
+	labelWidth := headerActionNameWidth
 	numCols := (len(bindings) + maxRows - 1) / maxRows
 	if numCols > maxCols {
 		numCols = maxCols
@@ -130,7 +131,7 @@ func formatBindingsColumns(bindings []keyBinding, maxRows, maxCols int) string {
 		if col >= maxCols {
 			break
 		}
-		cell := bindingCell(binding, longestDesc)
+		cell := bindingCell(binding, labelWidth)
 		if lines[row] != "" {
 			lines[row] += cell
 		} else {
@@ -149,10 +150,11 @@ func (c *CoreView) getViewsText() string {
 
 	format := func(b keyBinding) string {
 		viewID := c.viewBindingIDs[b.key]
+		label := clipPad(b.description, headerViewNameWidth)
 		if viewID != "" && viewID == c.activeViewID {
-			return fmt.Sprintf("%s %-9s", shortcutViewActive(b.key), b.description)
+			return fmt.Sprintf("%s %s ", shortcutViewActive(b.key), label)
 		}
-		return fmt.Sprintf("%s %-9s", shortcutView(b.key), b.description)
+		return fmt.Sprintf("%s %s ", shortcutView(b.key), label)
 	}
 
 	var sb strings.Builder

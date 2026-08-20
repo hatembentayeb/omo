@@ -38,6 +38,16 @@ func (c *CoreView) SetInfoMap(infoMap map[string]string) *CoreView {
 	}
 	sort.Strings(keys)
 
+	width := 0
+	for _, key := range keys {
+		if infoMap[key] == "" || key == "" {
+			continue
+		}
+		if len(key) > width {
+			width = len(key)
+		}
+	}
+
 	var sb strings.Builder
 	for _, key := range keys {
 		value := infoMap[key]
@@ -47,7 +57,7 @@ func (c *CoreView) SetInfoMap(infoMap map[string]string) *CoreView {
 		if sb.Len() > 0 {
 			sb.WriteString("\n")
 		}
-		sb.WriteString(fmt.Sprintf("%s: %s", key, value))
+		sb.WriteString(fmt.Sprintf("%-*s : %s", width, key, value))
 	}
 	// Caller/host typically colorizes; keep readable plain tags for standalone use.
 	c.infoPanel.SetText(sb.String())

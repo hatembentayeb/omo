@@ -66,7 +66,7 @@ func NewProgressModal(pages *tview.Pages, app *tview.Application, title string, 
 	// Create a flex for the progress and status
 	contentFlex := tview.NewFlex()
 	contentFlex.SetDirection(tview.FlexRow)
-	contentFlex.SetBackgroundColor(tcell.ColorDefault)
+	contentFlex.SetBackgroundColor(ColorAppBg)
 	contentFlex.AddItem(pm.progressBar, 1, 0, false).
 		AddItem(pm.statusText, 1, 0, false)
 
@@ -79,8 +79,8 @@ func NewProgressModal(pages *tview.Pages, app *tview.Application, title string, 
 		}
 		pm.Close()
 	})
-	form.SetBackgroundColor(tcell.ColorDefault)
-	form.SetButtonBackgroundColor(tcell.ColorDefault)
+	form.SetBackgroundColor(ColorAppBg)
+	form.SetButtonBackgroundColor(ColorAppBg)
 	form.SetButtonTextColor(tcell.ColorWhite)
 
 	// Create the main flex layout
@@ -94,7 +94,7 @@ func NewProgressModal(pages *tview.Pages, app *tview.Application, title string, 
 	frame := tview.NewFrame(innerFlex)
 	frame.SetBorders(2, 2, 2, 2, 4, 4)
 	frame.SetBorderColor(tcell.ColorRed) // Try a more visible color
-	frame.SetBackgroundColor(tcell.ColorDefault)
+	frame.SetBackgroundColor(ColorAppBg)
 	frame.SetBorderPadding(1, 1, 2, 2)
 	frame.AddText(" "+title+" ", true, tview.AlignCenter, tcell.ColorYellow)
 
@@ -104,13 +104,13 @@ func NewProgressModal(pages *tview.Pages, app *tview.Application, title string, 
 
 	innerModalFlex := tview.NewFlex()
 	innerModalFlex.SetDirection(tview.FlexRow)
-	innerModalFlex.SetBackgroundColor(tcell.ColorDefault)
+	innerModalFlex.SetBackgroundColor(ColorAppBg)
 	innerModalFlex.AddItem(nil, 0, 1, false).
 		AddItem(frame, height, 1, true).
 		AddItem(nil, 0, 1, false)
 
 	pm.modal = tview.NewFlex()
-	pm.modal.SetBackgroundColor(tcell.ColorDefault)
+	pm.modal.SetBackgroundColor(ColorAppBg)
 	pm.modal.AddItem(nil, 0, 1, false).
 		AddItem(innerModalFlex, width, 1, true).
 		AddItem(nil, 0, 1, false)

@@ -5,28 +5,27 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
-	"unicode/utf8"
 
-	"github.com/gdamore/tcell/v2"
+	"omo/pkg/ui"
+
 	"github.com/rivo/tview"
 )
 
-// LogoMood is the top-left OMO mark that can flash short ASCII/emoji reactions
-// when plugin actions succeed or fail. Fits the sidebar logo cell (~20×5).
+// LogoMood is the OMO mark shown at the top-right of the plugin header.
+// It can flash short ASCII/emoji reactions when plugin actions succeed or fail.
 type LogoMood struct {
-	tv      *tview.TextView
-	app     *tview.Application
-	version string
+	tv  *tview.TextView
+	app *tview.Application
 
 	gen atomic.Uint64
 }
 
-func newLogoMood(app *tview.Application, version string) *LogoMood {
+func newLogoMood(app *tview.Application) *LogoMood {
 	tv := tview.NewTextView()
 	tv.SetDynamicColors(true)
 	tv.SetTextAlign(tview.AlignCenter)
-	tv.SetBackgroundColor(tcell.ColorDefault)
-	lm := &LogoMood{tv: tv, app: app, version: version}
+	tv.SetBackgroundColor(ui.ColorAppBg)
+	lm := &LogoMood{tv: tv, app: app}
 	tv.SetText(lm.defaultText())
 	return lm
 }
@@ -34,11 +33,16 @@ func newLogoMood(app *tview.Application, version string) *LogoMood {
 func (l *LogoMood) View() *tview.TextView { return l.tv }
 
 func (l *LogoMood) defaultText() string {
-	v := l.version
-	if utf8.RuneCountInString(v) > 18 {
-		v = string([]rune(v)[:18])
+	return fmt.Sprintf("[%s::b]█▀█ █▀▄▀█ █▀█\n█▄█ █ ▀ █ █▄█", ui.HexActionKey)
+}
+
+// Restyle redraws the mark after a palette change.
+func (l *LogoMood) Restyle() {
+	if l == nil || l.tv == nil {
+		return
 	}
-	return fmt.Sprintf("[#FF6B00::b]█▀█ █▀▄▀█ █▀█\n█▄█ █ ▀ █ █▄█\n[#666666]%s", v)
+	l.tv.SetBackgroundColor(ui.ColorAppBg)
+	l.tv.SetText(l.defaultText())
 }
 
 // FlashPending shows a quick "working…" beat before the action returns.

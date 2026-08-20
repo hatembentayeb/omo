@@ -24,12 +24,12 @@ func ShowSortModal(
 	form.SetBorder(true)
 	form.SetTitle(" Sort Options ")
 	form.SetTitleColor(tcell.ColorOrange)
-	form.SetBorderColor(tcell.ColorAqua)
-	form.SetFieldBackgroundColor(tcell.ColorDefault)
-	form.SetButtonBackgroundColor(tcell.ColorDefault)
+	form.SetBorderColor(ColorBorder)
+	form.SetFieldBackgroundColor(ColorAppBg)
+	form.SetButtonBackgroundColor(ColorAppBg)
 	form.SetButtonTextColor(tcell.ColorWhite)
 	form.SetFieldTextColor(tcell.ColorWhite)
-	form.SetLabelColor(tcell.ColorAqua)
+	form.SetLabelColor(ColorBorder)
 	form.SetItemPadding(0) // Remove padding between form items
 
 	// Default options
@@ -87,13 +87,13 @@ func ShowSortModal(
 
 	innerFlex := tview.NewFlex()
 	innerFlex.SetDirection(tview.FlexRow)
-	innerFlex.SetBackgroundColor(tcell.ColorDefault)
+	innerFlex.SetBackgroundColor(ColorAppBg)
 	innerFlex.AddItem(nil, 0, 1, false).
 		AddItem(form, height, 1, true).
 		AddItem(nil, 0, 1, false)
 
 	flex := tview.NewFlex()
-	flex.SetBackgroundColor(tcell.ColorDefault)
+	flex.SetBackgroundColor(ColorAppBg)
 	flex.AddItem(nil, 0, 1, false).
 		AddItem(innerFlex, width, 1, true).
 		AddItem(nil, 0, 1, false)

@@ -36,11 +36,15 @@ type CoreView struct {
 	title        string             // Plugin title
 
 	// Header row panels
-	infoPanel    *tview.TextView // Left: connection / status
-	viewsPanel   *tview.TextView // Middle: views 0-9
-	keysPanel    *tview.TextView // Right (former logs): expanded key shortcuts
+	headerRow    *tview.Flex
+	logoSlot     *tview.Flex
+	headerLogo   tview.Primitive
+	infoPanel    *tview.TextView // connection / status
+	viewsPanel   *tview.TextView // views 0-9
+	keysPanel    *tview.TextView // current-view actions
 	helpExpanded bool
 	breadcrumbs  *tview.TextView
+	onCrumbs     func(string)
 
 	// In-place log viewer (replaces table; header stays).
 	logs             *logsView

@@ -17,13 +17,13 @@ func ShowStandardConfirmationModal(
 	form := tview.NewForm()
 	form.SetItemPadding(0)
 	form.SetButtonsAlign(tview.AlignCenter)
-	form.SetBackgroundColor(tcell.ColorDefault)
-	form.SetButtonBackgroundColor(tcell.ColorDefault)
+	form.SetBackgroundColor(ColorAppBg)
+	form.SetButtonBackgroundColor(ColorAppBg)
 	form.SetButtonTextColor(tcell.ColorWhite)
 	form.SetBorder(true)
 	form.SetTitle(" " + title + " ")
 	form.SetTitleAlign(tview.AlignCenter)
-	form.SetBorderColor(tcell.ColorAqua)
+	form.SetBorderColor(ColorBorder)
 	form.SetTitleColor(tcell.ColorOrange)
 	form.SetBorderPadding(1, 1, 2, 2)
 
@@ -48,10 +48,10 @@ func ShowStandardConfirmationModal(
 	// Style the buttons with focus colors
 	for i := 0; i < form.GetButtonCount(); i++ {
 		if b := form.GetButton(i); b != nil {
-			b.SetBackgroundColor(tcell.ColorDefault)
+			b.SetBackgroundColor(ColorAppBg)
 			b.SetLabelColor(tcell.ColorWhite)
-			b.SetBackgroundColorActivated(tcell.ColorAqua)
-			b.SetLabelColorActivated(tcell.ColorBlack)
+			b.SetBackgroundColorActivated(ColorHighlight)
+			b.SetLabelColorActivated(ColorHighlightText)
 		}
 	}
 
@@ -62,13 +62,13 @@ func ShowStandardConfirmationModal(
 	// Create a flexbox container to center the components
 	innerFlex := tview.NewFlex()
 	innerFlex.SetDirection(tview.FlexRow)
-	innerFlex.SetBackgroundColor(tcell.ColorDefault)
+	innerFlex.SetBackgroundColor(ColorAppBg)
 	innerFlex.AddItem(nil, 0, 1, false).
 		AddItem(form, height, 1, true).
 		AddItem(nil, 0, 1, false)
 
 	flex := tview.NewFlex()
-	flex.SetBackgroundColor(tcell.ColorDefault)
+	flex.SetBackgroundColor(ColorAppBg)
 	flex.AddItem(nil, 0, 1, false).
 		AddItem(innerFlex, width, 1, true).
 		AddItem(nil, 0, 1, false)

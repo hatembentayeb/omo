@@ -7,6 +7,7 @@ import (
 	"omo/internal/host"
 	"omo/pkg/pluginapi"
 	"omo/pkg/secrets"
+	"omo/pkg/ui"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -47,34 +48,45 @@ func main() {
 	pluginapi.SetSecretsProvider(secrets.NewAdapter(secretsProvider))
 
 	app := tview.NewApplication()
+	app.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
+		screen.Fill(' ', tcell.StyleDefault.Background(ui.ColorAppBg))
+		return false
+	})
 	pages := tview.NewPages()
 	omoHost := host.New(app, pages, logger, Version)
 
 	pluginsList := omoHost.LoadPlugins()
-	logoView := omoHost.LogoView()
-	actionsView := omoHost.ActionsView()
 	defer omoHost.Shutdown()
 
-	// Three rows: logo+version (5) + plugins list (flex) + actions (4)
-	// Two columns: sidebar (20 wide) + main content (flex)
-	omoHost.MainUI.SetRows(5, 0, 4).SetColumns(20, 0)
+	// Header is full width. Plugins + table share one warm gold frame.
+	// Below the frame: Plugins/View tabs | breadcrumbs | version | host actions.
+	omoHost.MainUI.SetRows(5, 0, host.StatusRowHeight).SetColumns(0)
 
 	omoHost.MainUI.SetBorders(false)
-	omoHost.MainUI.SetBackgroundColor(tcell.ColorDefault)
+	omoHost.MainUI.SetBackgroundColor(ui.ColorAppBg)
 
 	omoHost.MainFrame.SetBorders(0, 0, 0, 0, 0, 0)
 	omoHost.MainFrame.SetBorderPadding(0, 0, 0, 0)
-	omoHost.MainFrame.SetPrimitive(host.Cover(app, Version, omoHost.OpenDashboard))
 
-	omoHost.MainUI.AddItem(logoView, 0, 0, 1, 1, 0, 0, false).
-		AddItem(omoHost.MainFrame, 0, 1, 3, 1, 0, 0, false).
-		AddItem(pluginsList, 1, 0, 1, 1, 0, 0, true).
-		AddItem(actionsView, 2, 0, 1, 1, 0, 0, false)
+	omoHost.ShowCover()
+
+	status := tview.NewFlex()
+	status.SetDirection(tview.FlexColumn)
+	status.SetBackgroundColor(ui.ColorAppBg)
+	status.AddItem(omoHost.PaneView(), host.VersionColWidth, 0, false).
+		AddItem(omoHost.FooterView(), 0, 1, false)
+
+	omoHost.Body.AddItem(pluginsList, 0, 0, 1, 1, 0, 0, true).
+		AddItem(omoHost.MainFrame, 0, 1, 1, 1, 0, 0, false)
+
+	omoHost.MainUI.AddItem(omoHost.HeaderFrame, 0, 0, 1, 1, 0, 0, false).
+		AddItem(omoHost.Body, 1, 0, 1, 1, 0, 0, false).
+		AddItem(status, 2, 0, 1, 1, 0, 0, false)
 
 	pages.AddPage("main", omoHost.MainUI, true, true)
 	omoHost.ShowStartupSplash()
 
-	// Always compare against omoHost.PluginsList — RefreshPlugins replaces the list
+	// Always compare against omoHost.PluginsList — RefreshPlugins replaces the table
 	// primitive, so a captured local pointer goes stale and breaks Tab / p / r.
 	pluginsFocused := func() bool {
 		return app.GetFocus() == omoHost.PluginsList
@@ -86,7 +98,7 @@ func main() {
 	}
 
 	// Global key bindings
-	// Tab cycles: plugins list → main content → actions → plugins list
+	// Tab cycles: plugins list → main content → plugins list
 	// Shift+Tab cycles in reverse
 	// While a modal is open, Tab/Shift+Tab stay inside that modal (fields/buttons).
 	// Ctrl+t opens target/instance selector for the active RPC plugin
@@ -108,14 +120,10 @@ func main() {
 			if modalOpen() {
 				return event // modal form/list owns Tab
 			}
-			focus := app.GetFocus()
-			switch {
-			case pluginsFocused():
+			if pluginsFocused() {
 				omoHost.FocusPluginContent()
-			case focus == actionsView:
+			} else {
 				app.SetFocus(omoHost.PluginsList)
-			default:
-				app.SetFocus(actionsView)
 			}
 			return nil
 		}
@@ -124,13 +132,9 @@ func main() {
 			if modalOpen() {
 				return event // modal form/list owns Shift+Tab
 			}
-			focus := app.GetFocus()
-			switch {
-			case pluginsFocused():
-				app.SetFocus(actionsView)
-			case focus == actionsView:
+			if pluginsFocused() {
 				omoHost.FocusPluginContent()
-			default:
+			} else {
 				app.SetFocus(omoHost.PluginsList)
 			}
 			return nil
@@ -150,6 +154,9 @@ func main() {
 				return nil
 			case 'D':
 				omoHost.OpenDashboard()
+				return nil
+			case 't', 'T':
+				omoHost.OpenThemes()
 				return nil
 			}
 		}

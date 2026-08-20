@@ -21,7 +21,7 @@ func ShowInfoModal(
 	textView.SetScrollable(true) // Make scrollable like help modal
 	textView.SetWordWrap(true)   // Add word wrap like help modal
 	textView.SetBorder(true)
-	textView.SetBorderColor(tcell.ColorAqua)
+	textView.SetBorderColor(ColorBorder)
 	textView.SetTitle(" " + title + " ")
 	textView.SetTitleColor(tcell.ColorOrange)
 	textView.SetTitleAlign(tview.AlignCenter)
@@ -34,13 +34,13 @@ func ShowInfoModal(
 	// Create a flexbox container to center the components - similar to help modal layout
 	innerFlex := tview.NewFlex()
 	innerFlex.SetDirection(tview.FlexRow)
-	innerFlex.SetBackgroundColor(tcell.ColorDefault)
+	innerFlex.SetBackgroundColor(ColorAppBg)
 	innerFlex.AddItem(nil, 0, 1, false).
 		AddItem(textView, height, 1, true).
 		AddItem(nil, 0, 1, false)
 
 	flex := tview.NewFlex()
-	flex.SetBackgroundColor(tcell.ColorDefault)
+	flex.SetBackgroundColor(ColorAppBg)
 	flex.AddItem(nil, 0, 1, false).
 		AddItem(innerFlex, width, 1, true).
 		AddItem(nil, 0, 1, false)
