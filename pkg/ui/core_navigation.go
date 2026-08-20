@@ -12,25 +12,35 @@ import (
 // current position in the navigation hierarchy. It visually distinguishes
 // the current view from previous views using different colors.
 func (c *CoreView) updateBreadcrumbs() {
-	if len(c.navStack) == 0 {
-		c.breadcrumbs.SetText("")
-		return
+	text := FormatBreadcrumbs(c.navStack)
+	if c.breadcrumbs != nil {
+		c.breadcrumbs.SetText(text)
 	}
+	if c.onCrumbs != nil {
+		c.onCrumbs(text)
+	}
+}
 
+// FormatBreadcrumbs renders a crumb trail. Each name is a filled pill;
+// spaces around ">" stay on the default background (no gray bar).
+func FormatBreadcrumbs(stack []string) string {
+	if len(stack) == 0 {
+		return ""
+	}
 	var sb strings.Builder
-	for i, view := range c.navStack {
+	last := len(stack) - 1
+	for i, view := range stack {
 		if i > 0 {
-			sb.WriteString(" [yellow]>[white] ")
+			sb.WriteString(fmt.Sprintf("[-:-] [%s]>[%s] ", HexInfoKey, HexValue))
 		}
-		if i == len(c.navStack)-1 {
-			// Current view in orange
-			sb.WriteString(fmt.Sprintf("[black:orange]%s[-:-]", view))
+		if i == last {
+			sb.WriteString(fmt.Sprintf("[%s:%s:b]%s", HexHighlightText, HexInfoKey, view))
 		} else {
-			// Previous views in aqua
-			sb.WriteString(fmt.Sprintf("[black:aqua]%s[-:-]", view))
+			sb.WriteString(fmt.Sprintf("[%s:%s]%s", HexHighlightText, HexHighlight, view))
 		}
 	}
-	c.breadcrumbs.SetText(sb.String())
+	sb.WriteString("[-:-]")
+	return sb.String()
 }
 
 // PushView adds a view to the navigation stack.

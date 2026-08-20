@@ -16,18 +16,18 @@ func formatFullMessageDetail(topic string, msg *MessageInfo) string {
 		ts = msg.Timestamp.Format("2006-01-02 15:04:05.000")
 	}
 
-	text := fmt.Sprintf(`[yellow]Message Details[white]
+	text := fmt.Sprintf(`[yellow]Message Details[#f5efe6]
 
-[aqua]Topic:[white]     %s
-[aqua]Partition:[white] %d
-[aqua]Offset:[white]    %d
-[aqua]Timestamp:[white] %s
-[aqua]Key:[white]       %s
+[#e09201]Topic:[#f5efe6]     %s
+[#e09201]Partition:[#f5efe6] %d
+[#e09201]Offset:[#f5efe6]    %d
+[#e09201]Timestamp:[#f5efe6] %s
+[#e09201]Key:[#f5efe6]       %s
 `,
 		topic, msg.Partition, msg.Offset, ts, key)
 
 	if len(msg.Headers) > 0 {
-		text += "\n[aqua]Headers:[white]\n"
+		text += "\n[#e09201]Headers:[#f5efe6]\n"
 		for k, v := range msg.Headers {
 			text += fmt.Sprintf("  %s: %s\n", k, v)
 		}
@@ -37,7 +37,7 @@ func formatFullMessageDetail(topic string, msg *MessageInfo) string {
 	if len(value) > 2000 {
 		value = value[:2000] + "\n... (truncated)"
 	}
-	text += fmt.Sprintf("\n[aqua]Value:[white]\n%s", value)
+	text += fmt.Sprintf("\n[#e09201]Value:[#f5efe6]\n%s", value)
 	return text
 }
 

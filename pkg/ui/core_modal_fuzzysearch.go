@@ -20,9 +20,9 @@ func newFuzzyContainer(title string) *tview.Flex {
 	container.SetBorder(true)
 	container.SetTitle(" " + title + " ")
 	container.SetTitleAlign(tview.AlignCenter)
-	container.SetBorderColor(tcell.ColorAqua)
+	container.SetBorderColor(ColorBorder)
 	container.SetTitleColor(tcell.ColorOrange)
-	container.SetBackgroundColor(tcell.ColorDefault)
+	container.SetBackgroundColor(ColorAppBg)
 	container.SetBorderPadding(0, 0, 1, 1)
 	return container
 }
@@ -31,7 +31,7 @@ func newFuzzyInput() *tview.InputField {
 	inputField := tview.NewInputField()
 	inputField.SetLabel(" 🔍 ")
 	inputField.SetLabelColor(tcell.ColorYellow)
-	inputField.SetFieldBackgroundColor(tcell.ColorDefault)
+	inputField.SetFieldBackgroundColor(ColorAppBg)
 	inputField.SetFieldTextColor(tcell.ColorWhite)
 	inputField.SetPlaceholder("Type to search...")
 	inputField.SetPlaceholderTextColor(tcell.ColorGray)
@@ -40,11 +40,11 @@ func newFuzzyInput() *tview.InputField {
 
 func newFuzzyList() *tview.List {
 	list := tview.NewList()
-	list.SetBackgroundColor(tcell.ColorDefault)
-	list.SetMainTextColor(tcell.ColorWhite)
-	list.SetSecondaryTextColor(tcell.ColorGray)
-	list.SetSelectedTextColor(tcell.ColorBlack)
-	list.SetSelectedBackgroundColor(tcell.ColorAqua)
+	list.SetBackgroundColor(ColorAppBg)
+	list.SetMainTextColor(ColorTableRow)
+	list.SetSecondaryTextColor(tcell.GetColor(HexLabel))
+	list.SetSelectedTextColor(ColorHighlightText)
+	list.SetSelectedBackgroundColor(ColorHighlight)
 	list.SetHighlightFullLine(true)
 	list.ShowSecondaryText(true)
 	return list
@@ -53,13 +53,13 @@ func newFuzzyList() *tview.List {
 func centerModal(content tview.Primitive, width, height int) *tview.Flex {
 	innerFlex := tview.NewFlex()
 	innerFlex.SetDirection(tview.FlexRow)
-	innerFlex.SetBackgroundColor(tcell.ColorDefault)
+	innerFlex.SetBackgroundColor(ColorAppBg)
 	innerFlex.AddItem(nil, 0, 1, false)
 	innerFlex.AddItem(content, height, 0, true)
 	innerFlex.AddItem(nil, 0, 1, false)
 
 	flex := tview.NewFlex()
-	flex.SetBackgroundColor(tcell.ColorDefault)
+	flex.SetBackgroundColor(ColorAppBg)
 	flex.AddItem(nil, 0, 1, false)
 	flex.AddItem(innerFlex, width, 0, true)
 	flex.AddItem(nil, 0, 1, false)
@@ -187,7 +187,7 @@ func ShowFuzzySearchModal(
 	infoText := tview.NewTextView()
 	infoText.SetText(" ↑↓ Navigate  Enter Select  Esc Cancel")
 	infoText.SetTextColor(tcell.ColorGray)
-	infoText.SetBackgroundColor(tcell.ColorDefault)
+	infoText.SetBackgroundColor(ColorAppBg)
 	infoText.SetTextAlign(tview.AlignCenter)
 
 	container.AddItem(inputField, 1, 0, true)

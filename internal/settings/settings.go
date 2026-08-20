@@ -75,6 +75,20 @@ func New(app *tview.Application, pages *tview.Pages, version string, onRefreshPl
 func (m *Manager) GetLayout() tview.Primitive { return m.core.GetLayout() }
 func (m *Manager) GetTable() *ui.Table        { return m.core.GetTable() }
 
+func (m *Manager) ApplyTheme() {
+	if m == nil || m.core == nil {
+		return
+	}
+	m.core.ApplyTheme()
+	m.refreshRows()
+}
+
+// DetachHeader lifts Info | Views | Actions | Logo for the host header row.
+func (m *Manager) DetachHeader() tview.Primitive { return m.core.DetachHeader() }
+
+// SetHeaderLogo places the OMO mark on the right of the settings header.
+func (m *Manager) SetHeaderLogo(p tview.Primitive) { m.core.SetHeaderLogo(p) }
+
 func (m *Manager) Destroy() {
 	if m.core != nil {
 		m.core.Destroy()

@@ -41,8 +41,8 @@ func ShowErrorModal(
 	form := tview.NewForm()
 	form.SetItemPadding(0)
 	form.SetButtonsAlign(tview.AlignCenter)
-	form.SetBackgroundColor(tcell.ColorDefault)
-	form.SetButtonBackgroundColor(tcell.ColorDefault)
+	form.SetBackgroundColor(ColorAppBg)
+	form.SetButtonBackgroundColor(ColorAppBg)
 	form.SetButtonTextColor(tcell.ColorWhite)
 
 	// Add OK button
@@ -55,10 +55,10 @@ func ShowErrorModal(
 
 	// Style the button with focus colors
 	if b := form.GetButton(0); b != nil {
-		b.SetBackgroundColor(tcell.ColorDefault)
+		b.SetBackgroundColor(ColorAppBg)
 		b.SetLabelColor(tcell.ColorWhite)
-		b.SetBackgroundColorActivated(tcell.ColorAqua)
-		b.SetLabelColorActivated(tcell.ColorBlack)
+		b.SetBackgroundColorActivated(ColorHighlight)
+		b.SetLabelColorActivated(ColorHighlightText)
 	}
 
 	// Set a width for the modal
@@ -68,14 +68,14 @@ func ShowErrorModal(
 	// Create a flexbox container to center the components
 	innerFlex := tview.NewFlex()
 	innerFlex.SetDirection(tview.FlexRow)
-	innerFlex.SetBackgroundColor(tcell.ColorDefault)
+	innerFlex.SetBackgroundColor(ColorAppBg)
 	innerFlex.AddItem(nil, 0, 1, false).
 		AddItem(textView, height-3, 1, false).
 		AddItem(form, 3, 0, true).
 		AddItem(nil, 0, 1, false)
 
 	flex := tview.NewFlex()
-	flex.SetBackgroundColor(tcell.ColorDefault)
+	flex.SetBackgroundColor(ColorAppBg)
 	flex.AddItem(nil, 0, 1, false).
 		AddItem(innerFlex, width, 1, true).
 		AddItem(nil, 0, 1, false)
@@ -132,8 +132,8 @@ func ShowStandardErrorModal(
 	form := tview.NewForm()
 	form.SetItemPadding(0)
 	form.SetButtonsAlign(tview.AlignCenter)
-	form.SetBackgroundColor(tcell.ColorDefault)
-	form.SetButtonBackgroundColor(tcell.ColorDefault)
+	form.SetBackgroundColor(ColorAppBg)
+	form.SetButtonBackgroundColor(ColorAppBg)
 	form.SetButtonTextColor(tcell.ColorWhite)
 
 	// Add OK button with standardized styling
@@ -146,10 +146,10 @@ func ShowStandardErrorModal(
 
 	// Style the button with standardized focus colors
 	if b := form.GetButton(0); b != nil {
-		b.SetBackgroundColor(tcell.ColorDefault)
+		b.SetBackgroundColor(ColorAppBg)
 		b.SetLabelColor(tcell.ColorWhite)
-		b.SetBackgroundColorActivated(tcell.ColorAqua)
-		b.SetLabelColorActivated(tcell.ColorBlack)
+		b.SetBackgroundColorActivated(ColorHighlight)
+		b.SetLabelColorActivated(ColorHighlightText)
 	}
 
 	// Calculate appropriate dimensions based on content
@@ -162,14 +162,14 @@ func ShowStandardErrorModal(
 	// Create a flexbox layout with standardized margins
 	innerFlex := tview.NewFlex()
 	innerFlex.SetDirection(tview.FlexRow)
-	innerFlex.SetBackgroundColor(tcell.ColorDefault)
+	innerFlex.SetBackgroundColor(ColorAppBg)
 	innerFlex.AddItem(nil, 0, 1, false).
 		AddItem(textView, height-3, 1, true). // Make text view focused for scrolling
 		AddItem(form, 3, 0, true).
 		AddItem(nil, 0, 1, false)
 
 	flex := tview.NewFlex()
-	flex.SetBackgroundColor(tcell.ColorDefault)
+	flex.SetBackgroundColor(ColorAppBg)
 	flex.AddItem(nil, 0, 1, false).
 		AddItem(innerFlex, width, 1, true).
 		AddItem(nil, 0, 1, false)

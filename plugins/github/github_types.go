@@ -50,7 +50,7 @@ func (pr *PullRequest) GetTableRow() []string {
 		fmt.Sprintf("[white]#%d", pr.Number),
 		"[white]" + pr.Title,
 		state,
-		"[aqua]" + pr.Author,
+		"[#e8b86d]" + pr.Author,
 		"[green]" + pr.Branch,
 		"[yellow]" + pr.Base,
 		changes,
@@ -100,7 +100,7 @@ func (wr *WorkflowRun) GetTableRow() []string {
 		status,
 		"[green]" + wr.Branch,
 		"[gray]" + wr.Event,
-		"[aqua]" + wr.Actor,
+		"[#e8b86d]" + wr.Actor,
 		"[white]" + wr.Duration,
 		"[gray]" + formatAge(wr.CreatedAt),
 	}
@@ -214,7 +214,7 @@ func (r *Release) GetTableRow() []string {
 		"[green]" + r.TagName,
 		"[white]" + r.Name,
 		status,
-		"[aqua]" + r.Author,
+		"[#e8b86d]" + r.Author,
 		"[white]" + fmt.Sprintf("%d", r.Assets),
 		"[gray]" + formatAge(r.PublishedAt),
 	}

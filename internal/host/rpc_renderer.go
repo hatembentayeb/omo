@@ -85,10 +85,10 @@ func (r *RPCRenderer) ShowLoading(name string) {
 	if r.core == nil {
 		return
 	}
-	r.core.SetInfoText(fmt.Sprintf(
-		"[yellow]%s[white]\nStatus: Loading…\nSee ~/.omo/logs/rpc-host.log",
+	r.core.SetInfoText(pluginrpc.ColorizeInfoPanel(fmt.Sprintf(
+		"%s\nStatus: Loading…\nSee ~/.omo/logs/rpc-host.log",
 		name,
-	))
+	)))
 }
 
 // Apply paints ViewData into the CoreView and rebinds action keys.

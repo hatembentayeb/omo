@@ -120,7 +120,7 @@ func (db *dirBrowser) formatEntryText(entry dirEntry) (string, string) {
 			fmt.Sprintf("  [green]git repository at %s[white]", entry.fullPath)
 	}
 	if entry.isGit {
-		return fmt.Sprintf("[green]%s[white] [aqua][git][white]", entry.name),
+		return fmt.Sprintf("[green]%s[%s] [%s][git][%s]", entry.name, HexValue, HexInfoKey, HexValue),
 			fmt.Sprintf("  %s", entry.fullPath)
 	}
 	return entry.name, fmt.Sprintf("  %s", entry.fullPath)
@@ -318,19 +318,20 @@ func (db *dirBrowser) buildLayout() *tview.Flex {
 	container.SetBorder(true)
 	container.SetTitle(" Add Directory ")
 	container.SetTitleAlign(tview.AlignCenter)
-	container.SetBorderColor(tcell.ColorAqua)
+	container.SetBorderColor(ColorBorder)
 	container.SetTitleColor(tcell.ColorOrange)
-	container.SetBackgroundColor(tcell.ColorDefault)
+	container.SetBackgroundColor(ColorAppBg)
 	container.SetBorderPadding(0, 0, 1, 1)
 
 	infoText := tview.NewTextView()
 	infoText.SetDynamicColors(true)
-	infoText.SetBackgroundColor(tcell.ColorDefault)
+	infoText.SetBackgroundColor(ColorAppBg)
 	infoText.SetTextAlign(tview.AlignCenter)
-	infoText.SetText("[#5FD7FF]<enter>[#BCBCBC] Open  [#5FD7FF]<^A>[#BCBCBC] Add Repo  [#5FD7FF]<^S>[#BCBCBC] Scan All  [#5FD7FF]<bksp>[#BCBCBC] Up  [#5FD7FF]<esc>[#BCBCBC] Close")
+	infoText.SetText(fmt.Sprintf("[%s]<enter>[%s] Open  [%s]<^A>[%s] Add Repo  [%s]<^S>[%s] Scan All  [%s]<bksp>[%s] Up  [%s]<esc>[%s] Close",
+		HexActionKey, HexLabel, HexActionKey, HexLabel, HexActionKey, HexLabel, HexActionKey, HexLabel, HexActionKey, HexLabel))
 
 	sep := tview.NewTextView()
-	sep.SetBackgroundColor(tcell.ColorDefault)
+	sep.SetBackgroundColor(ColorAppBg)
 	sep.SetTextColor(tcell.ColorDarkGray)
 	sep.SetTextAlign(tview.AlignLeft)
 	sep.SetText(strings.Repeat("─", 76))
@@ -363,17 +364,17 @@ func ShowDirectoryBrowserModal(
 ) {
 	pathView := tview.NewTextView()
 	pathView.SetDynamicColors(true)
-	pathView.SetBackgroundColor(tcell.ColorDefault)
+	pathView.SetBackgroundColor(ColorAppBg)
 	pathView.SetTextColor(tcell.ColorWhite)
 
 	hintView := tview.NewTextView()
 	hintView.SetDynamicColors(true)
-	hintView.SetBackgroundColor(tcell.ColorDefault)
+	hintView.SetBackgroundColor(ColorAppBg)
 
 	filterInput := tview.NewInputField()
 	filterInput.SetLabel(" / ")
-	filterInput.SetLabelColor(tcell.ColorAqua)
-	filterInput.SetFieldBackgroundColor(tcell.ColorDefault)
+	filterInput.SetLabelColor(ColorBorder)
+	filterInput.SetFieldBackgroundColor(ColorAppBg)
 	filterInput.SetFieldTextColor(tcell.ColorWhite)
 	filterInput.SetPlaceholder("Filter or type a path...")
 	filterInput.SetPlaceholderTextColor(tcell.ColorGray)

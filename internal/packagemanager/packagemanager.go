@@ -77,6 +77,20 @@ func New(app *tview.Application, pages *tview.Pages, onClose func()) *Manager {
 // GetLayout returns the CoreView layout for embedding.
 func (m *Manager) GetLayout() tview.Primitive { return m.core.GetLayout() }
 
+func (m *Manager) ApplyTheme() {
+	if m == nil || m.core == nil {
+		return
+	}
+	m.core.ApplyTheme()
+	m.refreshRows()
+}
+
+// DetachHeader lifts Info | Views | Actions | Logo for the host header row.
+func (m *Manager) DetachHeader() tview.Primitive { return m.core.DetachHeader() }
+
+// SetHeaderLogo places the OMO mark on the right of the package-manager header.
+func (m *Manager) SetHeaderLogo(p tview.Primitive) { m.core.SetHeaderLogo(p) }
+
 // GetTable returns the table for focus.
 func (m *Manager) GetTable() *ui.Table { return m.core.GetTable() }
 
@@ -341,16 +355,16 @@ func (m *Manager) showOverviewStats(total, installed, updates int, totalSize int
 	if m.statusMsg != "" {
 		statusLine = "\n\n" + m.statusMsg
 	}
-	text := "[aqua::b]── Overview ──[white::-]\n\n" +
-		"[aqua]Total:      [white::b]" + strconv.Itoa(total) + "[white::-]\n" +
-		"[aqua]Installed:  [green::b]" + strconv.Itoa(installed) + "[white::-]\n" +
-		"[aqua]Available:  [red]" + strconv.Itoa(available) + "[white::-]\n" +
-		"[aqua]Updates:    [yellow::b]" + strconv.Itoa(updates) + "[white::-]\n" +
-		"[aqua]Disk Usage: [white]" + formatBytes(totalSize) + "\n\n" +
-		"[aqua::b]── Platform ──[white::-]\n\n" +
-		"[aqua]OS:         [white]" + runtime.GOOS + "\n" +
-		"[aqua]Arch:       [white]" + runtime.GOARCH + "\n" +
-		"[aqua]View:       [white]" + m.filterView +
+	text := "[" + ui.HexInfoKey + "::b]── Overview ──[" + ui.HexValue + "::-]\n\n" +
+		"[" + ui.HexInfoKey + "]Total:      [" + ui.HexValue + "::b]" + strconv.Itoa(total) + "[" + ui.HexValue + "::-]\n" +
+		"[" + ui.HexInfoKey + "]Installed:  [green::b]" + strconv.Itoa(installed) + "[" + ui.HexValue + "::-]\n" +
+		"[" + ui.HexInfoKey + "]Available:  [red]" + strconv.Itoa(available) + "[" + ui.HexValue + "::-]\n" +
+		"[" + ui.HexInfoKey + "]Updates:    [yellow::b]" + strconv.Itoa(updates) + "[" + ui.HexValue + "::-]\n" +
+		"[" + ui.HexInfoKey + "]Disk Usage: [" + ui.HexValue + "]" + formatBytes(totalSize) + "\n\n" +
+		"[" + ui.HexInfoKey + "::b]── Platform ──[" + ui.HexValue + "::-]\n\n" +
+		"[" + ui.HexInfoKey + "]OS:         [" + ui.HexValue + "]" + runtime.GOOS + "\n" +
+		"[" + ui.HexInfoKey + "]Arch:       [" + ui.HexValue + "]" + runtime.GOARCH + "\n" +
+		"[" + ui.HexInfoKey + "]View:       [" + ui.HexValue + "]" + m.filterView +
 		statusLine
 	m.core.SetInfoText(text)
 }
@@ -402,16 +416,16 @@ func (m *Manager) showDetail(name string) {
 	}
 
 	text := fmt.Sprintf(
-		"[aqua::b]%s[white::-]\n\n"+
-			"[aqua]Status:     [white]%s\n"+
-			"[aqua]Version:    [white]%s\n"+
-			"[aqua]Author:     [white]%s\n"+
-			"[aqua]License:    [white]%s\n"+
-			"[aqua]Arch:       [white]%s\n"+
-			"[aqua]Size:       [white]%s\n"+
-			"[aqua]Integrity:  [white]%s\n"+
-			"[aqua]URL:        [white]%s\n"+
-			"[aqua]Tags:       [white]%s\n\n"+
+		"["+ui.HexInfoKey+"::b]%s["+ui.HexValue+"::-]\n\n"+
+			"["+ui.HexInfoKey+"]Status:     ["+ui.HexValue+"]%s\n"+
+			"["+ui.HexInfoKey+"]Version:    ["+ui.HexValue+"]%s\n"+
+			"["+ui.HexInfoKey+"]Author:     ["+ui.HexValue+"]%s\n"+
+			"["+ui.HexInfoKey+"]License:    ["+ui.HexValue+"]%s\n"+
+			"["+ui.HexInfoKey+"]Arch:       ["+ui.HexValue+"]%s\n"+
+			"["+ui.HexInfoKey+"]Size:       ["+ui.HexValue+"]%s\n"+
+			"["+ui.HexInfoKey+"]Integrity:  ["+ui.HexValue+"]%s\n"+
+			"["+ui.HexInfoKey+"]URL:        ["+ui.HexValue+"]%s\n"+
+			"["+ui.HexInfoKey+"]Tags:       ["+ui.HexValue+"]%s\n\n"+
 			"[gray]%s%s",
 		entry.Name,
 		statusLine,
@@ -690,7 +704,7 @@ func (m *Manager) installAll() {
 	ui.ShowStandardConfirmationModal(
 		m.pages, m.app,
 		"Install All",
-		fmt.Sprintf("Install [aqua::b]%d[white::-] plugins?\n\n%s", len(toInstall), pluginNameList(toInstall)),
+		fmt.Sprintf("Install [%s::b]%d[%s::-] plugins?\n\n%s", ui.HexInfoKey, len(toInstall), ui.HexValue, pluginNameList(toInstall)),
 		func(confirmed bool) {
 			if !confirmed {
 				m.app.SetFocus(m.core.GetTable())
@@ -786,7 +800,7 @@ func (m *Manager) updateAll() {
 	ui.ShowStandardConfirmationModal(
 		m.pages, m.app,
 		"Update All",
-		fmt.Sprintf("Update [aqua::b]%d[white::-] plugins?\n\n%s", len(toUpdate), pluginNameList(toUpdate)),
+		fmt.Sprintf("Update [%s::b]%d[%s::-] plugins?\n\n%s", ui.HexInfoKey, len(toUpdate), ui.HexValue, pluginNameList(toUpdate)),
 		func(confirmed bool) {
 			if !confirmed {
 				m.app.SetFocus(m.core.GetTable())

@@ -8,6 +8,7 @@ import (
 
 	"omo/pkg/pluginapi"
 	"omo/pkg/pluginrpc"
+	"omo/pkg/ui"
 
 	goplugin "github.com/hashicorp/go-plugin"
 	"github.com/rivo/tview"
@@ -49,6 +50,10 @@ type PluginManager struct {
 	onActions func([]pluginrpc.KeyBinding, func(string))
 	onMood    func(phase string, ok bool, action, reaction string)
 	onHome    func()
+	onCrumbs  func(string)
+	onHeader  func(tview.Primitive)
+	logo      tview.Primitive
+	logoCore  *ui.CoreView
 }
 
 func newPluginManager(app *tview.Application, pages *tview.Pages, logFn func(string, ...interface{})) *PluginManager {
@@ -75,6 +80,62 @@ func (m *PluginManager) SetMoodHook(fn func(phase string, ok bool, action, react
 // SetHomeHook wires ESC from a plugin's home view back to the dashboard.
 func (m *PluginManager) SetHomeHook(fn func()) {
 	m.onHome = fn
+}
+
+// SetLogo places the host mark in the active plugin header (top right).
+func (m *PluginManager) SetLogo(logo tview.Primitive) {
+	m.logo = logo
+}
+
+// SetBreadcrumbHook publishes plugin crumbs to the host footer.
+func (m *PluginManager) SetBreadcrumbHook(fn func(string)) {
+	m.onCrumbs = fn
+}
+
+// SetHeaderHook publishes the detached Info | Views | Actions | Logo row
+// so the host can mount it full-width above the sidebar.
+func (m *PluginManager) SetHeaderHook(fn func(tview.Primitive)) {
+	m.onHeader = fn
+}
+
+// ReleaseLogo takes the mark out of a plugin header so the host can show it
+// on cover / dashboard / package manager / settings.
+func (m *PluginManager) ReleaseLogo() {
+	if m.logoCore != nil {
+		m.logoCore.ClearHeaderLogo()
+		m.logoCore = nil
+	}
+}
+
+func (m *PluginManager) attachChrome(renderer *RPCRenderer) {
+	if renderer == nil || renderer.core == nil {
+		return
+	}
+	if m.logoCore != nil && m.logoCore != renderer.core {
+		m.logoCore.ClearHeaderLogo()
+	}
+	if m.logo != nil {
+		renderer.core.SetHeaderLogo(m.logo)
+		m.logoCore = renderer.core
+	}
+	if m.onCrumbs != nil {
+		renderer.core.SetBreadcrumbHook(m.onCrumbs)
+	}
+	if m.onHeader != nil {
+		m.onHeader(renderer.core.DetachHeader())
+	}
+}
+
+// ReattachActiveChrome remounts the active plugin header and logo after a
+// host screen (package manager, settings) has stolen the chrome.
+func (m *PluginManager) ReattachActiveChrome() {
+	m.mu.Lock()
+	var renderer *RPCRenderer
+	if sess := m.sessions[m.active]; sess != nil && sess.Renderer != nil && sess.State == ConnRunning {
+		renderer = sess.Renderer
+	}
+	m.mu.Unlock()
+	m.attachChrome(renderer)
 }
 
 func (m *PluginManager) setSecrets(pluginapi.SecretsProvider) {
@@ -119,12 +180,14 @@ func (m *PluginManager) Activate(name, binPath string) (tview.Primitive, error) 
 		renderer.SetActionsHook(m.onActions)
 		renderer.SetMoodHook(m.onMood)
 		renderer.SetHomeHook(m.onHome)
+		m.attachChrome(renderer)
 		m.mu.Lock()
 		if m.sessions[name] == sess {
 			sess.Renderer = renderer
 		}
 		m.mu.Unlock()
 	}
+	m.attachChrome(renderer)
 
 	// Do NOT call Apply/Log/SetFocus on this path — Activate runs inside
 	// tview's SetSelectedFunc and any QueueUpdateDraw or table.Select can deadlock.
