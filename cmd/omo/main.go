@@ -59,7 +59,7 @@ func main() {
 	// Two columns: sidebar (20 wide) + main content (flex)
 	omoHost.MainUI.SetRows(5, 0, 4).SetColumns(20, 0)
 
-	omoHost.MainUI.SetBorders(true).SetBordersColor(tcell.ColorAqua)
+	omoHost.MainUI.SetBorders(false)
 	omoHost.MainUI.SetBackgroundColor(tcell.ColorDefault)
 
 	omoHost.MainFrame.SetBorders(0, 0, 0, 0, 0, 0)
@@ -72,6 +72,7 @@ func main() {
 		AddItem(actionsView, 2, 0, 1, 1, 0, 0, false)
 
 	pages.AddPage("main", omoHost.MainUI, true, true)
+	omoHost.ShowStartupSplash()
 
 	// Always compare against omoHost.PluginsList — RefreshPlugins replaces the list
 	// primitive, so a captured local pointer goes stale and breaks Tab / p / r.
@@ -90,6 +91,11 @@ func main() {
 	// While a modal is open, Tab/Shift+Tab stay inside that modal (fields/buttons).
 	// Ctrl+t opens target/instance selector for the active RPC plugin
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if omoHost.SplashVisible() {
+			omoHost.DismissSplash()
+			return nil
+		}
+
 		if event.Key() == tcell.KeyCtrlT {
 			if modalOpen() {
 				return event
@@ -141,6 +147,9 @@ func main() {
 				return nil
 			case 'i', 'I', 's', 'S':
 				omoHost.OpenSettings()
+				return nil
+			case 'D':
+				omoHost.OpenDashboard()
 				return nil
 			}
 		}

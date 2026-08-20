@@ -9,6 +9,17 @@ import (
 	"github.com/rivo/tview"
 )
 
+func init() {
+	// tview draws a double-line frame (╔═╗) when a bordered primitive has
+	// focus. Keep a single-line box for the plugin table (and other chrome).
+	tview.Borders.HorizontalFocus = tview.Borders.Horizontal
+	tview.Borders.VerticalFocus = tview.Borders.Vertical
+	tview.Borders.TopLeftFocus = tview.Borders.TopLeft
+	tview.Borders.TopRightFocus = tview.Borders.TopRight
+	tview.Borders.BottomLeftFocus = tview.Borders.BottomLeft
+	tview.Borders.BottomRightFocus = tview.Borders.BottomRight
+}
+
 // initUI builds:
 //
 //	header: connection info | Views (0-9) | Actions
@@ -48,21 +59,22 @@ func (c *CoreView) initUI() {
 	c.table.SetBorders(false)
 	c.table.SetSelectable(true, false)
 	c.table.SetBackgroundColor(tcell.ColorDefault)
-	c.table.SetBorderColor(tcell.ColorAqua)
 	c.table.Box.SetBackgroundColor(tcell.ColorDefault)
-	c.table.Box.SetBorderAttributes(tcell.AttrNone)
-	c.table.SetBorder(false)
+	c.table.SetBorder(true)
+	c.table.SetBorderPadding(0, 0, 1, 1)
+	c.table.SetBorderStyle(tcell.StyleDefault.
+		Foreground(tcell.ColorTeal).
+		Background(tcell.ColorDefault))
 
 	c.table.SetSelectedStyle(
 		tcell.StyleDefault.
-			Foreground(tcell.ColorWhite).
-			Background(tcell.ColorDarkSlateGray).
-			Attributes(tcell.AttrBold),
+			Foreground(tcell.ColorBlack).
+			Background(tcell.ColorAqua),
 	)
 
-	c.table.SetTitle(fmt.Sprintf(" [yellow]%s[white] ", c.title))
+	c.table.SetTitle(fmt.Sprintf(" [aqua]%s[white] ", c.title))
 	c.table.SetTitleAlign(tview.AlignCenter)
-	c.table.SetTitleColor(tcell.ColorYellow)
+	c.table.SetTitleColor(tcell.ColorTeal)
 
 	c.tableContent = NewVirtualTableContent()
 	c.table.SetContent(c.tableContent)
@@ -94,15 +106,6 @@ func (c *CoreView) initUI() {
 		AddItem(c.viewsPanel, 0, 1, false).
 		AddItem(c.keysPanel, 0, 1, false)
 
-	separator := tview.NewBox().
-		SetBackgroundColor(tcell.ColorDefault).
-		SetDrawFunc(func(screen tcell.Screen, x, y, width, height int) (int, int, int, int) {
-			for i := 0; i < width; i++ {
-				screen.SetContent(x+i, y, tcell.RuneHLine, nil, tcell.StyleDefault.Background(tcell.ColorDefault).Foreground(tcell.ColorAqua))
-			}
-			return x, y, width, height
-		})
-
 	// Content area swaps between the table and the in-place logs viewer.
 	c.contentPages = tview.NewPages()
 	c.contentPages.SetBackgroundColor(tcell.ColorDefault)
@@ -113,7 +116,6 @@ func (c *CoreView) initUI() {
 	c.mainLayout.SetBackgroundColor(tcell.ColorDefault)
 	c.mainLayout.SetBorder(false)
 	c.mainLayout.AddItem(headerRow, 5, 0, false).
-		AddItem(separator, 1, 0, false).
 		AddItem(c.contentPages, 0, 1, true).
 		AddItem(c.breadcrumbs, 1, 0, false)
 }

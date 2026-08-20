@@ -327,7 +327,7 @@ func (db *dirBrowser) buildLayout() *tview.Flex {
 	infoText.SetDynamicColors(true)
 	infoText.SetBackgroundColor(tcell.ColorDefault)
 	infoText.SetTextAlign(tview.AlignCenter)
-	infoText.SetText("[yellow]Enter[gray] Open  [yellow]^A[gray] Add Repo  [yellow]^S[gray] Scan All  [yellow]Bksp[gray] Up  [yellow]Esc[gray] Close")
+	infoText.SetText("[#5FD7FF]<enter>[#BCBCBC] Open  [#5FD7FF]<^A>[#BCBCBC] Add Repo  [#5FD7FF]<^S>[#BCBCBC] Scan All  [#5FD7FF]<bksp>[#BCBCBC] Up  [#5FD7FF]<esc>[#BCBCBC] Close")
 
 	sep := tview.NewTextView()
 	sep.SetBackgroundColor(tcell.ColorDefault)

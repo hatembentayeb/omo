@@ -47,11 +47,10 @@ func (v *VirtualTableContent) GetCell(row, column int) *tview.TableCell {
 		return nil
 	}
 
-	// Header row
+	// Header row — k9s-style cyan column names.
 	if row == 0 {
 		return tview.NewTableCell(strings.ToUpper(v.headers[column])).
-			SetTextColor(tcell.ColorYellow).
-			SetBackgroundColor(tcell.ColorDefault).
+			SetTextColor(tcell.ColorTeal).
 			SetAttributes(tcell.AttrBold).
 			SetSelectable(false).
 			SetExpansion(v.getExpansion(column))
@@ -66,20 +65,18 @@ func (v *VirtualTableContent) GetCell(row, column int) *tview.TableCell {
 	rowData := v.data[dataRow]
 	if column >= len(rowData) {
 		return tview.NewTableCell("").
-			SetBackgroundColor(tcell.ColorDefault).
 			SetSelectable(true).
 			SetExpansion(v.getExpansion(column))
 	}
 
 	text := rowData[column]
 	cell := tview.NewTableCell(text).
-		SetBackgroundColor(tcell.ColorDefault).
 		SetSelectable(true).
 		SetAlign(tview.AlignLeft).
 		SetExpansion(v.getExpansion(column))
 
 	if !strings.HasPrefix(text, "[") || !strings.Contains(text, "]") {
-		cell.SetTextColor(tcell.ColorAqua)
+		cell.SetTextColor(tcell.ColorWhite)
 	}
 
 	return cell

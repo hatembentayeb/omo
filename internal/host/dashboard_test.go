@@ -67,6 +67,26 @@ func TestDashStatusDefault(t *testing.T) {
 	}
 }
 
+func TestSplashDismissIsIdempotent(t *testing.T) {
+	app := tview.NewApplication()
+	pages := tview.NewPages()
+	h := New(app, pages, nil, "test")
+	pages.AddPage("main", tview.NewBox(), true, true)
+	pages.AddAndSwitchToPage("splash", Splash(), true)
+	if !h.SplashVisible() {
+		t.Fatal("splash should be visible after ShowStartupSplash page add")
+	}
+	h.DismissSplash()
+	h.DismissSplash()
+	if h.SplashVisible() {
+		t.Fatal("splash still visible after dismiss")
+	}
+	front, _ := pages.GetFrontPage()
+	if front != "main" {
+		t.Fatalf("front page = %q, want main", front)
+	}
+}
+
 func TestCoverEnterOpensDashboard(t *testing.T) {
 	app := tview.NewApplication()
 	opened := false

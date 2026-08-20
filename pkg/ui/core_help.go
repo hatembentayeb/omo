@@ -71,7 +71,31 @@ func bindingCell(b keyBinding, longestDesc int) string {
 	if paddingSpaces < 1 {
 		paddingSpaces = 1
 	}
-	return fmt.Sprintf("[purple::b]<%s>[white::-] %s%s", b.key, b.description, strings.Repeat(" ", paddingSpaces))
+	return fmt.Sprintf("%s %s%s", shortcutAction(b.key), b.description, strings.Repeat(" ", paddingSpaces))
+}
+
+// k9s-style shortcuts: magenta view keys, cyan action keys, gray labels.
+// Hex tags are used because tview's named-color lookup is easy to miss.
+const (
+	shortcutViewColor  = "#FF87FF"
+	shortcutActionColor = "#5FD7FF"
+	shortcutLabelColor = "#BCBCBC"
+)
+
+func shortcutView(key string) string {
+	return fmt.Sprintf("[%s]<%s>[%s]", shortcutViewColor, key, shortcutLabelColor)
+}
+
+func shortcutViewActive(key string) string {
+	return fmt.Sprintf("[%s::b]<%s>[%s::-]", shortcutViewColor, key, shortcutLabelColor)
+}
+
+func shortcutAction(key string) string {
+	return fmt.Sprintf("[%s]<%s>[%s]", shortcutActionColor, key, shortcutLabelColor)
+}
+
+func shortcutKey(key string) string {
+	return shortcutAction(key)
 }
 
 // formatBindingsColumns lays out bindings in a dense multi-column matrix.
@@ -126,9 +150,9 @@ func (c *CoreView) getViewsText() string {
 	format := func(b keyBinding) string {
 		viewID := c.viewBindingIDs[b.key]
 		if viewID != "" && viewID == c.activeViewID {
-			return fmt.Sprintf("[green::b]<%s>[white::-] %-9s", b.key, b.description)
+			return fmt.Sprintf("%s %-9s", shortcutViewActive(b.key), b.description)
 		}
-		return fmt.Sprintf("[purple::b]<%s>[white::-] %-9s", b.key, b.description)
+		return fmt.Sprintf("%s %-9s", shortcutView(b.key), b.description)
 	}
 
 	var sb strings.Builder
@@ -193,12 +217,16 @@ func writeHelpSection(sb *strings.Builder, section HelpSection) {
 		sb.WriteString("  [gray](no actions)[white]\n\n")
 		return
 	}
+	keyFmt := shortcutAction
+	if strings.EqualFold(section.Title, "Views") || strings.EqualFold(section.Title, "More Views") {
+		keyFmt = shortcutView
+	}
 	for _, b := range section.Bindings {
 		label := b.Label
 		if label == "" {
 			label = b.Key
 		}
-		sb.WriteString(fmt.Sprintf("  [aqua]%s[white]  %s\n", b.Key, label))
+		sb.WriteString(fmt.Sprintf("  %s  %s\n", keyFmt(b.Key), label))
 	}
 	sb.WriteString("\n")
 }
@@ -217,11 +245,11 @@ func (c *CoreView) formatFlatHelp() string {
 	var sb strings.Builder
 	sb.WriteString("[yellow]Views[white]\n")
 	for _, b := range buildSortedBindings(c.viewBindings) {
-		sb.WriteString(fmt.Sprintf("  [aqua]%s[white]  %s\n", b.key, b.description))
+		sb.WriteString(fmt.Sprintf("  %s  %s\n", shortcutView(b.key), b.description))
 	}
 	sb.WriteString("\n[yellow]Keys[white]\n")
 	for _, b := range buildSortedBindings(c.keyBindings) {
-		sb.WriteString(fmt.Sprintf("  [aqua]%s[white]  %s\n", b.key, b.description))
+		sb.WriteString(fmt.Sprintf("  %s  %s\n", shortcutAction(b.key), b.description))
 	}
 	return sb.String()
 }

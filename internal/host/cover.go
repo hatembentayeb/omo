@@ -15,6 +15,32 @@ const logo = `[#FF6B00]
  ██████  ██   ██ ██      ██    ██     ██████  ██      ███████ [white]
 `
 
+func emptyBox() *tview.Box {
+	return tview.NewBox().SetBackgroundColor(tcell.ColorDefault)
+}
+
+// Splash is the full-screen startup screen: centered OhMyOps mark, nothing else.
+func Splash() tview.Primitive {
+	mark := tview.NewTextView()
+	mark.SetDynamicColors(true)
+	mark.SetTextAlign(tview.AlignCenter)
+	mark.SetBackgroundColor(tcell.ColorDefault)
+	mark.SetText(logo + "\n[#FFD700::b]OhMyOps[white::-]")
+
+	inner := tview.NewFlex().SetDirection(tview.FlexRow)
+	inner.SetBackgroundColor(tcell.ColorDefault)
+	inner.AddItem(emptyBox(), 0, 1, false).
+		AddItem(mark, 9, 0, true).
+		AddItem(emptyBox(), 0, 1, false)
+
+	root := tview.NewFlex()
+	root.SetBackgroundColor(tcell.ColorDefault)
+	root.AddItem(emptyBox(), 0, 1, false).
+		AddItem(inner, 64, 0, true).
+		AddItem(emptyBox(), 0, 1, false)
+	return root
+}
+
 // Cover returns the home splash shown before the live plugin dashboard.
 func Cover(app *tview.Application, version string, onDashboard func()) tview.Primitive {
 	if version == "" {
@@ -49,15 +75,16 @@ func Cover(app *tview.Application, version string, onDashboard func()) tview.Pri
 	aboutBox.SetText(about)
 
 	start := "[#FFD700]Start here[white]\n\n" +
-		"[#FF9900]Enter[white]   Open live plugin dashboard\n" +
-		"[#FF9900]Sidebar Enter[white] Open selected plugin\n" +
-		"[#FF9900]Tab[white]     Cycle sidebar · content · actions\n" +
-		"[#FF9900]p[white]       Package Manager\n" +
-		"[#FF9900]i[white]       Settings / Info\n" +
-		"[#FF9900]r[white]       Refresh plugin list\n\n" +
+		"[#5FD7FF]<enter>[#BCBCBC] Open live plugin dashboard\n" +
+		"[#5FD7FF]<D>[#BCBCBC]     Sidebar: load dashboard tiles\n" +
+		"[#5FD7FF]<enter>[#BCBCBC] Sidebar: open selected plugin\n" +
+		"[#5FD7FF]<tab>[#BCBCBC]   Cycle sidebar · content · actions\n" +
+		"[#5FD7FF]<p>[#BCBCBC]     Package Manager\n" +
+		"[#5FD7FF]<i>[#BCBCBC]     Settings / Info\n" +
+		"[#5FD7FF]<r>[#BCBCBC]     Refresh plugin list\n\n" +
 		"[#4CAF50]Inside a plugin[white]\n" +
-		"[#FF9900]0-9[white] Views · [#FF9900]/[white] Filter · [#FF9900]R[white] Refresh\n" +
-		"[#FF9900]ESC[white] Back to dashboard"
+		"[#FF87FF]<0-9>[#BCBCBC] Views · [#5FD7FF]</>[#BCBCBC] Filter · [#5FD7FF]<R>[#BCBCBC] Refresh\n" +
+		"[#5FD7FF]<esc>[#BCBCBC] Back to dashboard"
 
 	startBox := tview.NewTextView()
 	startBox.SetDynamicColors(true)
@@ -72,7 +99,7 @@ func Cover(app *tview.Application, version string, onDashboard func()) tview.Pri
 
 	grid := tview.NewGrid()
 	grid.SetColumns(0, 42, 42, 0)
-	grid.SetRows(0, 11, 1, 16, 0)
+	grid.SetRows(0, 11, 1, 17, 0)
 	grid.SetBorders(false)
 	grid.SetBackgroundColor(tcell.ColorDefault)
 	grid.AddItem(logoBox, 1, 1, 1, 2, 0, 0, true)
@@ -82,7 +109,7 @@ func Cover(app *tview.Application, version string, onDashboard func()) tview.Pri
 	frame := tview.NewFrame(grid)
 	frame.SetBorders(0, 0, 0, 0, 0, 0)
 	frame.SetBackgroundColor(tcell.ColorDefault)
-	frame.AddText("Enter Dashboard · sidebar Enter Plugin · p Package Manager · i Settings", true, tview.AlignCenter, tcell.ColorDimGray)
+	frame.AddText("Enter Dashboard · Shift+D Tiles · sidebar Enter Plugin · p Package Manager · i Settings", true, tview.AlignCenter, tcell.ColorDimGray)
 	frame.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyEnter && onDashboard != nil {
 			onDashboard()
