@@ -9,7 +9,7 @@ download_url_template: "https://github.com/hatembentayeb/omo/releases/download/v
 
 plugins:
   - name: "redis"
-    version: "2026.08.21-5a9cf03"
+    version: "2026.08.21-71e1d02"
     description: "Manage Redis instances and monitor performance"
     author: "ohmyops"
     license: "MIT"
@@ -17,14 +17,14 @@ plugins:
     tags: ["database","cache","monitoring"]
     arch: ["amd64","arm64"]
     checksums:
-      linux-amd64: "b49606b908cf69a5e0865339d36cdc6e02dfd17462fd260dbb235f588ae3cab3"
-      linux-arm64: "c520939b3e1ce4d3debe5f7be68821b8d834936fc98aa957052080e0931a5b5e"
-      darwin-amd64: "04f8ead7afab5404bcee57636576b73645e174c778aaba105b4410f303e1eec6"
-      darwin-arm64: "9bc8bdab8a47e7750fa1ba2cb45de20194d2ba1da35e9bdf27b1ce12d3e5a807"
-      windows-amd64: "1a0e747f73dfb9bf8a00153aab26295592be696c41e8c096fa20d0ebf99ffa6d"
+      linux-amd64: "ac6daac2d5a19f7a01775d1c0454adcebd438afa6b4bd8a6a90d1f923900ceff"
+      linux-arm64: "23ee7d3d78cca69372a2ea8d12adefdab455ca391bf194d152bc4e762b41f107"
+      darwin-amd64: "db18a518e3a6e23a043c337f308a9fec56c44c89423fe8b18cf4a8a929e1843e"
+      darwin-arm64: "1863adee5d8c2fbeb04ae567ea4f461c037812f720bfd9f168a981d44e111dbb"
+      windows-amd64: "f96205475852b16e25b620bceaf2a1e7d82959e16c04e87ae00b706b738cfe0f"
 
   - name: "docker"
-    version: "2026.08.21-5a9cf03"
+    version: "2026.08.21-71e1d02"
     description: "Manage Docker containers, images, networks, and volumes"
     author: "ohmyops"
     license: "MIT"
@@ -32,14 +32,14 @@ plugins:
     tags: ["containers","devops","infrastructure"]
     arch: ["amd64","arm64"]
     checksums:
-      linux-amd64: "980dff5158a3a4ef323564a6415d74460d0675cf5a9b6e6016dfb8603b79f9a3"
-      linux-arm64: "4cd3e14b464860e11fe6ca419b146ac692580ba4a35dcb123977674ae84b54ba"
-      darwin-amd64: "2deabfa45e5c29240a14033e24b2c344f826f706c73f3da959db74af98a11ed2"
-      darwin-arm64: "a7d0fc579247ccd96969a066f656fde400cfb62eafd5ca288ff868ba9d76d129"
-      windows-amd64: "fc3bf84bc43f1a1f6182c86b8d4224af6f08037a1c74cb39d7ae0a26147abe49"
+      linux-amd64: "7737bddae0fc9df332c05ca3dce2016b02198d91c62f9033dc78bf19e74a629d"
+      linux-arm64: "d8528d22cf280f9dde853410412c0e88d25482336efcbf31cbb5112433b50bc7"
+      darwin-amd64: "2afc8e7f03e8b8f423df74ef9756f648ea5b0e13f49857683b9a2f9f74b07362"
+      darwin-arm64: "2ee30c63616b14b5086ace34daadcfe5f31c48945632f040f03c3a06afd7a682"
+      windows-amd64: "cc3111a7c9da81d50b68a62bdfb049dd7b330bbfa0d1e9618de28567eb1f0aca"
 
   - name: "git"
-    version: "2026.08.21-5a9cf03"
+    version: "2026.08.21-71e1d02"
     description: "Manage Git repositories, branches, and commits"
     author: "ohmyops"
     license: "MIT"
@@ -47,14 +47,14 @@ plugins:
     tags: ["vcs","developer-tools"]
     arch: ["amd64","arm64"]
     checksums:
-      linux-amd64: "d18ad89c5fbb9c0e3556f85e0a0178867dff61b88a2f10f4a392b9920a2c91df"
-      linux-arm64: "f09f700f49b460852954d3d8408d941e22cf99ee8ddc09cc82ffe7dace79c484"
-      darwin-amd64: "bf81ed1cfb4f8134283f33f281a092f6e742ce6140cbab2037d13790e7e3dc60"
-      darwin-arm64: "141b80e84f7c9cf423a79905873c11bf4bbf2ebb25eb57993ce7b1a3c6fd15ea"
-      windows-amd64: "32c58f31285729cb096c39e43396a72775a76b32fdcb0d311fbb0b11cb6c1bab"
+      linux-amd64: "cd69d803eaa5bf7c1635d4d56c170153d67c084481f07c473e6f2f2660883f01"
+      linux-arm64: "2ec7ec792201b2e961b4bea6e02947b3538df80515168751625f503402a42dfc"
+      darwin-amd64: "98c9fc1ee17dad852fddff5f1c551d9fc655366fdc3d25fef7a6723cb1c516a4"
+      darwin-arm64: "106fa155d8de9b119f3b76e695bb9b8faae16e5739fb9bb93949064b8739f7bb"
+      windows-amd64: "0835aea256f95f58120e20100c7bc9143e6ba023f7ae5c4a09ae30625f6ef7a3"
 
   - name: "argocd"
-    version: "2026.08.21-5a9cf03"
+    version: "2026.08.21-71e1d02"
     description: "Manage ArgoCD applications, projects, and accounts"
     author: "ohmyops"
     license: "MIT"
@@ -62,14 +62,14 @@ plugins:
     tags: ["gitops","kubernetes","cd"]
     arch: ["amd64","arm64"]
     checksums:
-      linux-amd64: "6f5e1088714a9e763a00135f57d0beeae2866876c89db063d9bb0e90e53cc70e"
-      linux-arm64: "71ed5175bfac71464323a5d773539f12e3c78add5810791634cec61e03e7b1e0"
-      darwin-amd64: "9ce37a8b6f517935a998da0c94a2a4cdea0ab0773ddbbe021d1a0da604f75894"
-      darwin-arm64: "5a70cb75417310213bf7fab03bf5ada47b7a52cd068f5360551f9a07075df1a6"
-      windows-amd64: "cbe800edadc32194285041a4b5ec18a03af797db87a261019dadefab3e828f49"
+      linux-amd64: "21b0cb67a4c6c095304416e37f5446ea6358aeadd37847458bcd1c29a0d37a8f"
+      linux-arm64: "0a79df1696fa3a7e78cac7398bb97615713f26ee51b5dfdfb0a5427cb4c33fa7"
+      darwin-amd64: "1089beef612bd98b9f855739febb4e09ecb75ab5c71f95631a22006b289557ea"
+      darwin-arm64: "45329a9d9ab284baf4623d3ae52541b1eeccedf8ff5013473205a9f5461c7413"
+      windows-amd64: "242ae5ec9008d684b04b903f2312d201037a070506f3342cab7ab24a26dd7f59"
 
   - name: "kafka"
-    version: "2026.08.21-5a9cf03"
+    version: "2026.08.21-71e1d02"
     description: "Monitor Kafka brokers, topics, and consumer groups"
     author: "ohmyops"
     license: "MIT"
@@ -77,14 +77,14 @@ plugins:
     tags: ["streaming","messaging","monitoring"]
     arch: ["amd64","arm64"]
     checksums:
-      linux-amd64: "b012cfd2e984afb9f9630ca0c05b0033593cbf41ded08ca80eac133074298e41"
-      linux-arm64: "d8ebfbf79079b4bc959909fd4e5516adc53cdc0bdeb6c816ba61c006175e816b"
-      darwin-amd64: "c8c671224a6cf3a2fb661bb52eb7e2197ed8e2987f80f652778d5924b4a180a8"
-      darwin-arm64: "75fbd89efb68ac54bbd9cf5d173062e3d63d7d281f531d6acd7e8a2b7bec2c94"
-      windows-amd64: "3b2742af62c917b7b63647f4e674b1c14150d9b57cd257fbc2ec2320088fbe28"
+      linux-amd64: "31db470579e5313979fb7a86d367e49c019c345617ebcaccd91e321d8221656c"
+      linux-arm64: "b1aa5736500c7806d4cafeed64d3d8057708db68610f713996bb1209f1e8ee98"
+      darwin-amd64: "89fb1a3f43da7c0f551645268cb62374a251c2aceea72acdeef6fa57495abce9"
+      darwin-arm64: "2cd5ccc6d8a90358852677cb944e906bd1f63ca89c0cdcc2549fed0ed3d4f530"
+      windows-amd64: "12ad3bd7ef0ed759fffff3b436b3a8de362bc58bb704bd703635f676e57cd6c8"
 
   - name: "s3"
-    version: "2026.08.21-5a9cf03"
+    version: "2026.08.21-71e1d02"
     description: "Browse and manage AWS S3 buckets and objects"
     author: "ohmyops"
     license: "MIT"
@@ -92,14 +92,14 @@ plugins:
     tags: ["aws","storage","cloud"]
     arch: ["amd64","arm64"]
     checksums:
-      linux-amd64: "809d6cf86b052310bf437e33baa58fdd75b29b5c781c73665c09b84eabfea817"
-      linux-arm64: "fd829dd894f8ed52ff680fcb0b1a2e17acef0260f12078d4be265801a4431fde"
-      darwin-amd64: "7edb34f36b4663b60bfab20c91331a9541d8dcacdb07faaf17b543572cbcc30f"
-      darwin-arm64: "13d54ab20c60f9d57a1408db20edbb02642889fe1b4111ce59e5179c9b79f7a8"
-      windows-amd64: "c43488c448cb94500c938d030be9cd7cd52f1f138078313a259ae803da6b05ba"
+      linux-amd64: "a8864358520e1ce7d882601b4374ec81fb4ee3a2d8fa96a6240cb8c06752ac69"
+      linux-arm64: "f58db8a3de396d3d1ddfebee1db1fda39a3e5197c1d6751c4c02411d53107249"
+      darwin-amd64: "faad1e264d9e6c2943057b95d6dbec99f79c02486b1cc0b5acf9b9e26e9bb570"
+      darwin-arm64: "484d9c0b0daef6da662650262b5cf3c6063e5f0847f19bb2927cd3b7682ef836"
+      windows-amd64: "91429d96b5cc7e6996a8301732ee6f1371c8cdc65a773a30039b9c939221a90a"
 
   - name: "k8suser"
-    version: "2026.08.21-5a9cf03"
+    version: "2026.08.21-71e1d02"
     description: "Manage Kubernetes users with certificate-based authentication"
     author: "ohmyops"
     license: "MIT"
@@ -107,14 +107,14 @@ plugins:
     tags: ["kubernetes","security","rbac"]
     arch: ["amd64","arm64"]
     checksums:
-      linux-amd64: "10c2a6c0218099da8e275da3eb5969aad8a370bb9df783a4f38db9bea3c22d66"
-      linux-arm64: "574893d2f70cd63ece06a2e8bc2d2e372cdbe7507f2a366a585a2c4690a84ee5"
-      darwin-amd64: "402d28921774c1123ed6743a6fdb2813fea4bdbe504603ee462439af97fb9f63"
-      darwin-arm64: "c7b74adc04b4ebbb31da10710bca9ba31e2464baf81c4c67327de3f0acd3c3d9"
-      windows-amd64: "d4314650aeb657c695f8437bde888bed4eeaf0f5dec51dc4d9533a0a4a467a12"
+      linux-amd64: "499aa599dedf2fc7e6c5b91668421dd8ad37fbd2a5a0bdb400264668d2e1fdd9"
+      linux-arm64: "cae29ad45db1ef0245cac412aa6d9328c64e52bc3868934c828cd5b6aae3a8a1"
+      darwin-amd64: "f261d24876b2bb3981f23a2c0438f35a4d8ae9531abdaf86bb4dae66ac65b303"
+      darwin-arm64: "8cc7602a059cdb5024cc4733176b71a771901c8a7bb0c7a1203d6fd7fbcc8037"
+      windows-amd64: "052fa0444ffc95320a3821d0515e87c248526863b96f1873bbe27413119011c7"
 
   - name: "sysprocess"
-    version: "2026.08.21-5a9cf03"
+    version: "2026.08.21-71e1d02"
     description: "Monitor and analyze system processes"
     author: "ohmyops"
     license: "MIT"
@@ -122,14 +122,14 @@ plugins:
     tags: ["system","monitoring","processes"]
     arch: ["amd64","arm64"]
     checksums:
-      linux-amd64: "c26fad351d61aa901fb6e28bee2f64b0bdf824d2d70c4557ff5a9f927419dbf5"
-      linux-arm64: "54b5db38f022b2d79e1d381dd2c45e3f82cd1fbb29e026cae612bd3c1f4a8519"
-      darwin-amd64: "ba0fbe375ef98f7293e52110b51f14175a8c75551d65916ac36220c1fdd9b0f6"
-      darwin-arm64: "7eb63d5bc6f655bae87ce3ee7460e9a5fa323113f880d783dbd539ee7587d3da"
-      windows-amd64: "8a748b852651616d43ba499f2bad7a78d0500aa459fae76f1f6110333658904c"
+      linux-amd64: "a14d706e437a4ea0bd8b81d4a29d02bb36296533bcf40fedf6bfd9204d962e4a"
+      linux-arm64: "f11a82137cb7a248eb564638bebed592f75fffd0bf3384276d828960bc4caad6"
+      darwin-amd64: "260d4ed6821e890c000170bebd6879d70033b4263e6e1bf93351af8596114af5"
+      darwin-arm64: "a63b25a359f24fab9de8582460d1509c59bddb27927890e2f1dc50d881f8c243"
+      windows-amd64: "82bcf6ebdb595d0e89637e162c9fbeff433236a3e16fb7d4a022e72d206e32f6"
 
   - name: "awsCosts"
-    version: "2026.08.21-5a9cf03"
+    version: "2026.08.21-71e1d02"
     description: "Monitor AWS costs, forecasts, and budgets"
     author: "ohmyops"
     license: "MIT"
@@ -137,14 +137,14 @@ plugins:
     tags: ["aws","finops","cloud"]
     arch: ["amd64","arm64"]
     checksums:
-      linux-amd64: "76135165c0bac5edaa3c959897cf759f41bcf158782ed1b813a1c33b63d405ce"
-      linux-arm64: "6c20491895c7fdf89e0449b732bf1f6fdaa3a1bf5d7ecddb4ded69f13bea6d8c"
-      darwin-amd64: "ee585633c33b3b21b6ee435ff99b1aa608387548b2cb991fdf1b0755863a90c3"
-      darwin-arm64: "2c1da95716c0f9bd11605d6a3de3ac9126ede9ee84d72da7f2c2eac70012697f"
-      windows-amd64: "f348bd4bed3a199dd7a434886a321df0c76866cecccf546569d94eb47593f2fd"
+      linux-amd64: "a55ad2d446663015bf04f970fe50c9725344c4c817b25464b70c283e9eb29d20"
+      linux-arm64: "fc02e2fe3eefcb1a9c7cc3041df37c198153a93417800aa60c4c3c685b72eb2c"
+      darwin-amd64: "d836a4ccf6f201b86b0e6466a6791e6262cdb5f87dd793c54b76e9a2331c5f8b"
+      darwin-arm64: "82d488d7f0d4515e8f93677cc321b671c223f3f6b74dfd02c6ae54dacc086b38"
+      windows-amd64: "9a2d0df11091717de93725eecea0079bed3883b7932bb8b53411552a810475a2"
 
   - name: "rabbitmq"
-    version: "2026.08.21-5a9cf03"
+    version: "2026.08.21-71e1d02"
     description: "Manage RabbitMQ queues, exchanges, bindings, and connections"
     author: "ohmyops"
     license: "MIT"
@@ -152,14 +152,14 @@ plugins:
     tags: ["messaging","broker","amqp"]
     arch: ["amd64","arm64"]
     checksums:
-      linux-amd64: "c52fa1fc3a27123a459a12b2b3bb15dcfbf671e73fa0cada3098c448f55511dd"
-      linux-arm64: "6d522e3508d380bb85ae3885b152b2fb706d7ab3c0f4a85818e0b910e1f34f65"
-      darwin-amd64: "b45b5c89350781918518417edb68bbc89a5b4f32bb6edde073db8cc288e8e9b5"
-      darwin-arm64: "c980c2a8fd67f9f7a876f5ce0b10e7c46ec10167d8e6b37c0d1a88b3af066ac4"
-      windows-amd64: "fb94f64fe0cceb77c28b1f4b7594feefd4dbc9a5f75bd0676e0fc9315c567f4a"
+      linux-amd64: "b174ac3ab34acf49e851efab5d06d6b14a9799e24bd0b1f7b2d7913cb2825d49"
+      linux-arm64: "e16df5eb06ab7dfa024ec22a1b91e1016852058f5d32fd83acb78e7c3dc6ac7f"
+      darwin-amd64: "2569fa6c8df225683f071a86824ad7b35f88e0f8f1b78094e109ac52c727d9b3"
+      darwin-arm64: "18b33e2f9ca11462c28fff8a7fcaf16e88b416e2b32bec824c0a8a106420e33f"
+      windows-amd64: "f83e3e0b280d97282eedbcab3cbf9ad9fbb3161a3e19583139e892024f2c5335"
 
   - name: "ssh"
-    version: "2026.08.21-5a9cf03"
+    version: "2026.08.21-71e1d02"
     description: "Manage SSH connections, remote execution, and server monitoring"
     author: "ohmyops"
     license: "MIT"
@@ -167,14 +167,14 @@ plugins:
     tags: ["ssh","remote","server","devops"]
     arch: ["amd64","arm64"]
     checksums:
-      linux-amd64: "af3ce45b2a938fb630a9ba728024dc74552e3971da7ec9d1c07231ce87b74f87"
-      linux-arm64: "c6b646db6fef5ec65cf4cfb75568a54e641eaf18a40dd0b35081d25a8ee2a261"
-      darwin-amd64: "08e107cdea723bba414ce92bc8e472368a48f6825b762df59a8c02a5e5ac9b2e"
-      darwin-arm64: "53c1a3edc81a4e95745f640ab1a36524c3e9186824fd41741cf1a9d4cd543591"
-      windows-amd64: "8a2fb355c35de177c284de1e66c7ecb7488d82eee0eb88a74152014bdee27fe9"
+      linux-amd64: "539cded1a06a5d9d892b84bc261c547e4bc6b869af702c6c44d76dd6744c2fc3"
+      linux-arm64: "ea9f1723c9889dc23edba1b09984ba9937d5d5ed0ba15e7d673f57889881f70c"
+      darwin-amd64: "1eaece643d1464e05520530c86b2b41d916e21c0559dd9c5ebe9aaa564833bd2"
+      darwin-arm64: "eb105fdd723e8a3dfc24df6aa079abdd2330519139b284118263c6055c472bda"
+      windows-amd64: "da7454a2748f8aee5e133fce06b2ff6df03b944269321c9d993a8daaa42bc913"
 
   - name: "github"
-    version: "2026.08.21-5a9cf03"
+    version: "2026.08.21-71e1d02"
     description: "Manage GitHub PRs, Actions pipelines, environment variables, secrets, and releases"
     author: "ohmyops"
     license: "MIT"
@@ -182,14 +182,14 @@ plugins:
     tags: ["github","ci-cd","devops","pull-requests","actions"]
     arch: ["amd64","arm64"]
     checksums:
-      linux-amd64: "0c474aedf030361df545062b054851e50d3369c679ab0a423c213ebf3bd8d145"
-      linux-arm64: "2355e57e1ccdad178a9588fc50966fb4d123c6980451f97b7bd855771afd2f19"
-      darwin-amd64: "2c8f0869c9a733066bc2410f5c25e23b658c39a39526dcd5358aec2740c43a9a"
-      darwin-arm64: "79d720b1b08afd95a58504f8a725ff98a4bc5d99541c6c3eca9a99c39b0a63df"
-      windows-amd64: "36269b466d2d77340c7bc11d898fb351288725ef5a7c9512b76d3f42e6de5751"
+      linux-amd64: "4f8cc8a6aab4c91c67acb38695e753ee865a7fcf4fef5217e302d6380f7816ef"
+      linux-arm64: "1d651fdb621570a39e65542279a358ca69e7ea9c86e55450b82bfa7467d2402b"
+      darwin-amd64: "48fc92f6fe5baffe114873cd15f91e36ed21199dc5c551dcf3c31cec3934d76e"
+      darwin-arm64: "d6effe8d00a05171303fa53135149baa267c1e77d2555126a1f981b21d1bdab4"
+      windows-amd64: "db3f53f51f8fdd6b45b8753a4b080f3e9cc85db7c5865db240c8f98160b85b0d"
 
   - name: "postgres"
-    version: "2026.08.21-5a9cf03"
+    version: "2026.08.21-71e1d02"
     description: "Manage PostgreSQL databases, schemas, and queries"
     author: "ohmyops"
     license: "MIT"
@@ -197,14 +197,14 @@ plugins:
     tags: ["database","sql","monitoring"]
     arch: ["amd64","arm64"]
     checksums:
-      linux-amd64: "a9edd2b794d686c331b8ffb8c28ea6bd7ccac8e2bf586f0f0b905806b9192d40"
-      linux-arm64: "3a90cf58f0f1d9559e6cde4bfaa0dfbf1ffb3e5bfecbf020a3083c4422e3e0bb"
-      darwin-amd64: "6b1fbdc1b64405f6fa7d73bb95878471ff6bbe50fa3f61ca4d56baf062b69920"
-      darwin-arm64: "b193e6646596f1072b4ef0f21fbfc9e3f2e560eaa1fd890490a21fc4822a1583"
-      windows-amd64: "2d5af3580e6ae6e63990f9a3627312d7d93cc3f8ea7a4e3e7aee9faf68e34dbc"
+      linux-amd64: "04b88756d6017e9027854def832e3c63bf96432a13521308b2798f15d7cbd3b4"
+      linux-arm64: "87a7294f5365af29ce6103cd5644c63df12e9007d0801495ce899dca2ad8bb64"
+      darwin-amd64: "971069aa1e9f2b4c9ac76b9b3cdcc8fdc1f84bf573adbbcda04d1b0fdc2efb9a"
+      darwin-arm64: "7b0b8313061f30662db54775518f6566de33d8a2edbbfa133e2e876533873a07"
+      windows-amd64: "ad08ed2e88bf7b92fb475e69b1174d8351f9f06e0455bc36fc0d390e4415e4bc"
 
   - name: "k8sportforward"
-    version: "2026.08.21-5a9cf03"
+    version: "2026.08.21-71e1d02"
     description: "Port-forward Kubernetes Deployments, StatefulSets, Services, and Pods with multi-tunnel management"
     author: "ohmyops"
     license: "MIT"
@@ -212,14 +212,14 @@ plugins:
     tags: ["kubernetes","networking","port-forward","devops"]
     arch: ["amd64","arm64"]
     checksums:
-      linux-amd64: "c0f7641fd54abc2c1b8b367f7797bd81eb46ea47c805cd98c736663bd0f1a42c"
-      linux-arm64: "31d0880faeb491840bfed940c5ee4e232891cead01288542e42feedcfe67867f"
-      darwin-amd64: "7ea53125b86bbe0e8bfc38c01e338b72687e644807908d9235b171f08a4f7583"
-      darwin-arm64: "831259938f8aa80eb3a5c164d2a7e1c71874e3c49826096d5ba96775dea9a41e"
-      windows-amd64: "b8a7f900bd1cf47f1075aadd6ebccc41d507ea703bed6f9673ff5f602ab2254c"
+      linux-amd64: "a3b950133abbf6540b706fcd5a51afab5843e44ddb51b72fddb67b5a5b1794a3"
+      linux-arm64: "394ef64f42033eb3de1c19ce6a62357ea8335c329cbbf217a09f977584baae8c"
+      darwin-amd64: "42bdc1549f330ea29417e38ef8dc2983c826d2f1c65048dfd1083465a8f64b27"
+      darwin-arm64: "6f669acef10782adc44e3d909dfa23990f6e9af4fd261572f6529900f5e11364"
+      windows-amd64: "34e6134cb7aad1f6eddd55bda9ed42eeea5d1207c04d8cb1f8a9864f057c7510"
 
   - name: "bunnydns"
-    version: "2026.08.21-5a9cf03"
+    version: "2026.08.21-71e1d02"
     description: "Manage Bunny.net DNS zones, records, DNSSEC, stats, and certificates"
     author: "ohmyops"
     license: "MIT"
@@ -227,14 +227,14 @@ plugins:
     tags: ["dns","bunny","networking","domains"]
     arch: ["amd64","arm64"]
     checksums:
-      linux-amd64: "69ec559065f48776bb19b62afe55b52e9cce78b8b22e0365207987d3935b22c4"
-      linux-arm64: "09345164daa3ef3d89dfdd79d23b74d65c45eb0988ee8ade2afb68a677a3642d"
-      darwin-amd64: "12725b583c0e9459177a0943bd22fbe84f5794a5ebe9c34dfa8f3e86fe0f9875"
-      darwin-arm64: "621fe4243d6273ff14c21a9f18f149432bef472545a3de7fb6d0c4b87c4561d7"
-      windows-amd64: "47bb99ff8f31649566bc5623c978138401660ac1ca38b824c209b26fe1578d20"
+      linux-amd64: "884eb7ad6dea12a8f939c2314d871d6dc6779f12130421b942942bb5941e74eb"
+      linux-arm64: "0b415b5d19f8f0ed5ba73382034357fa0e263ae6366f02f49e9661ecbb3ed4da"
+      darwin-amd64: "ca7a194a4403cf73545122d7d9298c56be06300e1004cc884bc2e99cf68c4433"
+      darwin-arm64: "069371d8c599840623438b52d9e098946d9500567be5ea3084347040a7798508"
+      windows-amd64: "852d5607dcfb719672c025af230c9b538ddbaa50c510ac2d2ecaed79407591d8"
 
   - name: "dnscheck"
-    version: "2026.08.21-5a9cf03"
+    version: "2026.08.21-71e1d02"
     description: "Dig-style DNS lookup, SSL expiry, mail auth, HTTP, and WHOIS for any domain"
     author: "ohmyops"
     license: "MIT"
@@ -242,14 +242,14 @@ plugins:
     tags: ["dns","ssl","tls","domain","whois","networking"]
     arch: ["amd64","arm64"]
     checksums:
-      linux-amd64: "d1b5e8aa85ca4bcf6dedc738c844b8b820c59f9fe9f1f37272e3feefc2d887ea"
-      linux-arm64: "8c909e97520a08acb9fc7a6b2f267a922197ce74146c53da8335774feeed5338"
-      darwin-amd64: "1cf79d7dde3ad728c4324010a017dcb8690473c9ba8885ffd801a84e8d269779"
-      darwin-arm64: "262e5a92a3715f974c37f935bd602f7d889d44e38c94b87facf96efbf0a4bd44"
-      windows-amd64: "d82f5bbaddd84fa5c7e9aff5adc18ebf2b13a0512ad122a042c408bc006a66b5"
+      linux-amd64: "ef97c21de254a2c765aa529e8bdf0ca4840da33583a9cddd3e2c25418203f70b"
+      linux-arm64: "e549c98ad3bbfaf8c885aa7470d86a1a897db377a7628ce48d403f7dc2f0adf7"
+      darwin-amd64: "3d3aaa63633b79517fd3f3fc45699097c84bdb4dfee7a61744a377f65a86c18c"
+      darwin-arm64: "b45cec45c910e6786f262109c7e74182071303dd1b02f39267cc0b0b3f4e3e13"
+      windows-amd64: "08a1cce1b0e7e328045ea026975209321a5bef56788c64f962cd471d46d7798a"
 
   - name: "jira"
-    version: "2026.08.21-5a9cf03"
+    version: "2026.08.21-71e1d02"
     description: "Manage Jira Cloud boards, issues, sprints, comments, and deployments"
     author: "ohmyops"
     license: "MIT"
@@ -257,9 +257,9 @@ plugins:
     tags: ["jira","atlassian","issues","boards","developer-tools"]
     arch: ["amd64","arm64"]
     checksums:
-      linux-amd64: "7e955eac8678f2822ed81ba87537ab54d0bca782ce75bbe1f0a87feeec4e96e9"
-      linux-arm64: "bbe8c7b06f320b0317a1a6ba33bff4191c61f38d4b51f4d96d6b0d294c6c791b"
-      darwin-amd64: "c05765068b45c7bad9e978ffead7a659ff94cf26206021612f5aed31daa5c5ca"
-      darwin-arm64: "03d2eae84ff1159f1ca15b46ad27e6a2fd6a3d590739d5c38ae3a9d110f77383"
-      windows-amd64: "5a998746c8f40912201bd4102e14ce5ed56c8ca1148432edd34af0fb3dceafba"
+      linux-amd64: "f40aa244713e1ba61496e404c1b955d36777081f493f94ac66aa87e7ecb1d625"
+      linux-arm64: "8243d23ea5308c69a328cb95fe4c516f8c267fea1969a567b1acd84374003cd0"
+      darwin-amd64: "302304d1db99e5914da1f115fa595a8699e1a152729edd5373a1de895ac205a6"
+      darwin-arm64: "8379662d202df9e94bd02531fb3a88c3de5191d4b6ec4feca80d29b6920afdc8"
+      windows-amd64: "0c00d4f4301750fcfd65763cb9a0aa7bac2a6a0c81d430e3a02f3c913b2e2985"
 
