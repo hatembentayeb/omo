@@ -94,8 +94,10 @@ Download the archive for your OS/arch from the [Releases](https://github.com/hat
 ```bash
 git clone https://github.com/hatembentayeb/omo.git
 cd omo
-make all    # builds host + all plugins into ~/.omo/plugins
+make build    # builds host + plugins, installs omo + man page globally
 ```
+
+Installs `omo` to `/usr/local/bin` (on `PATH`) and `man omo` to `/usr/local/share/man/man1`. Override with `PREFIX` (default `/usr/local`) or `OMO_INSTALL_DIR` / `OMO_MANDIR`. `make all` builds without the global copy.
 
 Requires **Go 1.25+**.
 
@@ -403,7 +405,8 @@ dev/               # local stacks + KeePass seed scripts
 ### Common commands
 
 ```bash
-make all          # build host + install all plugins to ~/.omo/plugins
+make build        # build host + plugins, install omo to PATH and man omo
+make all          # same build, skip the global copy
 make plugin-redis # rebuild a single plugin quickly
 make clean        # remove local ./omo binary (keeps ~/.omo)
 make purge        # remove ~/.omo entirely (destructive)
@@ -412,7 +415,7 @@ make dev-setup    # start/seed local Redis/Kafka (and friends) via dev/
 make dev-seed     # seed KeePass for plugins that don't need Docker
 ```
 
-After `make all`, run `omo` from your Go bin or `./omo`.
+After `make build`, run `omo` from anywhere on your PATH and `man omo` for the manual. After `make all`, use `./omo` or your Go bin.
 
 ### Project checks
 

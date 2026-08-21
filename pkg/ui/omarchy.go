@@ -1,11 +1,14 @@
 package ui
 
 import (
-	"os"
-	"path/filepath"
+	"embed"
+	"io/fs"
 	"sort"
 	"strings"
 )
+
+//go:embed themes/*/colors.toml
+var omarchyThemesFS embed.FS
 
 // OmarchyColors is the colors.toml schema used by Omarchy themes.
 type OmarchyColors struct {
@@ -27,90 +30,30 @@ type OmarchyColors struct {
 	Color15             string
 }
 
-func omarchyThemeRoots() []string {
-	home, err := os.UserHomeDir()
+func builtinOmarchyThemes() []Theme {
+	entries, err := fs.ReadDir(omarchyThemesFS, "themes")
 	if err != nil {
 		return nil
 	}
-	return []string{
-		filepath.Join(home, ".config", "omarchy", "themes"),
-		filepath.Join(home, ".local", "share", "omarchy", "themes"),
-	}
-}
-
-func omarchyCurrentName() (string, bool) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", false
-	}
-	b, err := os.ReadFile(filepath.Join(home, ".config", "omarchy", "current", "theme.name"))
-	if err != nil {
-		return "", false
-	}
-	name := strings.TrimSpace(string(b))
-	if name == "" {
-		return "", false
-	}
-	return name, true
-}
-
-func omarchyCurrentPalette() (Palette, bool) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return Palette{}, false
-	}
-	path := filepath.Join(home, ".config", "omarchy", "current", "theme", "colors.toml")
-	p, err := paletteFromColorsFile(path)
-	if err != nil {
-		return Palette{}, false
-	}
-	return p, true
-}
-
-func discoverOmarchyThemes() []Theme {
-	var out []Theme
-	seen := map[string]bool{}
-	for _, root := range omarchyThemeRoots() {
-		entries, err := os.ReadDir(root)
+	out := make([]Theme, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		id := entry.Name()
+		b, err := omarchyThemesFS.ReadFile("themes/" + id + "/colors.toml")
 		if err != nil {
 			continue
 		}
-		for _, entry := range entries {
-			if !entry.IsDir() {
-				continue
-			}
-			id := entry.Name()
-			if seen[id] {
-				continue
-			}
-			path := filepath.Join(root, id, "colors.toml")
-			p, err := paletteFromColorsFile(path)
-			if err != nil {
-				continue
-			}
-			seen[id] = true
-			src := "omarchy"
-			if strings.Contains(root, filepath.Join(".config", "omarchy")) {
-				src = "omarchy custom"
-			}
-			out = append(out, Theme{
-				ID:      id,
-				Name:    prettyThemeName(id),
-				Source:  src,
-				Palette: p,
-			})
-		}
+		out = append(out, Theme{
+			ID:      id,
+			Name:    prettyThemeName(id),
+			Source:  "omarchy",
+			Palette: PaletteFromOmarchy(parseOmarchyColors(string(b))),
+		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
-}
-
-func paletteFromColorsFile(path string) (Palette, error) {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return Palette{}, err
-	}
-	return PaletteFromOmarchy(parseOmarchyColors(string(b))), nil
 }
 
 func parseOmarchyColors(src string) OmarchyColors {

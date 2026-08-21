@@ -10,8 +10,7 @@ import (
 )
 
 const (
-	ThemeOmo     = "omo"
-	ThemeOmarchy = "omarchy"
+	ThemeOmo = "omo"
 )
 
 // Palette is the OMO chrome colors derived from an Omarchy (or built-in) scheme.
@@ -145,24 +144,20 @@ func saveThemeID(id string) error {
 	return os.WriteFile(path, []byte(strings.TrimSpace(id)+"\n"), 0o644)
 }
 
-// LoadSavedTheme applies ~/.omo/theme, or follows Omarchy when unset.
+// LoadSavedTheme applies ~/.omo/theme, or Omo when unset.
 func LoadSavedTheme() string {
 	id := loadSavedThemeID()
-	if id == "" {
-		if _, ok := omarchyCurrentName(); ok {
-			id = ThemeOmarchy
-		} else {
-			id = ThemeOmo
-		}
+	if id == "" || id == "omarchy" {
+		id = ThemeOmo
 	}
 	ApplyNamedTheme(id)
 	return activeThemeID
 }
 
-// ApplyNamedTheme looks up id (omo, omarchy, or an Omarchy theme folder) and applies it.
+// ApplyNamedTheme looks up id (omo or a bundled Omarchy theme) and applies it.
 func ApplyNamedTheme(id string) {
 	id = strings.TrimSpace(strings.ToLower(id))
-	if id == "" {
+	if id == "" || id == "omarchy" {
 		id = ThemeOmo
 	}
 	theme, ok := lookupTheme(id)
@@ -188,34 +183,10 @@ func lookupTheme(id string) (Theme, bool) {
 	return Theme{}, false
 }
 
-// ListThemes returns Follow Omarchy, Omo, then every Omarchy colors.toml theme.
+// ListThemes returns Omo plus every bundled Omarchy palette.
 func ListThemes() []Theme {
 	out := []Theme{
-		followOmarchyTheme(),
 		{ID: ThemeOmo, Name: "Omo", Source: "built-in", Palette: defaultPalette},
 	}
-	seen := map[string]bool{ThemeOmo: true, ThemeOmarchy: true}
-	for _, t := range discoverOmarchyThemes() {
-		if seen[t.ID] {
-			continue
-		}
-		seen[t.ID] = true
-		out = append(out, t)
-	}
-	return out
-}
-
-func followOmarchyTheme() Theme {
-	name, ok := omarchyCurrentName()
-	src := "desktop"
-	if ok {
-		src = "desktop · " + prettyThemeName(name)
-	} else {
-		src = "desktop (not found)"
-	}
-	p := defaultPalette
-	if pal, found := omarchyCurrentPalette(); found {
-		p = pal
-	}
-	return Theme{ID: ThemeOmarchy, Name: "Follow Omarchy", Source: src, Palette: p}
+	return append(out, builtinOmarchyThemes()...)
 }
