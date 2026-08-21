@@ -98,7 +98,7 @@ func PluginBinPath(pluginName string) string {
 // to route it, causing "dial tcp [::1]:443: connect: connection refused"
 // errors when contacting GitHub. Forcing "tcp4" avoids this.
 func NewHTTPClient(timeout time.Duration) *http.Client {
-	dialer := &net.Dialer{Timeout: 10 * time.Second}
+	dialer := &net.Dialer{Timeout: 10 * time.Second, Resolver: net.DefaultResolver}
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			return dialer.DialContext(ctx, "tcp4", addr)
