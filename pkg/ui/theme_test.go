@@ -57,16 +57,41 @@ func TestApplyNamedThemeOmo(t *testing.T) {
 
 func TestListThemesIncludesBuiltins(t *testing.T) {
 	list := ListThemes()
-	var omo, follow bool
+	var omo, tokyo bool
 	for _, th := range list {
 		if th.ID == ThemeOmo {
 			omo = true
 		}
-		if th.ID == ThemeOmarchy {
-			follow = true
+		if th.ID == "tokyo-night" {
+			tokyo = true
+		}
+		if th.ID == "omarchy" {
+			t.Fatal("Follow Omarchy must not depend on the desktop")
 		}
 	}
-	if !omo || !follow {
-		t.Fatalf("want omo + follow omarchy in %#v", list)
+	if !omo || !tokyo {
+		t.Fatalf("want omo + tokyo-night in %#v", ids(list))
 	}
+	if len(list) < 20 {
+		t.Fatalf("want bundled omarchy palettes, got %d: %v", len(list), ids(list))
+	}
+}
+
+func TestApplyNamedThemeTokyoNight(t *testing.T) {
+	ApplyNamedTheme("tokyo-night")
+	if ActiveThemeID() != "tokyo-night" {
+		t.Fatalf("id %s", ActiveThemeID())
+	}
+	if HexAppBg == defaultPalette.AppBg {
+		t.Fatal("tokyo-night should not use the omo background")
+	}
+	ApplyNamedTheme(ThemeOmo)
+}
+
+func ids(list []Theme) []string {
+	out := make([]string, len(list))
+	for i, t := range list {
+		out[i] = t.ID
+	}
+	return out
 }

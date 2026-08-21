@@ -7,7 +7,7 @@ import (
 	"github.com/gdamore/tcell/v2"
 )
 
-// OpenThemes lists Omarchy + built-in palettes and applies the selection.
+// OpenThemes lists bundled palettes (Omo + Omarchy) and applies the selection.
 func (h *Host) OpenThemes() {
 	if h == nil || h.Pages == nil {
 		return

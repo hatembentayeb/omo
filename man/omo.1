@@ -1,0 +1,109 @@
+.TH OMO 1 "August 2026" "omo" "User Commands"
+.SH NAME
+omo \- ops tools in one terminal
+.SH SYNOPSIS
+.B omo
+.br
+.B omo secrets
+.I command
+.RI [ args ]
+.SH DESCRIPTION
+.B omo
+is a local TUI host for ops plugins (Docker, Kubernetes, Redis, Git, and others).
+With no arguments it starts the terminal UI.
+.PP
+Credentials live in a KeePass database under
+.I ~/.omo/
+and are never sent to a remote service.
+Plugins run out-of-process over RPC.
+.SH OPTIONS
+.B omo
+takes no flags.
+The only subcommand is
+.BR secrets .
+.SH COMMANDS
+.TP
+.B omo
+Launch the TUI.
+.TP
+.B omo secrets list [prefix]
+List secret entry paths, optionally filtered by prefix.
+.TP
+.BI "omo secrets get " path
+Print one entry as JSON.
+.TP
+.BI "omo secrets put " path " [" flags ]
+Create or update an entry. Only supplied flags are written.
+.TP
+.BI "omo secrets delete " path
+Remove an entry.
+.TP
+.B omo secrets reset [--yes]
+Delete
+.I ~/.omo/secrets/omo.kdbx
+(the key file is kept). Recreated on next open.
+.PP
+Secret paths use
+.IR plugin / environment / name
+(for example
+.BR redis/production/cache ).
+.PP
+Flags for
+.B put :
+.BR --username ,
+.BR --password ,
+.BR --url ,
+.BR --notes ,
+.BR --attr " key=value"
+(repeatable).
+.SH ENVIRONMENT
+.TP
+.B OMO_SECRETS_RESET
+If set to
+.BR 1 ,
+delete the KeePass database before the next open (same as
+.BR "omo secrets reset" ).
+.SH FILES
+.TP
+.I ~/.omo/keys/omo.key
+Vault key. Back this up; without it the database cannot be opened.
+.TP
+.I ~/.omo/secrets/omo.kdbx
+KeePass database.
+.TP
+.I ~/.omo/plugins/
+Installed plugin binaries.
+.TP
+.I ~/.omo/theme
+Saved TUI theme id.
+.TP
+.I ~/.omo/logs/omo.log
+Host log.
+.SH KEYBINDINGS
+While the plugins list is focused:
+.BR D
+dashboard,
+.BR p
+package manager,
+.BR i
+settings,
+.BR t
+themes,
+.BR r
+refresh plugins.
+.PP
+Inside a plugin:
+.B Ctrl+t
+switch target,
+.B /
+filter,
+.B ?
+help,
+.B Esc
+back.
+.B Tab
+cycles focus.
+.SH SEE ALSO
+KeePassXC(1)
+.SH BUGS
+https://github.com/hatembentayeb/omo/issues

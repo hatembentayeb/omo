@@ -1,4 +1,6 @@
-PLUGINS_DIR := ./plugins
+PREFIX ?= /usr/local
+OMO_INSTALL_DIR ?= $(PREFIX)/bin
+OMO_MANDIR ?= $(PREFIX)/share/man/man1
 OMO_HOME := $(HOME)/.omo
 PLUGINS_INSTALL_DIR := $(OMO_HOME)/plugins
 # RPC plugin executables (hashicorp/go-plugin)
@@ -6,7 +8,7 @@ RPC_PLUGINS := redis docker git sysprocess argocd k8suser ssh postgres rabbitmq 
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS := -ldflags "-X main.Version=$(VERSION)"
 
-.PHONY: all clean install dirs plugin-redis plugin-docker plugin-git plugin-sysprocess plugin-argocd plugin-k8suser plugin-ssh plugin-postgres plugin-rabbitmq plugin-kafka plugin-github plugin-s3 plugin-awsCosts plugin-k8sportforward plugin-bunnydns plugin-dnscheck plugin-jira dev-setup dev-secrets dev-seed dev-up dev-down
+.PHONY: all build install-omo clean install dirs plugin-redis plugin-docker plugin-git plugin-sysprocess plugin-argocd plugin-k8suser plugin-ssh plugin-postgres plugin-rabbitmq plugin-kafka plugin-github plugin-s3 plugin-awsCosts plugin-k8sportforward plugin-bunnydns plugin-dnscheck plugin-jira dev-setup dev-secrets dev-seed dev-up dev-down
 
 # Build the host binary and all plugins, then install to ~/.omo
 all: dirs
@@ -25,6 +27,29 @@ all: dirs
 	@go run ./cmd/manifest
 	@cp index.yaml $(OMO_HOME)/index.yaml
 	@echo "Done. Plugins installed to $(PLUGINS_INSTALL_DIR)"
+
+# Build host + plugins, then install omo onto PATH and man omo onto manpath.
+build: all install-omo
+
+# dest mode src name — copy src to dest/name, creating dest and using sudo if needed.
+define omo-install
+	@if [ ! -d "$(1)" ]; then mkdir -p "$(1)" 2>/dev/null || sudo mkdir -p "$(1)"; fi
+	@if [ -w "$(1)" ]; then install -m $(2) $(3) "$(1)/$(4)"; \
+	else echo "Installing $(4) to $(1) (sudo)..."; sudo install -m $(2) $(3) "$(1)/$(4)"; fi
+endef
+
+install-omo:
+	@if [ ! -f omo ]; then echo "omo binary missing — run make all first"; exit 1; fi
+	$(call omo-install,$(OMO_INSTALL_DIR),755,omo,omo)
+	$(call omo-install,$(OMO_MANDIR),644,man/omo.1,omo.1)
+	@echo "omo $(VERSION) → $(OMO_INSTALL_DIR)/omo"
+	@echo "man omo        → $(OMO_MANDIR)/omo.1"
+	@hash -r 2>/dev/null || true
+	@if command -v omo >/dev/null 2>&1; then \
+		echo "on PATH: $$(command -v omo)"; \
+	else \
+		echo "not on PATH — add $(OMO_INSTALL_DIR) to PATH"; \
+	fi
 
 # Build only the redis RPC plugin binary for fast iteration
 plugin-redis: dirs

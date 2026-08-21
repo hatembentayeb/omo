@@ -22,6 +22,8 @@ func SetInfoColors(key, value string) {
 	}
 }
 
+const infoPluginKey = "Plugin"
+
 var (
 	reColorTag = regexp.MustCompile(`\[[^\]]*\]`)
 	reInfoKV   = regexp.MustCompile(`^([^:\n]+?)\s*:\s*(.*)$`)
@@ -46,7 +48,7 @@ func NotConnectedInfo(brand, detail string) string {
 
 // InfoTitle returns a branded first line for plugin info panels.
 func InfoTitle(title string) string {
-	return fmt.Sprintf("[%s::b]%s[%s]", infoOrange, title, infoValue)
+	return formatInfoKV(infoPluginKey, title, len(infoPluginKey))
 }
 
 // InfoLine returns a single colored "Label: value" line.
@@ -80,6 +82,9 @@ func infoLabelWidth(lines []string) int {
 			continue
 		}
 		if i == 0 && !strings.Contains(plain, ":") {
+			if n := len(infoPluginKey); n > width {
+				width = n
+			}
 			continue
 		}
 		m := reInfoKV.FindStringSubmatch(plain)
@@ -101,7 +106,7 @@ func colorizeInfoLine(line string, first bool, labelWidth int) string {
 
 	plain := stripColorTags(trimmed)
 	if first && !strings.Contains(plain, ":") {
-		return fmt.Sprintf("[%s::b]%s[%s]", infoOrange, plain, infoValue)
+		return formatInfoKV(infoPluginKey, plain, labelWidth)
 	}
 
 	// Already colorized (title or KV with tags).
@@ -112,7 +117,7 @@ func colorizeInfoLine(line string, first bool, labelWidth int) string {
 	m := reInfoKV.FindStringSubmatch(plain)
 	if m == nil {
 		if first {
-			return fmt.Sprintf("[%s::b]%s[%s]", infoOrange, plain, infoValue)
+			return formatInfoKV(infoPluginKey, plain, labelWidth)
 		}
 		return fmt.Sprintf("[%s]%s[-]", infoValue, plain)
 	}
