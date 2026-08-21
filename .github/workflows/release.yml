@@ -60,12 +60,16 @@ jobs:
           CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/omo-${{ env.VERSION }}-darwin-arm64 ./cmd/omo
           # Windows
           CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/omo-${{ env.VERSION }}-windows-amd64.exe ./cmd/omo
-          # Compress binaries
+          # Compress binaries (include man page next to the host binary)
+          cp man/omo.1 dist/omo.1
           cd dist
-          for file in *; do
-            tar -czf "$file.tar.gz" "$file"
+          for file in omo-*; do
+            [ -f "$file" ] || continue
+            case "$file" in *.tar.gz) continue ;; esac
+            tar -czf "$file.tar.gz" "$file" omo.1
             rm "$file"
           done
+          rm -f omo.1
           cd ..
 
       - name: Build RPC plugins

@@ -37,11 +37,11 @@
 ---
 
 <p align="center">
-  <img src="assets/screenshots/tui-dashboard.jpg" alt="omo cover screen — plugin rail and OHMYOPS dashboard" width="880">
+  <img src="assets/screenshots/tui-dashboard.jpg" alt="omo dashboard — plugin rail and live plugin tiles" width="880">
 </p>
 
 <p align="center">
-  <sub>Plugin rail on the left. Active tool on the right. Keyboard shortcuts always visible.</sub>
+  <sub>Plugin rail on the left. Live tiles on the right. Keyboard shortcuts always visible.</sub>
 </p>
 
 ---
@@ -65,11 +65,12 @@ Built for SREs, platform engineers, and indie operators who live in the terminal
 
 ## Features
 
-- **15 official plugins** — Docker, Redis, Kafka, RabbitMQ, Postgres, SSH, Argo CD, Kubernetes users, Kubernetes port-forward, Bunny DNS, AWS Costs, S3, Git, GitHub, system processes
+- **Official plugins** — Docker, Redis, Kafka, RabbitMQ, Postgres, SSH, Argo CD, Kubernetes, Git, GitHub, S3, AWS Costs, Bunny DNS, DNS check, Jira, system processes
 - **KeePass-backed secrets** — auto-created on first launch; open with KeePassXC or `omo secrets`
-- **Package Manager** — sync the plugin index from GitHub and install/update plugins in-app
+- **Package Manager** — sync the plugin index from GitHub and install/update plugins in-app (`p`)
+- **Themes** — bundled palettes (Omo + Omarchy); press **`t`** with the plugins list focused
 - **Multi-target** — `Ctrl+t` switches instances (e.g. `redis/production/cache` ↔ `redis/staging/cache`)
-- **Keyboard-first** — Tab focus, filter (`/`), refresh (`R`), help (`?`); Tab stays inside open modals
+- **Keyboard-first** — Tab focus, filter (`/`), refresh (`R`), help (`?`), dashboard (`D`); Tab stays inside open modals
 - **Safe by design** — credentials stay local; plugins receive config via `Configure`, not nested secret RPC
 - **Cross-platform host** — Linux / macOS / Windows; plugins ship as standalone executables
 
@@ -83,7 +84,16 @@ Built for SREs, platform engineers, and indie operators who live in the terminal
 curl -fsSL https://raw.githubusercontent.com/hatembentayeb/omo/main/install.sh | bash
 ```
 
-Installs the latest release into `/usr/local/bin` (override with `OMO_INSTALL_DIR`) and creates `~/.omo/`.
+Installs the latest release into `/usr/local/bin` and `man omo` into `/usr/local/share/man/man1` (override with `OMO_INSTALL_DIR` / `OMO_MANDIR`) and creates `~/.omo/`.
+
+### Termux (Android)
+
+```bash
+pkg install curl tar man
+curl -fsSL https://raw.githubusercontent.com/hatembentayeb/omo/main/install.sh | bash
+```
+
+Detects Termux and installs into `$PREFIX/bin` and `$PREFIX/share/man/man1` (no sudo). Needs a 64-bit device (`aarch64` or `x86_64`).
 
 ### From GitHub Releases
 
@@ -122,11 +132,10 @@ On first run, omo:
 
 Inside omo:
 
-1. Focus the **plugins list** (left sidebar) and press **`p`**  
-   — or **Tab** to the host actions list and select **Package Manager**
+1. Focus the **plugins list** (left sidebar) and press **`p`**
 2. Press **`S`** to sync the plugin index
 3. Press **`A`** to install all plugins (or install selectively)
-4. Press **`Q`** to return
+4. Press **`Q`** or **Esc** to return
 
 ### 3. Add a connection
 
@@ -169,9 +178,9 @@ Select the plugin in the sidebar. Use `Ctrl+t` to pick the target, `?` for plugi
 No mockups — these are the same screens you run every day.
 
 <p align="center">
-  <img src="assets/screenshots/tui-dashboard.jpg" alt="omo cover screen with plugin rail, OHMYOPS logo, About and Keys panels" width="880">
+  <img src="assets/screenshots/tui-dashboard.jpg" alt="omo dashboard with plugin rail and live plugin tiles" width="880">
 </p>
-<p align="center"><sub><strong>Dashboard</strong> — plugin rail on the left, cover in the center. Pick a tool or open the Package Manager with <code>p</code>.</sub></p>
+<p align="center"><sub><strong>Dashboard</strong> — plugin rail on the left, live tiles on the right. Open with <code>D</code>.</sub></p>
 
 <p align="center">
   <img src="assets/screenshots/tui-packagemanager.jpg" alt="omo Package Manager listing installed plugins with versions, status, and tags" width="880">
@@ -184,19 +193,19 @@ No mockups — these are the same screens you run every day.
 <p align="center"><sub><strong>Docker</strong> — containers, images, networks, volumes, and compose — keyboard-first.</sub></p>
 
 <p align="center">
-  <img src="assets/screenshots/tui-docker-logs.jpg" alt="omo Docker logs view with line numbers, wrap, find, and autoscroll controls" width="880">
+  <img src="assets/screenshots/tui-redis.jpg" alt="omo Redis keys table with type, TTL, and size" width="880">
 </p>
-<p align="center"><sub><strong>Logs</strong> — shared in-place logs view — wrap, find, marks, and copy from any plugin.</sub></p>
+<p align="center"><sub><strong>Redis</strong> — keys, info, slowlog, clients, and pub/sub.</sub></p>
 
 <p align="center">
-  <img src="assets/screenshots/tui-k8s-portforward.jpg" alt="omo Kubernetes port-forward workloads table with namespace, ports, and forward status" width="880">
+  <img src="assets/screenshots/tui-ssh.jpg" alt="omo SSH Manager remote process table" width="880">
 </p>
-<p align="center"><sub><strong>Kubernetes</strong> — workloads, services, pods, and port-forwards against your cluster context.</sub></p>
+<p align="center"><sub><strong>SSH</strong> — remote processes, disk, network, Docker, and services.</sub></p>
 
 <p align="center">
-  <img src="assets/screenshots/tui-postgres.jpg" alt="omo PostgreSQL Manager users table with roles, privileges, and connection counts" width="880">
+  <img src="assets/screenshots/tui-sysprocess.jpg" alt="omo Process Monitor details view with ancestry" width="880">
 </p>
-<p align="center"><sub><strong>Postgres</strong> — users, databases, tables, and schemas in one keyboard-driven manager.</sub></p>
+<p align="center"><sub><strong>Process Monitor</strong> — local processes, ports, warnings, and why something is running.</sub></p>
 
 More on the site: [oh-myops.com](https://oh-myops.com/#screenshots).
 
@@ -322,8 +331,10 @@ Run `omo secrets` with no args for full help.
 | **↑ / ↓** | Move selection |
 | **Enter** | Activate |
 | **r** | Refresh plugins *(plugins list focused)* |
+| **D** | Dashboard *(plugins list focused)* |
 | **p** | Open Package Manager *(plugins list focused)* |
 | **i** | Open Settings / Info *(plugins list focused)* |
+| **t** | Themes *(plugins list focused)* |
 
 ### Inside a plugin
 
@@ -371,6 +382,7 @@ Plugin-specific actions are listed in `?` and in the actions column.
 ├── index.yaml           # remote plugin catalog (synced)
 ├── installed.yaml       # what you have installed
 ├── logs/                # omo.log + per-plugin logs
+├── theme                # saved TUI theme id
 └── plugins/
     ├── redis/redis
     ├── docker/docker
