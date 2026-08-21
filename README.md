@@ -230,6 +230,7 @@ More on the site: [oh-myops.com](https://oh-myops.com/#screenshots).
 | **s3** | Buckets, objects, ACL, lifecycle, multipart | `s3/<env>/<profile>` |
 | **git** | Status, commits, branches, stash | `git/<env>/<repo>` |
 | **github** | PRs, Actions, secrets, variables, releases | `github/<env>/<account>` |
+| **jira** | Cloud boards, issues, sprints, comments, deploys | `jira/<env>/<instance>` |
 | **sysprocess** | Local processes, CPU, memory, disk, ports | *(no KeePass entry)* |
 
 Plugin metadata lives in [`plugins.meta.yaml`](plugins.meta.yaml); the published index is [`index.yaml`](index.yaml).
